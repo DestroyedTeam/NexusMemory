@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.parse
 import webbrowser
 from http import HTTPStatus
@@ -120,8 +121,15 @@ def _default_target_roots() -> dict[str, dict[str, str]]:
 
 
 def _serialize_conversations_preview(graphs: list[Any], *, max_turns: int = 80) -> list[dict[str, Any]]:
-    """Build secret-redacted inline conversation previews so users see real message content in Step 2."""
+    """Build secret-redacted inline conversation previews with full Project/Section/Parent-Child hierarchy metadata."""
     previews: list[dict[str, Any]] = []
+    # Also compute live child counts within the previewed set
+    children_in_set: dict[str, int] = {}
+    for g in graphs:
+        pid = g.metadata.get("parent_session_id")
+        if pid:
+            children_in_set[str(pid)] = children_in_set.get(str(pid), 0) + 1
+
     for g in graphs:
         title, _ = redact_text(str(g.title or g.source_id))
         turns: list[dict[str, Any]] = []
@@ -143,6 +151,12 @@ def _serialize_conversations_preview(graphs: list[Any], *, max_turns: int = 80) 
                     "text": red,
                 }
             )
+        parent_id = g.metadata.get("parent_session_id")
+        depth = int(g.metadata.get("nesting_depth") or (1 if parent_id else 0))
+        child_cnt = max(
+            int(g.metadata.get("child_subagent_count") or 0),
+            children_in_set.get(str(g.source_id), 0),
+        )
         previews.append(
             {
                 "source_id": g.source_id,
@@ -151,6 +165,11 @@ def _serialize_conversations_preview(graphs: list[Any], *, max_turns: int = 80) 
                 "workspace": g.workspace,
                 "project_name": g.metadata.get("project_name"),
                 "section_name": g.metadata.get("section_name"),
+                "parent_session_id": parent_id,
+                "root_session_id": g.metadata.get("root_session_id"),
+                "nesting_depth": depth,
+                "subagent_role": g.metadata.get("subagent_role"),
+                "child_subagent_count": child_cnt,
                 "total_nodes": len(g.nodes),
                 "shown_nodes": len(turns),
                 "branch_count": len(g.branch_paths()),
@@ -547,6 +566,118 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
   }
   [data-theme="light"] details.raw pre { background: #F1F5F9; }
   .hidden { display: none !important; }
+
+  /* Minimalist Info Popover Button (ⓘ) & Floating Card */
+  .info-btn {
+    display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+    border: 1px solid var(--border); background: transparent; color: var(--text-3);
+    font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0;
+    flex-shrink: 0; transition: all 140ms ease; font-family: inherit;
+  }
+  .info-btn:hover, .info-btn.open {
+    border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+  }
+  .info-popover {
+    position: fixed; z-index: 9999; width: 310px; max-width: calc(100vw - 24px);
+    padding: 12px 14px; border-radius: 12px;
+    background: var(--surface-solid); border: 1px solid var(--border-hi);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.48); color: var(--text-1);
+    font-size: 12px; line-height: 1.55;
+  }
+  .info-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .info-pop-title { font-weight: 700; font-size: 12.5px; color: var(--accent); }
+  .info-pop-close {
+    border: none; background: transparent; color: var(--text-3); cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 2px 4px;
+  }
+  .info-pop-close:hover { color: var(--text-1); }
+
+  /* First-Class Config Control Strip (Limit Presets + Switches) */
+  .ctrl-strip {
+    margin-top: 14px; padding: 12px 14px; border-radius: 12px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 11px;
+  }
+  .ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .ctrl-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ctrl-label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 650; color: var(--text-1); white-space: nowrap; }
+  .limit-presets {
+    display: inline-flex; align-items: center; border: 1px solid var(--border);
+    border-radius: 9px; overflow: hidden; background: var(--surface-solid);
+  }
+  .limit-presets button {
+    border: none; border-right: 1px solid var(--border); background: transparent; color: var(--text-2);
+    padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+    font-variant-numeric: tabular-nums; transition: all 120ms ease;
+  }
+  .limit-presets button:last-child { border-right: none; }
+  .limit-presets button:hover { color: var(--text-1); background: rgba(148,163,184,0.08); }
+  .limit-presets button.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .limit-num {
+    width: 78px !important; height: 31px !important; font-size: 12px !important;
+    font-weight: 650; text-align: center; font-variant-numeric: tabular-nums;
+  }
+  .switch-pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+    border-radius: 9px; border: 1px solid var(--border); background: var(--surface-solid);
+    font-size: 12px; font-weight: 550; color: var(--text-1); cursor: pointer; user-select: none;
+  }
+  .switch-pill:hover { border-color: var(--border-hi); }
+  .switch-pill input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+
+  /* Real-Time Animated Progress Bar Panel */
+  .prog-panel {
+    margin-top: 10px; padding: 13px 15px; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(14,165,233,0.12), rgba(99,102,241,0.10));
+    border: 1px solid rgba(56,189,248,0.42);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .prog-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .prog-phase { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 680; }
+  .prog-pct { font-size: 17px; font-weight: 780; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .prog-track {
+    width: 100%; height: 9px; border-radius: 999px; overflow: hidden;
+    background: rgba(148,163,184,0.18); position: relative;
+  }
+  .prog-fill {
+    height: 100%; width: 0%; border-radius: 999px;
+    background: linear-gradient(90deg, #0EA5E9 0%, #38BDF8 50%, #818CF8 100%);
+    background-size: 200% 100%;
+    transition: width 160ms ease-out;
+    animation: progShimmer 1.4s linear infinite;
+  }
+  @keyframes progShimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+  .prog-meta {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums;
+  }
+  .prog-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 62%; }
+
+  /* Right Rail Mini Progress */
+  .rail-prog {
+    padding: 9px 10px; border-radius: 10px; background: var(--surface);
+    border: 1px solid rgba(56,189,248,0.35); display: flex; flex-direction: column; gap: 6px;
+  }
+  .rail-prog-row { display: flex; justify-content: space-between; font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  /* Hierarchy Tree Indicators in Step 2 Preview */
+  .sess-row.is-child {
+    padding-left: 24px; background: rgba(129, 140, 248, 0.04);
+    border-left: 2px solid rgba(129, 140, 248, 0.35);
+  }
+  .sess-row.is-child.active { border-left: 3px solid var(--accent-2); background: var(--target-soft); }
+  .sess-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .mini-tag {
+    font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 5px;
+    background: rgba(148,163,184,0.14); color: var(--text-2); max-width: 145px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mini-tag.proj { background: var(--safe-soft); color: var(--safe); }
+  .mini-tag.sec { background: var(--accent-soft); color: var(--accent); }
+  .mini-tag.sub { background: var(--target-soft); color: var(--accent-2); }
 </style>
 </head>
 <body>
@@ -588,28 +719,28 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
     </nav>
 
     <div class="side-foot">
-      <div class="foot-card">
-        <b>全流程闭环 · 零 AI 猜测</b><br/>
-        选图标 → 看对话 → 生成包 → 备份正式迁入，随时一键撤销。
+      <div class="foot-card" style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+        <span><b>零 AI 确定性引擎</b></span>
+        <button class="info-btn" onclick="showInfoTip('engine', this)" title="查看说明">ⓘ</button>
       </div>
-      <button class="theme-btn" onclick="toggleTheme()">🌓 切换深空 / 浅色外观</button>
+      <button class="theme-btn" onclick="toggleTheme()">🌓 深空 / 浅色</button>
     </div>
   </aside>
 
   <!-- Main Workspace -->
   <main class="main">
     <header class="topbar">
-      <div>
-        <h1 id="page-title">一站式跨 Harness 迁移向导</h1>
-        <div class="topbar-sub" id="page-sub">统一图标选来源与目标 · 直接预览对话内容 · 写前自动备份随时回滚</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <h1 id="page-title">跨 Harness 迁移向导</h1>
+        <button class="info-btn" onclick="showInfoTip('workflow', this)" title="四步迁移说明" style="-webkit-app-region:no-drag;">ⓘ</button>
       </div>
-      <span class="live-badge" id="global-status"><span class="pulse"></span><span>第 1 步 · 选择来源与目标</span></span>
+      <span class="live-badge" id="global-status"><span class="pulse"></span><span>第 1 步 · 选来源与目标</span></span>
     </header>
 
     <div class="scroll" id="main-scroll">
       <!-- TAB 1: UNIFIED 4-STEP MIGRATION WORKFLOW -->
       <div id="tab-migrate">
-        <!-- Always-visible 4-Step Guided Progress Bar -->
+        <!-- Always-visible 4-Step Guided Stepper -->
         <nav class="stepper" aria-label="迁移四步流程">
           <button class="st-btn active" id="st-1" onclick="jumpStep(1)"><span class="st-num">1</span><span class="st-label">选来源与目标</span></button>
           <button class="st-btn" id="st-2" onclick="jumpStep(2)"><span class="st-num">2</span><span class="st-label">预演与看内容</span></button>
@@ -617,29 +748,45 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
           <button class="st-btn" id="st-4" onclick="jumpStep(4)"><span class="st-num">4</span><span class="st-label">备份正式迁入</span></button>
         </nav>
 
+        <!-- Real-Time Live Progress Bar Panel (replaces frozen grey spinner!) -->
+        <div class="prog-panel hidden" id="live-progress-panel" role="status" aria-live="polite">
+          <div class="prog-top">
+            <div class="prog-phase">
+              <span class="badge info" id="prog-phase-badge">解析中</span>
+              <span id="prog-title">正在并行处理会话…</span>
+            </div>
+            <div class="prog-pct" id="prog-pct">0%</div>
+          </div>
+          <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+          <div class="prog-meta">
+            <span class="prog-detail" id="prog-detail">准备中…</span>
+            <span id="prog-stats">0 / 0 · 0.0 条/秒</span>
+          </div>
+        </div>
+
         <!-- Dynamic Next-Step Guidance Banner -->
-        <div class="guide-banner" id="guide-banner" style="margin-top:12px;">
-          <span id="guide-text"><b>引导提示：</b>先在下方对称图标区点选「来源」和「目标」AI Harness（已自动选中本机最活跃工具），然后点击右侧蓝色按钮开始只读预演。</span>
+        <div class="guide-banner" id="guide-banner" style="margin-top:10px;">
+          <span id="guide-text"><b>第 1 步：</b>点选「来源」与「目标」图标，设置迁移上限，再点右侧 <b>预演查看 →</b></span>
         </div>
 
         <!-- STEP 1: SYMMETRIC VISUAL SOURCE <-> TARGET PICKER -->
-        <section class="glass" id="sec-step-1" style="margin-top:12px;">
+        <section class="glass" id="sec-step-1" style="margin-top:10px;">
           <!-- Active Bridge Summary + Swap -->
           <div class="bridge-bar">
             <div class="bridge-end">
               <div class="h-icon" id="bridge-src-icon"></div>
               <div class="bridge-end-meta">
-                <div class="bridge-role">来源 FROM（全程只读）</div>
+                <div class="bridge-role">FROM · 只读来源</div>
                 <div class="bridge-name" id="bridge-src-name">OpenAI Codex</div>
                 <div class="bridge-sub" id="bridge-src-sub">~/.codex</div>
               </div>
             </div>
-            <button class="swap-btn" id="btn-swap" onclick="swapDirection()" title="互换来源与目标">⇄ 互换方向</button>
+            <button class="swap-btn" id="btn-swap" onclick="swapDirection()" title="互换来源与目标">⇄ 互换</button>
             <div class="bridge-end" style="justify-content:flex-end;text-align:right;">
               <div class="bridge-end-meta">
-                <div class="bridge-role">目标 TO（原生格式）</div>
+                <div class="bridge-role">TO · 原生目标</div>
                 <div class="bridge-name" id="bridge-dst-name">Claude Code CLI</div>
-                <div class="bridge-sub" id="bridge-dst-sub">E5 实测 · 零 Invalid Params</div>
+                <div class="bridge-sub" id="bridge-dst-sub">E5 · 原生格式</div>
               </div>
               <div class="h-icon" id="bridge-dst-icon"></div>
             </div>
@@ -647,172 +794,188 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
 
           <!-- SOURCE ICON GRID -->
           <div class="card-hd" style="margin-bottom:8px;">
-            <div>
-              <div class="card-title"><span class="step-tag">FROM</span> 选择来源 Harness</div>
-            </div>
+            <div class="card-title"><span class="step-tag">FROM</span> 来源 Harness <button class="info-btn" onclick="showInfoTip('source_target', this)">ⓘ</button></div>
             <div class="picker-toolbar">
               <div class="seg">
                 <button class="active" id="src-filter-inst" onclick="setSrcFilter('installed', this)">本机已发现</button>
-                <button id="src-filter-all" onclick="setSrcFilter('all', this)">全部 24 款</button>
+                <button id="src-filter-all" onclick="setSrcFilter('all', this)">全部 24</button>
               </div>
               <input type="text" class="mini-search" id="src-search" placeholder="搜索来源…" oninput="renderSourceGrid()" />
-              <button class="btn-ghost" style="height:29px;font-size:11.5px;" onclick="pickExternalSource()">+ 导入文件/ZIP</button>
+              <button class="btn-ghost" style="height:29px;font-size:11.5px;" onclick="pickExternalSource()">+ 导入文件</button>
             </div>
           </div>
           <div class="harness-grid" id="source-grid"></div>
 
           <!-- TARGET ICON GRID (IDENTICAL VISUAL STYLE!) -->
-          <div class="card-hd" style="margin-top:16px;margin-bottom:8px;">
-            <div>
-              <div class="card-title"><span class="step-tag" style="background:var(--target-soft);color:var(--accent-2);">TO</span> 选择目标 Harness（23 款全双向 + 3P 全通道 + 无损归档）</div>
-            </div>
+          <div class="card-hd" style="margin-top:14px;margin-bottom:8px;">
+            <div class="card-title"><span class="step-tag" style="background:var(--target-soft);color:var(--accent-2);">TO</span> 目标 Harness</div>
             <div class="picker-toolbar">
               <div class="seg">
                 <button class="active" id="dst-filter-top" onclick="setDstFilter('popular', this)">主流常用</button>
-                <button id="dst-filter-all" onclick="setDstFilter('all', this)">全部 25 目标</button>
+                <button id="dst-filter-all" onclick="setDstFilter('all', this)">全部 25</button>
               </div>
               <input type="text" class="mini-search" id="dst-search" placeholder="搜索目标…" oninput="renderTargetGrid()" />
             </div>
           </div>
           <div class="harness-grid" id="target-grid"></div>
 
-          <!-- Scope & Options -->
-          <div class="grid-2" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
-            <div class="field">
-              <label>精准筛选分组 / Section（推荐，如 Destruction Era）</label>
-              <input type="text" id="filter-section" placeholder="留空则不按分组筛选" />
-            </div>
-            <div class="field">
-              <label>项目关键词 & 安全条数上限（避免一次全量迁移）</label>
-              <div class="input-row">
-                <input type="text" id="filter-project" placeholder="项目名称关键词（可选）" />
-                <input type="number" id="filter-limit" value="5" min="1" max="500" style="width:88px;" />
+          <!-- First-Class Limit, Hierarchy & Filter Control Strip -->
+          <div class="ctrl-strip">
+            <div class="ctrl-row">
+              <div class="ctrl-group">
+                <span class="ctrl-label">📊 迁移上限 <button class="info-btn" onclick="showInfoTip('limit', this)">ⓘ</button></span>
+                <div class="limit-presets" id="limit-presets">
+                  <button class="active" data-val="5" onclick="setLimitPreset(5)">5</button>
+                  <button data-val="20" onclick="setLimitPreset(20)">20</button>
+                  <button data-val="100" onclick="setLimitPreset(100)">100</button>
+                  <button data-val="500" onclick="setLimitPreset(500)">500</button>
+                  <button data-val="0" onclick="setLimitPreset(0)">全部</button>
+                </div>
+                <input type="number" class="limit-num" id="filter-limit" value="5" min="0" max="50000" oninput="onLimitInput()" title="0 表示不限制（全部）" />
+              </div>
+
+              <div class="ctrl-group">
+                <label class="switch-pill">
+                  <input type="checkbox" id="opt-subagents" />
+                  <span>🌿 含子代理</span>
+                  <button type="button" class="info-btn" onclick="event.preventDefault();event.stopPropagation();showInfoTip('subagents', this)">ⓘ</button>
+                </label>
+                <label class="switch-pill">
+                  <input type="checkbox" id="opt-resources" checked />
+                  <span>🧩 同步 Skills/MCP</span>
+                  <button type="button" class="info-btn" onclick="event.preventDefault();event.stopPropagation();showInfoTip('resources', this)">ⓘ</button>
+                </label>
               </div>
             </div>
-          </div>
-          <div class="grid-2" style="margin-top:10px;">
-            <div class="field">
-              <label>来源路径（已随图标自动填入，可手动微调）</label>
-              <div class="input-row">
-                <input type="text" id="src-path" />
-                <button class="btn-ghost" onclick="pickPath('src-path', 'dir')">改目录</button>
+
+            <div class="grid-2">
+              <div class="field">
+                <label style="display:flex;align-items:center;gap:5px;">🏷 分组 / Section <button class="info-btn" onclick="showInfoTip('filter_scope', this)">ⓘ</button></label>
+                <input type="text" id="filter-section" placeholder="留空表示全部（如 Destruction Era）" />
+              </div>
+              <div class="field">
+                <label style="display:flex;align-items:center;gap:5px;">📁 项目关键词</label>
+                <input type="text" id="filter-project" placeholder="留空表示全部项目" />
               </div>
             </div>
-            <div class="field">
-              <label>目标工作区 CWD（用于映射项目路径）</label>
-              <div class="input-row">
-                <input type="text" id="cwd-path" value="__DEFAULT_CWD__" />
-                <button class="btn-ghost" onclick="pickPath('cwd-path', 'dir')">选择</button>
+
+            <div class="grid-2">
+              <div class="field">
+                <label style="display:flex;align-items:center;gap:5px;">📂 来源目录 <button class="info-btn" onclick="showInfoTip('paths', this)">ⓘ</button></label>
+                <div class="input-row">
+                  <input type="text" id="src-path" />
+                  <button class="btn-ghost" onclick="pickPath('src-path', 'dir')">浏览</button>
+                </div>
+              </div>
+              <div class="field">
+                <label style="display:flex;align-items:center;gap:5px;">💻 默认工作区</label>
+                <div class="input-row">
+                  <input type="text" id="cwd-path" value="__DEFAULT_CWD__" />
+                  <button class="btn-ghost" onclick="pickPath('cwd-path', 'dir')">浏览</button>
+                </div>
               </div>
             </div>
-          </div>
-          <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--text-2);">
-            <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;">
-              <input type="checkbox" id="opt-resources" checked /> 同步资源层（Copy 模式 Skills + 密钥脱敏 <code>${ENV_VAR}</code> MCP）
-            </label>
-            <span style="font-size:11.5px;">暂存包路径：<code id="out-preview-label">__DEFAULT_OUT__</code></span>
           </div>
         </section>
 
         <!-- STEP 2: DRY-RUN PREVIEW + INLINE CONVERSATION CONTENT READER -->
-        <section class="glass" id="sec-step-2" style="margin-top:14px;">
+        <section class="glass" id="sec-step-2" style="margin-top:12px;">
           <div class="card-hd">
-            <div>
-              <div class="card-title"><span class="step-tag">STEP 2</span> 预演清单 & 直接核对会话内容</div>
-              <div class="card-desc">点选左侧任意会话即可直接在右侧阅读真实消息内容（已自动脱敏密钥），确认无误再进入第 3 步</div>
+            <div class="card-title"><span class="step-tag">STEP 2</span> 预演与对话内容 <button class="info-btn" onclick="showInfoTip('step2_preview', this)">ⓘ</button></div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="badge info hidden" id="hierarchy-badge"></span>
+              <span class="badge info" id="preview-badge">待预演</span>
             </div>
-            <span class="badge info" id="preview-badge">等待执行第 1 步预演</span>
           </div>
 
           <div class="kpi-row">
             <div class="kpi"><div class="kpi-v" id="k-convs">—</div><div class="kpi-l">命中会话</div></div>
-            <div class="kpi"><div class="kpi-v" id="k-nodes">—</div><div class="kpi-l">消息 / 工具节点</div></div>
-            <div class="kpi"><div class="kpi-v" id="k-sess">—</div><div class="kpi-l">目标原生文件</div></div>
-            <div class="kpi"><div class="kpi-v" id="k-sec" style="color:var(--safe);">0</div><div class="kpi-l">已自动脱敏凭据</div></div>
+            <div class="kpi"><div class="kpi-v" id="k-nodes">—</div><div class="kpi-l">消息节点</div></div>
+            <div class="kpi"><div class="kpi-v" id="k-sess">—</div><div class="kpi-l">目标文件</div></div>
+            <div class="kpi"><div class="kpi-v" id="k-sec" style="color:var(--safe);">0</div><div class="kpi-l">已脱敏凭据</div></div>
           </div>
 
           <div class="preview-split">
             <div class="sess-col" id="preview-sess-list">
-              <div style="padding:26px 14px;text-align:center;color:var(--text-3);font-size:12px;">点击右侧「1. 只读预演并查看内容」，命中会话列表将显示在这里</div>
+              <div style="padding:26px 14px;text-align:center;color:var(--text-3);font-size:12px;">点击右侧「预演查看」后在此显示会话层级树</div>
             </div>
             <div class="reader-col" id="preview-reader">
-              <div style="padding:48px 18px;text-align:center;color:var(--text-3);font-size:12.5px;">选中左侧任意会话后，这里将直接展示完整的用户/助手对话与工具记录，无需猜测内容是否正确。</div>
+              <div style="padding:48px 18px;text-align:center;color:var(--text-3);font-size:12.5px;">选择左侧会话即可核对脱敏后的真实对话</div>
             </div>
           </div>
 
           <details class="raw">
-            <summary style="cursor:pointer;">查看底层保真报告 JSON（高级）</summary>
+            <summary style="cursor:pointer;">底层保真报告 JSON</summary>
             <pre id="raw-json">{}</pre>
           </details>
         </section>
 
         <!-- STEP 3: BUNDLE RECEIPT -->
-        <section class="glass" id="sec-step-3" style="margin-top:14px;">
+        <section class="glass" id="sec-step-3" style="margin-top:12px;">
           <div class="card-hd">
-            <div>
-              <div class="card-title"><span class="step-tag">STEP 3</span> 本地迁移包暂存与完整性校验</div>
-              <div class="card-desc">生成含 <code>portable.json</code> 无损副本与目标原生文件的本地包（0600 私有权限），此时仍未修改目标软件目录</div>
-            </div>
-            <span class="badge info" id="bundle-badge">尚未生成</span>
+            <div class="card-title"><span class="step-tag">STEP 3</span> 本地迁移包 <button class="info-btn" onclick="showInfoTip('step3_bundle', this)">ⓘ</button></div>
+            <span class="badge info" id="bundle-badge">未生成</span>
           </div>
           <div class="input-row">
             <input type="text" id="out-path" value="__DEFAULT_OUT__" />
-            <button class="btn-ghost" onclick="pickPath('out-path', 'dir')">改输出位置</button>
-            <button class="btn-ghost" id="btn-inline-viewer" onclick="openViewer()" disabled>在离线浏览器中查看 ↗</button>
+            <button class="btn-ghost" onclick="pickPath('out-path', 'dir')">位置</button>
+            <button class="btn-ghost" id="btn-inline-viewer" onclick="openViewer()" disabled>离线浏览 ↗</button>
           </div>
           <div id="bundle-receipt" class="hidden" style="margin-top:10px;font-size:12px;color:var(--safe);"></div>
         </section>
 
-        <!-- STEP 4: DIRECT BACKUP & APPLY + ONE-CLICK ROLLBACK (RIGHT IN THE MAIN FLOW!) -->
-        <section class="glass" id="sec-step-4" style="margin-top:14px;">
+        <!-- STEP 4: DIRECT BACKUP & APPLY + ONE-CLICK ROLLBACK -->
+        <section class="glass" id="sec-step-4" style="margin-top:12px;">
           <div class="card-hd">
-            <div>
-              <div class="card-title"><span class="step-tag" style="background:var(--safe-soft);color:var(--safe);">STEP 4</span> 自动备份并正式迁入目标软件（支持随时一键回滚）</div>
-              <div class="card-desc">完成第 3 步生成迁移包后，在这里直接把会话写入目标软件！建议先选「沙箱试运行」，确认满意再写入真实目录</div>
-            </div>
-            <span class="badge info" id="apply-badge">等待第 3 步迁移包</span>
+            <div class="card-title"><span class="step-tag" style="background:var(--safe-soft);color:var(--safe);">STEP 4</span> 备份并迁入 <button class="info-btn" onclick="showInfoTip('step4_apply', this)">ⓘ</button></div>
+            <span class="badge info" id="apply-badge">等待迁移包</span>
           </div>
 
           <div class="mode-grid">
             <button class="mode-card active" id="mode-sandbox" onclick="setApplyMode('sandbox')">
-              <div class="mode-card-t"><span>🧪 沙箱目录试迁</span><span class="badge ok">推荐先试</span></div>
-              <div class="mode-card-d">写入独立临时目录，零风险测试安装与回滚，完全不触碰你真实安装的目标软件。</div>
+              <div class="mode-card-t">
+                <span style="display:inline-flex;align-items:center;gap:6px;">🧪 沙箱试迁 <span class="info-btn" onclick="event.stopPropagation();showInfoTip('mode_sandbox', this)">ⓘ</span></span>
+                <span class="badge ok">零风险</span>
+              </div>
             </button>
             <button class="mode-card" id="mode-live" onclick="setApplyMode('live')">
-              <div class="mode-card-t"><span>🚀 正式写入目标软件</span><span class="badge warn">自动 0600 备份</span></div>
-              <div class="mode-card-d">写入目标软件真实配置目录（写前自动打包原始 SHA-256 备份，默认拒绝覆盖同名会话）。</div>
+              <div class="mode-card-t">
+                <span style="display:inline-flex;align-items:center;gap:6px;">🚀 正式写入 <span class="info-btn" onclick="event.stopPropagation();showInfoTip('mode_live', this)">ⓘ</span></span>
+                <span class="badge warn">自动备份</span>
+              </div>
             </button>
           </div>
 
           <div class="grid-2">
             <div class="field">
-              <label>目标写入目录（随目标图标与模式自动切换）</label>
+              <label>📁 目标写入目录</label>
               <div class="input-row">
                 <input type="text" id="apply-target-root" />
-                <button class="btn-ghost" onclick="pickPath('apply-target-root', 'dir')">选择</button>
+                <button class="btn-ghost" onclick="pickPath('apply-target-root', 'dir')">浏览</button>
               </div>
             </div>
             <div class="field" id="apply-claude-dir-wrap">
-              <label>配套 Claude Projects 目录（仅 Claude 3P Code 通道需要）</label>
+              <label>🔗 配套 Claude 目录</label>
               <div class="input-row">
-                <input type="text" id="apply-claude-dir" placeholder="非 3P Code 目标可留空" />
-                <button class="btn-ghost" onclick="pickPath('apply-claude-dir', 'dir')">选择</button>
+                <input type="text" id="apply-claude-dir" placeholder="仅 3P Code 需要" />
+                <button class="btn-ghost" onclick="pickPath('apply-claude-dir', 'dir')">浏览</button>
               </div>
             </div>
           </div>
 
           <div class="grid-2" style="margin-top:10px;">
             <div class="field">
-              <label>同名文件冲突保护策略</label>
+              <label style="display:flex;align-items:center;gap:5px;">🛡 冲突策略 <button class="info-btn" onclick="showInfoTip('collision', this)">ⓘ</button></label>
               <select id="apply-collision">
-                <option value="refuse">拒绝覆盖（最安全默认）</option>
-                <option value="rename">自动重命名保留双方</option>
-                <option value="skip">跳过已存在文件</option>
+                <option value="refuse">拒绝覆盖（默认）</option>
+                <option value="rename">重命名保留双方</option>
+                <option value="skip">跳过已存在</option>
               </select>
             </div>
             <div class="field" style="justify-content:flex-end;">
-              <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;height:36px;">
-                <input type="checkbox" id="apply-include-skills" /> 同时将脱敏 Skills 复制到目标目录
+              <label class="switch-pill" style="height:36px;">
+                <input type="checkbox" id="apply-include-skills" />
+                <span>🧩 同步 Skills 至目标</span>
               </label>
             </div>
           </div>
@@ -886,29 +1049,47 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
 
   <!-- Right Live Progress & Unified Next-Step CTA Rail -->
   <aside class="inspector">
-    <div class="insp-title">当前迁移进度</div>
+    <div class="insp-title">迁移进度</div>
     <div class="progress-card">
-      <div class="p-item active" id="rp-1"><span class="p-dot">1</span><span>选定来源与目标图标</span></div>
-      <div class="p-item" id="rp-2"><span class="p-dot">2</span><span>只读预演 & 核对对话</span></div>
-      <div class="p-item" id="rp-3"><span class="p-dot">3</span><span>生成并校验本地迁移包</span></div>
-      <div class="p-item" id="rp-4"><span class="p-dot">4</span><span>备份并正式迁入目标</span></div>
+      <div class="p-item active" id="rp-1"><span class="p-dot">1</span><span>选来源与目标</span></div>
+      <div class="p-item" id="rp-2"><span class="p-dot">2</span><span>预演与看内容</span></div>
+      <div class="p-item" id="rp-3"><span class="p-dot">3</span><span>生成并校验包</span></div>
+      <div class="p-item" id="rp-4"><span class="p-dot">4</span><span>备份正式迁入</span></div>
     </div>
 
-    <div class="insp-title">实时安全护盾</div>
+    <div class="rail-prog hidden" id="rail-progress">
+      <div class="rail-prog-row"><span id="rail-prog-phase">处理中</span><span style="color:var(--accent);" id="rail-prog-pct">0%</span></div>
+      <div class="prog-track" style="height:6px;"><div class="prog-fill" id="rail-prog-fill"></div></div>
+      <div style="font-size:10.5px;color:var(--text-2);font-variant-numeric:tabular-nums;" id="rail-prog-sub">0 / 0</div>
+    </div>
+
+    <div class="insp-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>安全护盾</span>
+      <button class="info-btn" onclick="showInfoTip('shield', this)">ⓘ</button>
+    </div>
     <div class="tele-list">
-      <div class="tele-row"><span>引擎模式</span><b style="color:var(--accent);">零 AI 确定性</b></div>
-      <div class="tele-row"><span>协议防错</span><b style="color:var(--safe);">零 Invalid Params</b></div>
-      <div class="tele-row"><span>密钥脱敏</span><b style="color:var(--safe);">${ENV_VAR} 自动替换</b></div>
-      <div class="tele-row"><span>写前备份</span><b>0600 tar.gz + SHA-256</b></div>
+      <div class="tele-row"><span>引擎</span><b style="color:var(--accent);">零 AI 确定性</b></div>
+      <div class="tele-row"><span>协议</span><b style="color:var(--safe);">零报错校验</b></div>
+      <div class="tele-row"><span>密钥</span><b style="color:var(--safe);">${ENV_VAR}</b></div>
+      <div class="tele-row"><span>备份</span><b>0600 + SHA-256</b></div>
     </div>
 
     <div class="action-stack">
-      <div class="next-hint" id="cta-hint">下一步：先执行只读预演，查看真实会话内容</div>
-      <button class="btn-primary" id="btn-main-cta" onclick="runNextStep()">1. 只读预演并查看内容 →</button>
-      <button class="btn-sec" id="btn-rail-viewer" onclick="openViewer()" disabled>打开独立离线浏览器 ↗</button>
-      <button class="btn-danger hidden" id="btn-rail-rollback" onclick="runCurrentRollback()">↺ 一键撤销本次迁入（回滚）</button>
+      <div class="next-hint" id="cta-hint">下一步：只读预演会话内容</div>
+      <button class="btn-primary" id="btn-main-cta" onclick="runNextStep()">1. 预演查看 →</button>
+      <button class="btn-sec" id="btn-rail-viewer" onclick="openViewer()" disabled>离线浏览器 ↗</button>
+      <button class="btn-danger hidden" id="btn-rail-rollback" onclick="runCurrentRollback()">↺ 一键回滚</button>
     </div>
   </aside>
+
+  <!-- Reusable Click-to-Open Info Popover -->
+  <div class="info-popover hidden" id="info-popover" role="dialog" aria-modal="false">
+    <div class="info-pop-head">
+      <span class="info-pop-title" id="info-pop-title">说明</span>
+      <button class="info-pop-close" onclick="closeInfoTip()" aria-label="关闭">×</button>
+    </div>
+    <div id="info-pop-body"></div>
+  </div>
 
 <script>
 const TOKEN = "__NEXUS_TOKEN__";
@@ -958,8 +1139,184 @@ const state = {
   activePreviewIdx: 0,
   lastBundlePath: null,
   lastTxDir: null,
-  lastApplySessions: []
+  lastApplySessions: [],
+  activeInfoBtn: null
 };
+
+const INFO_TIPS = {
+  engine: {
+    title: "零 AI 确定性引擎",
+    body: "所有解析、格式转换、密钥脱敏、SHA-256 校验与回滚均由纯确定性本地代码执行，不调用任何大模型或外部网络。"
+  },
+  workflow: {
+    title: "四步安全迁移流程",
+    body: "① 选来源与目标并设置上限 → ② 只读预演核对真实对话与层级结构 → ③ 生成 0600 权限本地迁移包并校验 → ④ 写前自动打包备份后迁入沙箱或正式目录，随时一键回滚。"
+  },
+  source_target: {
+    title: "对称来源与目标（23 款全双向）",
+    body: "来源与目标采用统一图标卡片，点击中间「⇄ 互换」可一键双向翻转。所有主流本地 Harness（含 Codex、Antigravity、T3 Code、Claude 3P、Cursor、Windsurf 等）均已开放全双向读写。"
+  },
+  limit: {
+    title: "迁移数量上限（主会话数）",
+    body: "按最近更新时间倒序选取前 N 条顶层主会话；选「全部」或填 0 表示不限制。若同时开启「含子代理」，所选主会话关联的 Codex Delegation / 子代理会自动一并带入并保持父子层级。"
+  },
+  subagents: {
+    title: "包含子代理 / Codex Delegation 层级",
+    body: "关闭（默认）：仅迁移顶层主会话，避免上千条临时子代理刷屏。开启：自动附带所选主会话派生的子代理，并按父在前、子在后写入 T3 Code 原生 lineage（parentThreadId / rootThreadId / relationshipToParent: subagent），既保留层级关联又不会把侧边栏塞爆。"
+  },
+  resources: {
+    title: "同步资源层（Skills + 脱敏 MCP）",
+    body: "以安全复制模式收集本地 Skills 与 MCP 配置；所有 API Key、Token、Cookie 会自动替换为 ${ENV_VAR} 环境变量占位符，绝不外泄明文密钥。"
+  },
+  filter_scope: {
+    title: "分组 / Section 与项目精准筛选",
+    body: "可按源端分组名（如 Codex 的 Destruction Era）或项目目录关键词精准过滤，先筛再读盘，面对数千条历史会话也能秒级命中。"
+  },
+  paths: {
+    title: "来源目录与默认工作区",
+    body: "来源目录随图标自动探测填入。对携带真实项目路径的会话（Antigravity / Codex / Claude 等），会按会话各自原始项目分别归类；仅对缺失路径的历史会话回退到默认工作区。"
+  },
+  step2_preview: {
+    title: "只读预演与层级预览",
+    body: "零写入磁盘。左侧展示每条会话的项目归属（📁）、分组（🏷）与父子代理层级（↳），点选即可在右侧核对脱敏后的完整消息流。"
+  },
+  step3_bundle: {
+    title: "本地迁移包与完整性校验",
+    body: "在本地生成含 portable.json 无损归档与目标原生格式文件的迁移包（0600 私有权限），并自动校验所有文件 SHA-256 与零明文密钥。此步仍未修改目标软件目录。"
+  },
+  step4_apply: {
+    title: "自动备份并正式迁入",
+    body: "写入前自动按受影响文件精准打包 0600 tar.gz 原始备份（含 SQLite WAL/SHM），写入后立即执行 SHA-256 与数据库读回校验，并支持按原哈希一键精确回滚。"
+  },
+  mode_sandbox: {
+    title: "🧪 沙箱试迁（推荐首次使用）",
+    body: "将迁移包写入独立临时目录，零风险验证格式与回滚，完全不触碰你本机真实安装的目标软件。"
+  },
+  mode_live: {
+    title: "🚀 正式写入目标软件",
+    body: "直接写入目标软件的真实数据目录（如 ~/.t3/userdata/statev2.sqlite 或 ~/.codex）。写前自动备份，若目标软件正在运行，迁入完成后重启即可看到新会话。"
+  },
+  collision: {
+    title: "同名会话冲突策略",
+    body: "「拒绝覆盖」最安全；「重命名保留双方」会为冲突条目分配新 ID 保留历史；「跳过已存在」仅导入新会话。"
+  },
+  shield: {
+    title: "实时安全护盾",
+    body: "写前两级门禁（拦截损坏配置与云同步冲突目录）、强制 0600 权限原子替换、全量凭据正则脱敏、精准文件级回滚（绝不清空目标目录无关文件）。"
+  }
+};
+
+function showInfoTip(key, btn) {
+  const tip = INFO_TIPS[key];
+  if (!tip) return;
+  const pop = document.getElementById("info-popover");
+  if (state.activeInfoBtn === btn && !pop.classList.contains("hidden")) {
+    closeInfoTip();
+    return;
+  }
+  closeInfoTip();
+  state.activeInfoBtn = btn;
+  btn.classList.add("open");
+  document.getElementById("info-pop-title").textContent = tip.title;
+  document.getElementById("info-pop-body").textContent = tip.body;
+  pop.classList.remove("hidden");
+  const rect = btn.getBoundingClientRect();
+  const pw = pop.offsetWidth || 310;
+  const ph = pop.offsetHeight || 120;
+  let left = rect.left + rect.width / 2 - pw / 2;
+  left = Math.max(12, Math.min(window.innerWidth - pw - 12, left));
+  let top = rect.bottom + 8;
+  if (top + ph > window.innerHeight - 12) top = Math.max(12, rect.top - ph - 8);
+  pop.style.left = left + "px";
+  pop.style.top = top + "px";
+}
+
+function closeInfoTip() {
+  const pop = document.getElementById("info-popover");
+  if (pop) pop.classList.add("hidden");
+  if (state.activeInfoBtn) {
+    state.activeInfoBtn.classList.remove("open");
+    state.activeInfoBtn = null;
+  }
+}
+
+document.addEventListener("click", e => {
+  const pop = document.getElementById("info-popover");
+  if (!pop || pop.classList.contains("hidden")) return;
+  if (pop.contains(e.target) || (state.activeInfoBtn && state.activeInfoBtn.contains(e.target))) return;
+  closeInfoTip();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeInfoTip(); });
+
+function setLimitPreset(val) {
+  document.getElementById("filter-limit").value = String(val);
+  document.querySelectorAll("#limit-presets button").forEach(b => {
+    b.classList.toggle("active", Number(b.dataset.val) === Number(val));
+  });
+}
+
+function onLimitInput() {
+  const v = parseInt(document.getElementById("filter-limit").value, 10);
+  const num = Number.isFinite(v) && v >= 0 ? v : 0;
+  document.querySelectorAll("#limit-presets button").forEach(b => {
+    b.classList.toggle("active", Number(b.dataset.val) === num);
+  });
+}
+
+function showLiveProgress(title, phaseLabel, pct, completed, total, rate, etaSec, detail) {
+  const panel = document.getElementById("live-progress-panel");
+  const rail = document.getElementById("rail-progress");
+  panel.classList.remove("hidden");
+  rail.classList.remove("hidden");
+  const p = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  document.getElementById("prog-phase-badge").textContent = phaseLabel || "处理中";
+  document.getElementById("prog-title").textContent = title || "正在处理…";
+  document.getElementById("prog-pct").textContent = p + "%";
+  document.getElementById("prog-fill").style.width = p + "%";
+  document.getElementById("prog-detail").textContent = detail || "并行处理中…";
+  const rateTxt = rate && rate > 0 ? `${rate.toFixed(1)} 条/秒` : "";
+  const etaTxt = etaSec != null && etaSec > 0.2 ? ` · 约剩 ${etaSec < 60 ? etaSec.toFixed(1) + "s" : Math.ceil(etaSec / 60) + "m"}` : "";
+  const countTxt = total > 0 ? `${completed} / ${total}` : `${completed}`;
+  document.getElementById("prog-stats").textContent = [countTxt, rateTxt].filter(Boolean).join(" · ") + etaTxt;
+
+  document.getElementById("rail-prog-phase").textContent = phaseLabel || "处理中";
+  document.getElementById("rail-prog-pct").textContent = p + "%";
+  document.getElementById("rail-prog-fill").style.width = p + "%";
+  document.getElementById("rail-prog-sub").textContent = [countTxt, rateTxt].filter(Boolean).join(" · ");
+}
+
+function hideLiveProgress() {
+  document.getElementById("live-progress-panel").classList.add("hidden");
+  document.getElementById("rail-progress").classList.add("hidden");
+}
+
+async function runAsyncJob(endpoint, payload, titleText) {
+  showLiveProgress(titleText, "启动中", 3, 0, 0, 0, null, "正在初始化并行引擎…");
+  const started = await api(endpoint, payload);
+  const jobId = started.job_id;
+  while (true) {
+    const st = await api("/api/jobs/" + encodeURIComponent(jobId));
+    showLiveProgress(
+      titleText,
+      st.phase_label || "处理中",
+      st.percent || 0,
+      st.completed || 0,
+      st.total || 0,
+      st.rate_per_sec || 0,
+      st.eta_sec,
+      st.detail || ""
+    );
+    if (st.status === "done") {
+      setTimeout(hideLiveProgress, 700);
+      return st.result;
+    }
+    if (st.status === "error") {
+      hideLiveProgress();
+      throw new Error(st.error || "任务执行失败");
+    }
+    await new Promise(r => setTimeout(r, 120));
+  }
+}
 
 async function api(path, body) {
   const opts = {
@@ -1025,21 +1382,21 @@ function updateProgressUI() {
   document.getElementById("btn-rail-rollback").classList.toggle("hidden", !state.lastTxDir);
 
   if (s === 1) {
-    cta.textContent = "1. 只读预演并查看内容 →";
-    hint.textContent = "下一步：点击预演，直接查看命中的真实对话内容（零写入）";
-    gStat.innerHTML = `<span class="pulse"></span><span>第 1 步 · 选择来源与目标</span>`;
+    cta.textContent = "1. 预演查看 →";
+    hint.textContent = "下一步：只读预演会话内容";
+    gStat.innerHTML = `<span class="pulse"></span><span>第 1 步 · 选来源与目标</span>`;
   } else if (s === 2) {
-    cta.textContent = "2. 生成并校验本地迁移包 →";
-    hint.textContent = "已看清对话内容？下一步生成 0600 迁移包并通过 SHA-256 校验";
-    gStat.innerHTML = `<span class="pulse"></span><span>第 2 步 · 已预演对话内容</span>`;
+    cta.textContent = "2. 生成迁移包 →";
+    hint.textContent = "下一步：生成并校验 0600 迁移包";
+    gStat.innerHTML = `<span class="pulse"></span><span>第 2 步 · 已预演</span>`;
   } else if (s === 3) {
-    cta.textContent = state.applyMode === "sandbox" ? "3. 试迁入沙箱目录（零风险）→" : "3. 自动备份并正式迁入目标 →";
-    hint.textContent = "迁移包已就绪！点击即可在第 4 步备份并正式迁入目标软件";
-    gStat.innerHTML = `<span class="pulse"></span><span>第 3 步 · 迁移包已校验，等待迁入</span>`;
+    cta.textContent = state.applyMode === "sandbox" ? "3. 沙箱试迁 →" : "3. 备份并迁入 →";
+    hint.textContent = "下一步：自动备份并写入目标";
+    gStat.innerHTML = `<span class="pulse"></span><span>第 3 步 · 待迁入</span>`;
   } else {
-    cta.textContent = "↻ 开启新一次迁移";
-    hint.textContent = "✓ 本次迁移已正式完成！下方可随时一键回滚或离线浏览";
-    gStat.innerHTML = `<span class="pulse"></span><span>✓ 第 4 步 · 已正式迁入目标</span>`;
+    cta.textContent = "↻ 新一次迁移";
+    hint.textContent = "✓ 已迁入 · 可随时回滚";
+    gStat.innerHTML = `<span class="pulse"></span><span>✓ 第 4 步 · 已完成</span>`;
   }
 }
 
@@ -1151,7 +1508,12 @@ function renderSourceGrid() {
   document.getElementById("source-grid").innerHTML = list.map(h => {
     const d = state.discoveredById[h.discoverId];
     const detected = d && d.detected;
-    const sub = detected ? `${d.session_file_count} 会话 · ${d.skill_count} Skills` : h.sub;
+    let sub = h.sub;
+    if (detected) {
+      sub = (d.subagent_count && d.subagent_count > 0)
+        ? `${d.session_file_count} 主会话 · ${d.subagent_count} 子代理`
+        : `${d.session_file_count} 会话 · ${d.skill_count} Skills`;
+    }
     const dotCls = !h.write ? "ro" : (detected ? "" : "off");
     return `<button class="h-card ${h.id === state.srcId ? "sel-src" : ""}" onclick="selectSource('${h.id}')">
       <div class="h-icon" style="background:${h.color};">${h.svg}</div>
@@ -1207,7 +1569,6 @@ async function pickPath(inputId, mode) {
     if (picked) {
       document.getElementById(inputId).value = picked;
       if (inputId === "src-path") updateBridgeBar();
-      if (inputId === "out-path") document.getElementById("out-preview-label").textContent = picked;
     }
   } catch (e) {
     setGuide("<b>路径选择失败：</b>" + esc(e.message), "err");
@@ -1221,13 +1582,16 @@ async function pickExternalSource() {
 }
 
 function collectPayload() {
+  const rawLimit = parseInt(document.getElementById("filter-limit").value, 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : null;
   return {
     source: document.getElementById("src-path").value.trim(),
     source_format: state.srcFmt || "auto",
     target: state.dstId,
     section: document.getElementById("filter-section").value.trim() || null,
     project: document.getElementById("filter-project").value.trim() || null,
-    limit: parseInt(document.getElementById("filter-limit").value, 10) || 5,
+    limit,
+    include_subagents: document.getElementById("opt-subagents").checked,
     out: document.getElementById("out-path").value.trim(),
     cwd: document.getElementById("cwd-path").value.trim(),
     include_resources: document.getElementById("opt-resources").checked
@@ -1245,10 +1609,12 @@ function renderInlineConversation(idx) {
   }
   const roleLabel = { user:"用户", assistant:"AI 助手", tool_call:"工具调用", tool_result:"工具返回", system:"系统", developer:"系统指令" };
   const head = `<div style="padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-    <b style="font-size:13.5px;">${esc(conv.title)}</b>
-    <div style="display:flex;gap:5px;">
-      ${conv.section_name ? `<span class="badge info">分组：${esc(conv.section_name)}</span>` : ""}
-      ${conv.project_name ? `<span class="badge ok">项目：${esc(conv.project_name)}</span>` : ""}
+    <b style="font-size:13.5px;">${conv.nesting_depth > 0 ? "↳ " : ""}${esc(conv.title)}</b>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;">
+      ${conv.project_name ? `<span class="badge ok">📁 ${esc(conv.project_name)}</span>` : ""}
+      ${conv.section_name ? `<span class="badge info">🏷 ${esc(conv.section_name)}</span>` : ""}
+      ${conv.parent_session_id ? `<span class="badge warn">🌿 ${esc(conv.subagent_role || "子代理")}</span>` : ""}
+      ${conv.child_subagent_count > 0 ? `<span class="badge info">🌿 含 ${conv.child_subagent_count} 子代理</span>` : ""}
       <span class="badge">${conv.shown_nodes}/${conv.total_nodes} 条消息</span>
     </div>
   </div>`;
@@ -1278,6 +1644,19 @@ function renderPreviewData(manifest, convPreviews) {
   document.getElementById("k-sec").textContent = secTotal;
   document.getElementById("raw-json").textContent = JSON.stringify(manifest, null, 2);
 
+  // Show Project / Section / Parent-Child hierarchy summary badge
+  const hIdx = manifest.project_index_summary || {};
+  const hBadge = document.getElementById("hierarchy-badge");
+  const projCnt = Math.max(0, (hIdx.project_count || 0) - ((hIdx.unknown_project_count || 0) > 0 ? 1 : 0));
+  const secCnt = Math.max(0, (hIdx.section_group_count || 0) - ((hIdx.unknown_section_count || 0) > 0 ? 1 : 0));
+  const relCnt = hIdx.session_relation_count || 0;
+  if (projCnt || secCnt || relCnt) {
+    hBadge.textContent = `📁 ${projCnt} 项目 · 🏷 ${secCnt} 分组 · 🌿 ${relCnt} 层级关联`;
+    hBadge.classList.remove("hidden");
+  } else {
+    hBadge.classList.add("hidden");
+  }
+
   state.previewConvs = convPreviews || [];
   const listEl = document.getElementById("preview-sess-list");
   if (!state.previewConvs.length) {
@@ -1285,18 +1664,26 @@ function renderPreviewData(manifest, convPreviews) {
     document.getElementById("preview-reader").innerHTML = `<div style="padding:36px;text-align:center;color:var(--text-3);">无命中会话</div>`;
     return;
   }
-  listEl.innerHTML = state.previewConvs.map((c, idx) => `
-    <button class="sess-row ${idx === 0 ? "active" : ""}" onclick="renderInlineConversation(${idx})">
-      <div class="sess-row-t">${esc(c.title)}</div>
+  listEl.innerHTML = state.previewConvs.map((c, idx) => {
+    const isChild = (c.nesting_depth || 0) > 0 || Boolean(c.parent_session_id);
+    const padPx = isChild ? Math.min(36, 14 + (c.nesting_depth || 1) * 10) : 12;
+    const prefix = isChild ? `<span style="color:var(--accent-2);font-weight:700;">↳ </span>` : "";
+    const tags = [
+      c.project_name ? `<span class="mini-tag proj" title="${esc(c.workspace || c.project_name)}">📁 ${esc(c.project_name)}</span>` : "",
+      c.section_name ? `<span class="mini-tag sec">🏷 ${esc(c.section_name)}</span>` : "",
+      isChild ? `<span class="mini-tag sub">🌿 ${esc(c.subagent_role || "子代理")}</span>` : "",
+      (!isChild && c.child_subagent_count > 0) ? `<span class="mini-tag sub">🌿 ${c.child_subagent_count} 子代理</span>` : ""
+    ].filter(Boolean).join("");
+    return `<button class="sess-row ${isChild ? "is-child" : ""} ${idx === 0 ? "active" : ""}" style="${isChild ? `padding-left:${padPx}px;` : ""}" onclick="renderInlineConversation(${idx})">
+      <div class="sess-row-t">${prefix}${esc(c.title)}</div>
       <div class="sess-row-s">
-        <span>${esc(c.section_name || c.project_name || "未分组")}</span>
-        <span>·</span>
         <span>${c.total_nodes} 节点</span>
         <span>·</span>
         <span>${c.branch_count} 分支</span>
       </div>
-    </button>
-  `).join("");
+      ${tags ? `<div class="sess-tags">${tags}</div>` : ""}
+    </button>`;
+  }).join("");
   renderInlineConversation(0);
 }
 
@@ -1317,15 +1704,15 @@ async function doStep2Preview() {
   const btn = document.getElementById("btn-main-cta");
   btn.disabled = true;
   try {
-    const res = await api("/api/preview", collectPayload());
+    const res = await runAsyncJob("/api/jobs/preview", collectPayload(), "正在并行解析与预演会话");
     renderPreviewData(res.manifest, res.conversations_preview);
-    document.getElementById("preview-badge").textContent = `✓ 已命中 ${res.manifest.conversation_count} 条会话`;
+    document.getElementById("preview-badge").textContent = `✓ ${res.manifest.conversation_count} 条会话`;
     document.getElementById("preview-badge").className = "badge ok";
     if (res.manifest.conversation_count > 0) {
       state.step = 2;
-      setGuide(`<b>第 2 步完成（零写入）：</b>已在下方直接展开真实对话内容。核对无误后，点击右侧 <b>「2. 生成并校验本地迁移包 →」</b>。`, "ok");
+      setGuide(`<b>第 2 步完成（零写入）：</b>已在下方展开真实对话与层级树，确认无误后点右侧 <b>2. 生成迁移包 →</b>`, "ok");
     } else {
-      setGuide(`<b>未命中会话：</b>请检查「分组 / 项目」筛选条件（留空可查看该来源全部会话）。`, "err");
+      setGuide(`<b>未命中会话：</b>请检查分组/项目筛选条件（留空查看全部）。`, "err");
     }
     updateProgressUI();
     jumpStep(2);
@@ -1338,21 +1725,20 @@ async function doStep3Stage() {
   const btn = document.getElementById("btn-main-cta");
   btn.disabled = true;
   try {
-    const res = await api("/api/convert", collectPayload());
+    const res = await runAsyncJob("/api/jobs/convert", collectPayload(), "正在生成并校验本地迁移包");
     state.lastBundlePath = res.written_to;
     state.lastApplySessions = res.manifest.target_sessions || [];
     document.getElementById("out-path").value = res.written_to;
-    document.getElementById("out-preview-label").textContent = res.written_to;
     document.getElementById("rb-bundle").value = res.written_to;
-    document.getElementById("bundle-badge").textContent = res.verify.ok ? "✓ SHA-256 与脱敏校验通过" : "✗ 校验异常";
+    document.getElementById("bundle-badge").textContent = res.verify.ok ? "✓ SHA-256 校验通过" : "✗ 校验异常";
     document.getElementById("bundle-badge").className = "badge " + (res.verify.ok ? "ok" : "err");
     const rec = document.getElementById("bundle-receipt");
-    rec.innerHTML = `✓ 已生成本地迁移包：<code>${esc(res.written_to)}</code>（共 ${res.verify.checks.bundle_file_count} 个文件，零未脱敏密钥）。<br/>👉 <b>下一步：</b>可点「在离线浏览器中查看」核对完整富文本，或直接点击右侧蓝色按钮执行 <b>第 4 步：备份并正式迁入目标软件</b>！`;
+    rec.innerHTML = `✓ 已生成：<code>${esc(res.written_to)}</code>（${res.verify.checks.bundle_file_count} 个文件 · 零明文密钥）`;
     rec.classList.remove("hidden");
     state.step = 3;
-    document.getElementById("apply-badge").textContent = "已就绪 · 等待迁入";
+    document.getElementById("apply-badge").textContent = "已就绪 · 待迁入";
     document.getElementById("apply-badge").className = "badge info";
-    setGuide(`<b>第 3 步完成：</b>迁移包已安全落盘并校验通过！现在请在第 4 步选择「沙箱试迁」或「正式写入」，点击右侧蓝色按钮完成最终迁移。`, "ok");
+    setGuide(`<b>第 3 步完成：</b>迁移包已校验通过！在第 4 步选择「沙箱」或「正式写入」后，点右侧蓝色按钮迁入目标。`, "ok");
     updateProgressUI();
     jumpStep(4);
   } catch (e) {
@@ -1362,7 +1748,7 @@ async function doStep3Stage() {
 
 async function doStep4Apply() {
   if (!state.lastBundlePath) {
-    setGuide("<b>请先完成第 3 步：</b>先生成并校验本地迁移包，再正式迁入目标软件。", "err");
+    setGuide("<b>请先完成第 3 步：</b>先生成本地迁移包，再执行迁入。", "err");
     return;
   }
   const target_root = document.getElementById("apply-target-root").value.trim();
@@ -1374,44 +1760,44 @@ async function doStep4Apply() {
   const btn = document.getElementById("btn-main-cta");
   btn.disabled = true;
   try {
-    const res = await api("/api/apply", {
+    const res = await runAsyncJob("/api/jobs/apply", {
       bundle: state.lastBundlePath,
       target_root,
       claude_dir,
       on_collision: document.getElementById("apply-collision").value,
       include_skills: document.getElementById("apply-include-skills").checked,
       apply: true
-    });
+    }, "正在打包备份并批量迁入目标");
     state.lastTxDir = res.journal_dir;
     document.getElementById("rb-bundle").value = res.journal_dir;
-    document.getElementById("apply-badge").textContent = res.post_write_verification.ok ? "✓ 已正式迁入并读回校验通过" : "⚠ 读回校验异常";
+    document.getElementById("apply-badge").textContent = res.post_write_verification.ok ? "✓ 已迁入并读回校验通过" : "⚠ 读回校验异常";
     document.getElementById("apply-badge").className = "badge " + (res.post_write_verification.ok ? "ok" : "err");
 
     const firstSid = (state.lastApplySessions[0] || {}).session_id || "<session-id>";
     let resumeTip = `目标目录：${target_root}`;
-    if (state.dstId === "claude-code") resumeTip = `在终端续聊：CLAUDE_CONFIG_DIR="${target_root}" claude --resume ${firstSid}`;
-    else if (state.dstId === "codex") resumeTip = `在终端续聊：CODEX_HOME="${target_root}" codex exec resume ${firstSid}`;
-    else if (state.dstId === "gemini-cli") resumeTip = `在终端查看：gemini --list-sessions`;
-    else if (state.dstId.startsWith("claude-desktop-3p")) resumeTip = `重启或刷新 Claude Desktop 3P 客户端即可在对应通道看到已迁入会话`;
-    else if (state.dstId === "t3code") resumeTip = `已直接写入 T3 Code 原生数据库 statev2.sqlite（若 T3 Code 正在运行，完全退出后重新打开即可在左侧看到新迁入的会话）`;
-    else if (state.dstId === "cursor") resumeTip = `已直接写入 Cursor 原生数据库 state.vscdb（重启 Cursor 即可在历史列表中看到迁入会话）`;
+    if (state.dstId === "claude-code") resumeTip = `续聊命令：CLAUDE_CONFIG_DIR="${target_root}" claude --resume ${firstSid}`;
+    else if (state.dstId === "codex") resumeTip = `续聊命令：CODEX_HOME="${target_root}" codex exec resume ${firstSid}`;
+    else if (state.dstId === "gemini-cli") resumeTip = `查看会话：gemini --list-sessions`;
+    else if (state.dstId.startsWith("claude-desktop-3p")) resumeTip = `重启或刷新 Claude Desktop 3P 即可看到新迁入会话`;
+    else if (state.dstId === "t3code") resumeTip = `已批量写入 statev2.sqlite（含真实项目归属与子代理层级；若 T3 Code 正在运行，重启后即显示）`;
+    else if (state.dstId === "cursor") resumeTip = `已写入 Cursor state.vscdb（重启 Cursor 即可看到）`;
 
     const sbox = document.getElementById("apply-success-box");
     sbox.innerHTML = `
-      <b>✓ 迁移已正式生效！（写入 ${res.written_files.length} 个文件，已创建 0600 原始备份）</b><br/>
-      <span style="color:var(--text-2);font-size:12px;">事务备份日志：<code>${esc(res.journal_dir)}</code></span>
+      <b>✓ 迁移已生效（${res.written_files.length} 条记录 · 已创建 0600 备份）</b><br/>
+      <span style="color:var(--text-2);font-size:11.5px;">事务日志：<code>${esc(res.journal_dir)}</code></span>
       <div class="resume-cmd">${esc(resumeTip)}</div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn-danger" style="padding:0 12px;" onclick="runCurrentRollback()">↺ 不满意？一键撤销并按原哈希恢复</button>
-        <button class="btn-sec" style="padding:0 12px;" onclick="openViewer()">打开离线浏览器核对 ↗</button>
+        <button class="btn-danger" style="padding:0 12px;" onclick="runCurrentRollback()">↺ 一键撤销并恢复原状</button>
+        <button class="btn-sec" style="padding:0 12px;" onclick="openViewer()">离线浏览器 ↗</button>
       </div>
     `;
     sbox.classList.remove("hidden");
     state.step = 4;
-    setGuide(`<b>🎉 全部 4 步已完成！</b>会话已正式迁入 <b>${esc(target_root)}</b> 并通过写后读回校验。如需撤销，随时点「一键回滚」。`, "ok");
+    setGuide(`<b>🎉 迁移完成！</b>已写入 <b>${esc(target_root)}</b> 并通过读回校验，随时可一键回滚。`, "ok");
     updateProgressUI();
   } catch (e) {
-    setGuide("<b>正式迁入被安全拦截或失败：</b>" + esc(e.message), "err");
+    setGuide("<b>迁入失败：</b>" + esc(e.message), "err");
   } finally { btn.disabled = false; }
 }
 
@@ -1544,6 +1930,216 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
         .encode("utf-8")
     )
     viewer_servers: list[HTTPServer] = []
+    jobs: dict[str, dict[str, Any]] = {}
+    jobs_lock = threading.Lock()
+
+    _PHASE_LABELS = {
+        "init": "初始化",
+        "parse": "并行解析",
+        "plan": "投影转换",
+        "render": "脱敏预览",
+        "write": "写入迁移包",
+        "backup": "写前备份",
+        "apply": "批量写入目标",
+        "verify": "SHA-256 校验",
+        "done": "已完成",
+    }
+    _PHASE_RANGES: dict[str, dict[str, tuple[float, float]]] = {
+        "preview": {"parse": (2.0, 68.0), "plan": (68.0, 92.0), "render": (92.0, 100.0)},
+        "convert": {"parse": (2.0, 44.0), "plan": (44.0, 64.0), "write": (64.0, 90.0), "verify": (90.0, 100.0)},
+        "apply": {"backup": (2.0, 16.0), "apply": (16.0, 86.0), "verify": (86.0, 100.0)},
+    }
+
+    def _run_preview_work(body: dict[str, Any], on_progress: Any = None) -> dict[str, Any]:
+        src = str(body.get("source") or "").strip()
+        if not src:
+            raise ValueError("请先选择来源 Harness 图标或导入本地文件")
+        fmt = str(body.get("source_format") or "auto")
+        target = str(body.get("target") or "claude-code")
+        if target not in SUPPORTED_TARGETS:
+            raise ValueError(f"不支持的目标格式: {target}")
+        section = body.get("section") or None
+        project = body.get("project") or None
+        raw_lim = body.get("limit")
+        limit = int(raw_lim) if (raw_lim is not None and str(raw_lim).strip() != "" and int(raw_lim) > 0) else None
+        include_subagents = bool(body.get("include_subagents", False))
+        cwd = body.get("cwd") or default_cwd
+        graphs, _ = load_any_source(
+            src,
+            source_format=fmt,
+            section_filter=section,
+            project_filter=project,
+            limit=limit,
+            include_subagents=include_subagents,
+            on_progress=on_progress,
+        )
+        graphs = filter_conversations(graphs, project=project, section=section)
+        if limit and not include_subagents:
+            graphs = graphs[:limit]
+        res_bundle = scan_resources(project_dir=cwd) if body.get("include_resources") else None
+        manifest = preview(graphs, cwd=cwd, target=target, resources=res_bundle, on_progress=on_progress)
+        if on_progress is not None:
+            on_progress("render", 0, 1, "正在生成脱敏对话预览…")
+        convs_prev = _serialize_conversations_preview(graphs)
+        if on_progress is not None:
+            on_progress("render", 1, 1, f"已就绪 {len(convs_prev)} 条会话")
+        return {"manifest": manifest, "conversations_preview": convs_prev}
+
+    def _run_convert_work(body: dict[str, Any], on_progress: Any = None) -> dict[str, Any]:
+        src = str(body.get("source") or "").strip()
+        if not src:
+            raise ValueError("请先选择来源 Harness 图标或导入本地文件")
+        fmt = str(body.get("source_format") or "auto")
+        target = str(body.get("target") or "claude-code")
+        if target not in SUPPORTED_TARGETS:
+            raise ValueError(f"不支持的目标格式: {target}")
+        section = body.get("section") or None
+        project = body.get("project") or None
+        raw_lim = body.get("limit")
+        limit = int(raw_lim) if (raw_lim is not None and str(raw_lim).strip() != "" and int(raw_lim) > 0) else None
+        include_subagents = bool(body.get("include_subagents", False))
+        cwd = body.get("cwd") or default_cwd
+        graphs, assets = load_any_source(
+            src,
+            source_format=fmt,
+            section_filter=section,
+            project_filter=project,
+            limit=limit,
+            include_subagents=include_subagents,
+            on_progress=on_progress,
+        )
+        graphs = filter_conversations(graphs, project=project, section=section)
+        if limit and not include_subagents:
+            graphs = graphs[:limit]
+        res_bundle = scan_resources(project_dir=cwd) if body.get("include_resources") else None
+        out = str(body.get("out") or default_out).strip()
+        out_p = Path(out).expanduser()
+        if out_p.exists():
+            stamp = secrets.token_hex(3)
+            out_p = out_p.with_name(f"{out_p.name}-{stamp}")
+        manifest = write_bundle(
+            graphs,
+            out=out_p,
+            cwd=cwd,
+            target=target,
+            asset_bytes=assets,
+            resources=res_bundle,
+            on_progress=on_progress,
+        )
+        if on_progress is not None:
+            on_progress("verify", 0, 1, "正在执行 SHA-256 与密钥脱敏校验…")
+        vcheck = verify_bundle(out_p)
+        if on_progress is not None:
+            on_progress("verify", 1, 1, "迁移包校验通过" if vcheck.get("ok") else "迁移包校验异常")
+        return {
+            "written_to": str(out_p.resolve()),
+            "manifest": manifest,
+            "verify": vcheck,
+            "conversations_preview": _serialize_conversations_preview(graphs),
+        }
+
+    def _run_apply_work(body: dict[str, Any], on_progress: Any = None) -> dict[str, Any]:
+        return apply_bundle(
+            str(body.get("bundle") or ""),
+            target_root=str(body.get("target_root") or ""),
+            claude_dir=body.get("claude_dir") or None,
+            on_collision=str(body.get("on_collision") or "refuse"),
+            include_skills=bool(body.get("include_skills", False)),
+            apply=bool(body.get("apply", False)),
+            on_progress=on_progress,
+        )
+
+    def _start_async_job(kind: str, body: dict[str, Any]) -> str:
+        jid = secrets.token_hex(8)
+        started_at = time.monotonic()
+        with jobs_lock:
+            # Keep memory bounded (last 40 jobs)
+            if len(jobs) > 40:
+                for old_id in list(jobs.keys())[:-20]:
+                    if jobs[old_id].get("status") != "running":
+                        jobs.pop(old_id, None)
+            jobs[jid] = {
+                "job_id": jid,
+                "kind": kind,
+                "status": "running",
+                "phase": "init",
+                "phase_label": _PHASE_LABELS["init"],
+                "completed": 0,
+                "total": 0,
+                "percent": 2.0,
+                "elapsed_sec": 0.0,
+                "rate_per_sec": 0.0,
+                "eta_sec": None,
+                "detail": "正在启动并行任务…",
+                "result": None,
+                "error": None,
+            }
+
+        phase_starts: dict[str, float] = {}
+
+        def _on_progress(phase: str, done: int, total: int, detail: str) -> None:
+            now = time.monotonic()
+            if phase not in phase_starts:
+                phase_starts[phase] = now
+            p_elapsed = max(0.01, now - phase_starts[phase])
+            rate = (done / p_elapsed) if done > 0 else 0.0
+            eta = ((total - done) / rate) if (rate > 0 and total > done) else 0.0
+            lo, hi = _PHASE_RANGES.get(kind, {}).get(phase, (0.0, 100.0))
+            frac = min(1.0, max(0.0, done / max(total, 1)))
+            pct = lo + (hi - lo) * frac
+            with jobs_lock:
+                st = jobs.get(jid)
+                if st is not None:
+                    st.update(
+                        {
+                            "phase": phase,
+                            "phase_label": _PHASE_LABELS.get(phase, phase),
+                            "completed": int(done),
+                            "total": int(total),
+                            "percent": round(pct, 1),
+                            "elapsed_sec": round(now - started_at, 2),
+                            "rate_per_sec": round(rate, 2),
+                            "eta_sec": round(eta, 2) if total > done else 0.0,
+                            "detail": str(detail or ""),
+                        }
+                    )
+
+        def _worker() -> None:
+            try:
+                if kind == "preview":
+                    res = _run_preview_work(body, on_progress=_on_progress)
+                elif kind == "convert":
+                    res = _run_convert_work(body, on_progress=_on_progress)
+                elif kind == "apply":
+                    res = _run_apply_work(body, on_progress=_on_progress)
+                else:
+                    raise ValueError(f"unknown job kind: {kind}")
+                with jobs_lock:
+                    st = jobs[jid]
+                    st.update(
+                        {
+                            "status": "done",
+                            "phase": "done",
+                            "phase_label": _PHASE_LABELS["done"],
+                            "percent": 100.0,
+                            "elapsed_sec": round(time.monotonic() - started_at, 2),
+                            "eta_sec": 0.0,
+                            "result": res,
+                        }
+                    )
+            except Exception as exc:
+                with jobs_lock:
+                    st = jobs[jid]
+                    st.update(
+                        {
+                            "status": "error",
+                            "elapsed_sec": round(time.monotonic() - started_at, 2),
+                            "error": str(exc),
+                        }
+                    )
+
+        threading.Thread(target=_worker, daemon=True).start()
+        return jid
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args: Any) -> None:
@@ -1592,6 +2188,16 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
                 if path == "/api/matrix":
                     self._send_json(HTTPStatus.OK, build_matrix_data())
                     return
+                if path.startswith("/api/jobs/"):
+                    jid = urllib.parse.unquote(path.removeprefix("/api/jobs/").strip("/"))
+                    with jobs_lock:
+                        st = jobs.get(jid)
+                        snap = dict(st) if st is not None else None
+                    if snap is None:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+                    else:
+                        self._send_json(HTTPStatus.OK, snap)
+                    return
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
             except Exception as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
@@ -1608,53 +2214,18 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
                     self._send_json(HTTPStatus.OK, {"path": picked})
                     return
 
-                if path in {"/api/preview", "/api/convert"}:
-                    src = str(body.get("source") or "").strip()
-                    if not src:
-                        raise ValueError("请先在左侧选择来源 Harness 图标或导入本地文件")
-                    fmt = str(body.get("source_format") or "auto")
-                    target = str(body.get("target") or "claude-code")
-                    if target not in SUPPORTED_TARGETS:
-                        raise ValueError(f"不支持的目标格式: {target}")
-                    section = body.get("section") or None
-                    project = body.get("project") or None
-                    limit = int(body["limit"]) if body.get("limit") else None
-                    cwd = body.get("cwd") or default_cwd
-                    graphs, assets = load_any_source(
-                        src, source_format=fmt, section_filter=section, project_filter=project, limit=limit
-                    )
-                    graphs = filter_conversations(graphs, project=project, section=section)
-                    if limit:
-                        graphs = graphs[:limit]
-                    res_bundle = scan_resources(project_dir=cwd) if body.get("include_resources") else None
-                    if path == "/api/preview":
-                        manifest = preview(graphs, cwd=cwd, target=target, resources=res_bundle)
-                        self._send_json(
-                            HTTPStatus.OK,
-                            {
-                                "manifest": manifest,
-                                "conversations_preview": _serialize_conversations_preview(graphs),
-                            },
-                        )
-                        return
-                    out = str(body.get("out") or default_out).strip()
-                    out_p = Path(out).expanduser()
-                    if out_p.exists():
-                        stamp = secrets.token_hex(3)
-                        out_p = out_p.with_name(f"{out_p.name}-{stamp}")
-                    manifest = write_bundle(
-                        graphs, out=out_p, cwd=cwd, target=target, asset_bytes=assets, resources=res_bundle
-                    )
-                    vcheck = verify_bundle(out_p)
-                    self._send_json(
-                        HTTPStatus.OK,
-                        {
-                            "written_to": str(out_p.resolve()),
-                            "manifest": manifest,
-                            "verify": vcheck,
-                            "conversations_preview": _serialize_conversations_preview(graphs),
-                        },
-                    )
+                if path in {"/api/jobs/preview", "/api/jobs/convert", "/api/jobs/apply"}:
+                    kind = path.rsplit("/", 1)[-1]
+                    jid = _start_async_job(kind, body)
+                    self._send_json(HTTPStatus.OK, {"job_id": jid})
+                    return
+
+                if path == "/api/preview":
+                    self._send_json(HTTPStatus.OK, _run_preview_work(body))
+                    return
+
+                if path == "/api/convert":
+                    self._send_json(HTTPStatus.OK, _run_convert_work(body))
                     return
 
                 if path == "/api/verify":
@@ -1668,15 +2239,7 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
                     return
 
                 if path == "/api/apply":
-                    res = apply_bundle(
-                        str(body.get("bundle") or ""),
-                        target_root=str(body.get("target_root") or ""),
-                        claude_dir=body.get("claude_dir") or None,
-                        on_collision=str(body.get("on_collision") or "refuse"),
-                        include_skills=bool(body.get("include_skills", False)),
-                        apply=bool(body.get("apply", False)),
-                    )
-                    self._send_json(HTTPStatus.OK, res)
+                    self._send_json(HTTPStatus.OK, _run_apply_work(body))
                     return
 
                 if path == "/api/rollback":

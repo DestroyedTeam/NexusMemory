@@ -139,6 +139,7 @@ def parse_local_agent_session(
         transcript_source = "metadata_only_no_transcript"
 
     nodes: list[MessageNode] = []
+    seen_nids: set[str] = set()
     prev_id: str | None = None
     all_links: list[str] = []
     seen_links: set[str] = set()
@@ -181,8 +182,9 @@ def parse_local_agent_session(
                     seen_links.add(u)
                     all_links.append(u)
             nid = str(entry.get("uuid") or f"audit-{idx}")
-            if any(n.node_id == nid for n in nodes):
+            if nid in seen_nids:
                 nid = f"{nid}-{idx}"
+            seen_nids.add(nid)
             if nodes:
                 prev = nodes[-1]
                 nodes[-1] = MessageNode(

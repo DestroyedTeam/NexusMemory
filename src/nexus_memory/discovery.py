@@ -258,6 +258,7 @@ def discover_harnesses(
         skills_p: Path = item["skills_dir"]
         mcp_p: Path = item["mcp_config"]
         present = root_p.exists() or sess_p.exists() or skills_p.exists() or mcp_p.exists()
+        subagent_count = 0
         if item["id"] == "t3code":
             sess_count = 0
             t3_db = root_p / "userdata" / "statev2.sqlite"
@@ -274,6 +275,27 @@ def discover_harnesses(
                         con.close()
                 except Exception:
                     sess_count = 0
+        elif item["id"] == "antigravity":
+            ag_db = root_p / "conversation_summaries.db"
+            if ag_db.is_file():
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(f"file:{ag_db}?mode=ro", uri=True)
+                    try:
+                        top_r = con.execute(
+                            "SELECT COUNT(*) FROM conversation_summaries WHERE nesting_depth = 0 AND parent_conversation_id = ''"
+                        ).fetchone()
+                        sub_r = con.execute(
+                            "SELECT COUNT(*) FROM conversation_summaries WHERE nesting_depth > 0 OR parent_conversation_id != ''"
+                        ).fetchone()
+                        sess_count = int(top_r[0]) if top_r else 0
+                        subagent_count = int(sub_r[0]) if sub_r else 0
+                    finally:
+                        con.close()
+                except Exception:
+                    sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
+            else:
+                sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
         else:
             sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
         detected.append(
@@ -284,6 +306,7 @@ def discover_harnesses(
                 "root_path": str(root_p),
                 "session_dir": str(sess_p),
                 "session_file_count": sess_count,
+                "subagent_count": subagent_count,
                 "skills_dir": str(skills_p),
                 "skill_count": _count_files(skills_p, "SKILL.md") if skills_p.is_dir() else 0,
                 "mcp_config_present": mcp_p.is_file(),

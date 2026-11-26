@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -374,6 +376,7 @@ def parse_codex_home(
     section_filter: str | None = None,
     project_filter: str | None = None,
     limit: int | None = None,
+    on_progress: Callable[[str, int, int, str], None] | None = None,
 ) -> list[ConversationGraph]:
     """Read Codex sessions with full `state_5.sqlite` Projects, Project Roots, Sections & Spawn Edges.
 
@@ -471,6 +474,18 @@ def parse_codex_home(
         )
         if parent_id:
             meta["parent_session_id"] = parent_id
+            # Compute nesting depth along parent_by_child chain
+            depth = 1
+            cur_p = parent_id
+            seen_chain = {tid, cur_p}
+            while cur_p in parent_by_child and parent_by_child[cur_p] not in seen_chain:
+                cur_p = parent_by_child[cur_p]
+                seen_chain.add(cur_p)
+                depth += 1
+            meta.setdefault("nesting_depth", depth)
+            meta.setdefault("root_session_id", cur_p)
+        else:
+            meta.setdefault("nesting_depth", 0)
         if db_row.get("model") and not meta.get("model"):
             meta["model"] = db_row["model"]
         if db_row.get("archived"):
@@ -499,6 +514,7 @@ def parse_codex_home(
         sec_needle = section_filter.casefold() if section_filter else None
         proj_needle = project_filter.casefold() if project_filter else None
         dbh = root / "thread_history_1.sqlite"
+        matched_items: list[tuple[str, dict[str, Any]]] = []
         for tid, db_row in meta_by_id.items():
             sec_id = _string(db_row.get("thread_section_id"))
             sec_name = (sections_by_id.get(sec_id or "") or {}).get("name") or ""
@@ -507,6 +523,12 @@ def parse_codex_home(
                 continue
             if proj_needle and proj_needle not in (pname or "").casefold() and proj_needle not in (pid or "").casefold():
                 continue
+            matched_items.append((tid, db_row))
+            if limit and len(matched_items) >= limit:
+                break
+
+        def _load_one_meta(item: tuple[str, dict[str, Any]]) -> ConversationGraph | None:
+            tid, db_row = item
             rp = _resolve_codex_rollout_path(_string(db_row.get("rollout_path")), root, tid)
             graph: ConversationGraph | None = None
             if rp is not None:
@@ -516,32 +538,87 @@ def parse_codex_home(
                     graph = None
             if graph is None:
                 graph = _parse_thread_from_history_sqlite(dbh, tid, db_row)
-            if graph is not None:
-                graphs.append(enrich_graph(graph, db_row))
-                seen_ids.add(tid)
-                if limit and len(graphs) >= limit:
-                    break
+            return enrich_graph(graph, db_row) if graph is not None else None
+
+        total_m = len(matched_items)
+        if total_m >= 4:
+            workers = min(8, os.cpu_count() or 4, total_m)
+            out_map: dict[int, ConversationGraph] = {}
+            done = 0
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futs = {pool.submit(_load_one_meta, item): idx for idx, item in enumerate(matched_items)}
+                for fut in as_completed(futs):
+                    idx = futs[fut]
+                    g = fut.result()
+                    if g is not None:
+                        out_map[idx] = g
+                    done += 1
+                    if on_progress is not None:
+                        lbl = (g.title if g else matched_items[idx][0]) or ""
+                        on_progress("parse", done, total_m, str(lbl))
+            graphs = [out_map[i] for i in sorted(out_map)]
+        else:
+            for idx, item in enumerate(matched_items, 1):
+                g = _load_one_meta(item)
+                if g is not None:
+                    graphs.append(g)
+                if on_progress is not None:
+                    on_progress("parse", idx, max(total_m, 1), str((g.title if g else item[0]) or ""))
         return graphs
 
-    # General scan across sessions/ and archived_sessions/
+    # General scan across sessions/ and archived_sessions/ (parallelized for large rollout sets)
+    candidates: list[tuple[Path, bool]] = []
     for subdir, is_arch in (("sessions", False), ("archived_sessions", True)):
         base = root / subdir
         if not base.is_dir():
             continue
         files = sorted(
-            [p for p in base.rglob("*") if p.is_file() and (p.name.endswith(".jsonl") or p.name.endswith(".jsonl.zst"))]
+            [p for p in base.rglob("*") if p.is_file() and (p.name.endswith(".jsonl") or p.name.endswith(".jsonl.zst"))],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
         )
         for fp in files:
-            try:
-                graph = parse_rollout(fp, archived=is_arch)
-            except (OSError, ValueError):
-                continue
-            if graph.source_id in seen_ids:
-                continue
-            seen_ids.add(graph.source_id)
-            graphs.append(enrich_graph(graph, meta_by_id.get(graph.source_id, {})))
-            if limit and len(graphs) >= limit:
-                return graphs
+            candidates.append((fp, is_arch))
+    if limit:
+        candidates = candidates[:limit]
+
+    total_c = len(candidates)
+
+    def _load_one_file(item: tuple[Path, bool]) -> ConversationGraph | None:
+        fp, is_arch = item
+        try:
+            g = parse_rollout(fp, archived=is_arch)
+        except (OSError, ValueError):
+            return None
+        return enrich_graph(g, meta_by_id.get(g.source_id, {}))
+
+    if total_c >= 4:
+        workers = min(8, os.cpu_count() or 4, total_c)
+        out_map2: dict[int, ConversationGraph] = {}
+        done = 0
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = {pool.submit(_load_one_file, item): idx for idx, item in enumerate(candidates)}
+            for fut in as_completed(futs):
+                idx = futs[fut]
+                g = fut.result()
+                if g is not None:
+                    out_map2[idx] = g
+                done += 1
+                if on_progress is not None:
+                    on_progress("parse", done, total_c, str((g.title if g else candidates[idx][0].name) or ""))
+        for i in sorted(out_map2):
+            g = out_map2[i]
+            if g.source_id not in seen_ids:
+                seen_ids.add(g.source_id)
+                graphs.append(g)
+    else:
+        for idx, item in enumerate(candidates, 1):
+            g = _load_one_file(item)
+            if g is not None and g.source_id not in seen_ids:
+                seen_ids.add(g.source_id)
+                graphs.append(g)
+            if on_progress is not None:
+                on_progress("parse", idx, max(total_c, 1), str((g.title if g else item[0].name) or ""))
     return graphs
 
 

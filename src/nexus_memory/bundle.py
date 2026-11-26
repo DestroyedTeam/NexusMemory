@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,7 @@ def preview(
     device_id: str = DEFAULT_3P_DEVICE_ID,
     org_id: str = DEFAULT_3P_ORG_ID,
     model_provider: str = "openai",
+    on_progress: Callable[[str, int, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """Compute a deterministic dry-run migration plan + multi-dimensional fidelity report without writing."""
     manifest, _ = _plan(
@@ -110,6 +112,7 @@ def preview(
         device_id=device_id,
         org_id=org_id,
         model_provider=model_provider,
+        on_progress=on_progress,
     )
     return manifest
 
@@ -224,6 +227,7 @@ def _plan(
     device_id: str = DEFAULT_3P_DEVICE_ID,
     org_id: str = DEFAULT_3P_ORG_ID,
     model_provider: str = "openai",
+    on_progress: Callable[[str, int, int, str], None] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     if target not in SUPPORTED_TARGETS:
         raise ValueError(f"unsupported target '{target}'; choose from {', '.join(SUPPORTED_TARGETS)}")
@@ -232,6 +236,7 @@ def _plan(
     losses: list[dict[str, Any]] = []
     secret_counts: dict[str, int] = {}
     project_keys: set[str] = set()
+    total_convs = len(conversations)
 
     for conversation_index, graph in enumerate(conversations, 1):
         # Codex/Claude rollouts carry their originating workspace; map each such session
@@ -451,6 +456,8 @@ def _plan(
         losses.extend({"source_id": graph.source_id, **loss} for loss in graph_losses)
         for kind, count in scan_secret_markers(graph.raw_source).items():
             secret_counts[kind] = secret_counts.get(kind, 0) + count
+        if on_progress is not None:
+            on_progress("plan", conversation_index, max(total_convs, 1), str(graph.title or graph.source_id))
 
     if resources:
         for kind, count in resources.redacted_secret_counts.items():
@@ -588,6 +595,7 @@ def write_bundle(
     model_provider: str = "openai",
     gate_config: GateConfig | None = None,
     allow_cloud_sync_path: str | Path | None = None,
+    on_progress: Callable[[str, int, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """Write a complete, private-permission (0700/0600), lossless-sidecar local bundle.
 
@@ -609,6 +617,7 @@ def write_bundle(
         device_id=device_id,
         org_id=org_id,
         model_provider=model_provider,
+        on_progress=on_progress,
     )
     ensure_private_dir(output)
     try:
@@ -657,7 +666,8 @@ def write_bundle(
         # Write target-specific staged files
         codex_index_entries: list[dict[str, Any]] = []
         gemini_projects: dict[str, str] = {}
-        for session in native_sessions:
+        total_ns = len(native_sessions)
+        for ns_idx, session in enumerate(native_sessions, 1):
             wkind = session.get("writer_kind", "claude-code-jsonl")
             if wkind in {"claude-code-jsonl", "jsonl"}:
                 dst = ensure_within_root(output / session["target_relative_path"], output)
@@ -709,6 +719,8 @@ def write_bundle(
                 index_dst = ensure_within_root(output / session["index_relative_path"], output)
                 atomic_write_bytes(transcript_dst, encode_jsonl(session["records"]), mode=0o600)
                 atomic_write_json(index_dst, session["index_payload"], mode=0o600)
+            if on_progress is not None:
+                on_progress("write", ns_idx, max(total_ns, 1), str(session.get("title") or session.get("session_id") or ""))
         if codex_index_entries:
             idx_dst = ensure_within_root(output / "codex_sessions" / "session_index.jsonl", output)
             atomic_write_bytes(idx_dst, encode_jsonl(codex_index_entries), mode=0o600)

@@ -21,6 +21,7 @@ import shutil
 import sqlite3
 import tarfile
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -416,6 +417,7 @@ def apply_bundle(
     include_skills: bool = False,
     gate_config: GateConfig | None = None,
     allow_cloud_sync_path: str | Path | None = None,
+    on_progress: Callable[[str, int, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """Dry-run or transactionally apply a verified bundle to `target_root` with backup & verification."""
     if on_collision not in {"refuse", "skip", "rename"}:
@@ -497,6 +499,8 @@ def apply_bundle(
     ensure_private_dir(journal_root)
 
     # Record scoped pre-apply pristine backups (only touched files + SQLite WAL/SHM companions; never wipes unrelated files!)
+    if on_progress is not None:
+        on_progress("backup", 0, 1, "正在打包 0600 写前备份…")
     ensure_private_dir(troot)
     primary_touched = [
         Path(op["dst"])
@@ -529,12 +533,49 @@ def apply_bundle(
             "created_rel_paths": c_bk["created_rel_paths"],
             "modified_files": c_bk["modified_files"],
         }
+    if on_progress is not None:
+        on_progress("backup", 1, 1, "0600 原始备份已完成")
 
-    # Execute atomic writes
+    # Execute atomic writes (batching all t3code-statev2-merge ops per SQLite DB into ONE transaction!)
     written_files: list[dict[str, Any]] = []
-    for op in resolved_ops:
-        if op["action"] == "skip_existing":
-            continue
+    active_ops = [op for op in resolved_ops if op["action"] != "skip_existing"]
+    total_ops = len(active_ops)
+    done_ops = 0
+
+    t3_groups: dict[str, list[dict[str, Any]]] = {}
+    other_ops: list[dict[str, Any]] = []
+    for op in active_ops:
+        if op["kind"] == "t3code-statev2-merge":
+            t3_groups.setdefault(str(op["dst"]), []).append(op)
+        else:
+            other_ops.append(op)
+
+    # Batch-merge T3 Code threads per statev2.sqlite (single SQLite transaction, parent-before-child ordering)
+    if t3_groups:
+        from .harnesses_extended import merge_t3code_threads_batch
+
+        for dst_str, group_ops in t3_groups.items():
+            dst = Path(dst_str)
+            ensure_private_dir(dst.parent)
+            payloads = [json.loads(Path(op["src"]).read_text(encoding="utf-8-sig")) for op in group_ops]
+            base_done = done_ops
+
+            def _t3_progress(phase: str, done_in_batch: int, batch_total: int, label: str) -> None:
+                if on_progress is not None:
+                    on_progress("apply", base_done + done_in_batch, max(total_ops, 1), label)
+
+            metas = merge_t3code_threads_batch(
+                dst,
+                payloads,
+                on_collision=on_collision,
+                on_progress=_t3_progress if on_progress is not None else None,
+            )
+            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            for op, meta in zip(group_ops, metas):
+                written_files.append({**op, "t3code_thread_id": meta.get("thread_id"), "written_sha256": db_sha})
+            done_ops += len(group_ops)
+
+    for op in other_ops:
         src = Path(op["src"])
         dst = Path(op["dst"])
         if op["action"] == "merge_existing" and op["kind"] == "codex-session-index-merge":
@@ -585,13 +626,6 @@ def apply_bundle(
                 dst.chmod(0o600)
             except OSError:
                 pass
-        elif op["kind"] == "t3code-statev2-merge":
-            from .harnesses_extended import merge_t3code_thread_into_statev2
-
-            payload = json.loads(src.read_text(encoding="utf-8-sig"))
-            ensure_private_dir(dst.parent)
-            merge_meta = merge_t3code_thread_into_statev2(dst, payload, on_collision=on_collision)
-            op = {**op, "t3code_thread_id": merge_meta.get("thread_id")}
         elif op["action"] == "merge_existing" and op["kind"] == "gemini-projects-merge":
             try:
                 cur_obj = json.loads(dst.read_text(encoding="utf-8-sig"))
@@ -609,6 +643,9 @@ def apply_bundle(
             data = src.read_bytes()
             atomic_write_bytes(dst, data, mode=0o600)
         written_files.append({**op, "written_sha256": hashlib.sha256(dst.read_bytes()).hexdigest()})
+        done_ops += 1
+        if on_progress is not None:
+            on_progress("apply", done_ops, max(total_ops, 1), dst.name)
 
     # Refresh final SHA-256 on shared merge targets (e.g. multiple sessions merged into one SQLite DB)
     final_hash_cache: dict[str, str] = {}
@@ -648,7 +685,11 @@ def apply_bundle(
     atomic_write_json(journal_root / "transaction.json", tx_record, mode=0o600)
 
     # Immediate post-write readback verification
+    if on_progress is not None:
+        on_progress("verify", 0, 1, "正在执行写后 SHA-256 与数据库读回校验…")
     vresult = verify_transaction(journal_root)
+    if on_progress is not None:
+        on_progress("verify", 1, 1, "读回校验通过" if vresult.get("ok") else "读回校验发现异常")
     tx_record["post_write_verification"] = vresult
     atomic_write_json(journal_root / "transaction.json", tx_record, mode=0o600)
     return tx_record

@@ -13,8 +13,11 @@ Hardened against real Anthropic Messages API & third-party gateway `Invalid Para
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -288,20 +291,57 @@ def parse_claude_code_session(path: str | Path) -> ConversationGraph:
     )
 
 
-def parse_claude_code_dir(claude_dir: str | Path) -> list[ConversationGraph]:
-    """Read all Claude Code CLI sessions under `<claude_dir>/projects/*/*.jsonl`."""
+def parse_claude_code_dir(
+    claude_dir: str | Path,
+    *,
+    limit: int | None = None,
+    on_progress: Callable[[str, int, int, str], None] | None = None,
+) -> list[ConversationGraph]:
+    """Read Claude Code CLI sessions under `<claude_dir>/projects/*/*.jsonl` (parallelized for speed)."""
     root = Path(claude_dir).expanduser()
     projects_dir = root / "projects" if (root / "projects").is_dir() else root
     graphs: list[ConversationGraph] = []
     if not projects_dir.is_dir():
         return graphs
-    for fp in sorted(projects_dir.rglob("*.jsonl")):
-        if not fp.is_file():
-            continue
-        try:
-            graphs.append(parse_claude_code_session(fp))
-        except (OSError, ValueError):
-            continue
+    files = sorted(
+        [fp for fp in projects_dir.rglob("*.jsonl") if fp.is_file()],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if limit:
+        files = files[:limit]
+    total = len(files)
+    if total >= 4:
+        workers = min(8, os.cpu_count() or 4, total)
+        out_map: dict[int, ConversationGraph] = {}
+        done = 0
+
+        def _safe_parse(fp: Path) -> ConversationGraph | None:
+            try:
+                return parse_claude_code_session(fp)
+            except (OSError, ValueError):
+                return None
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = {pool.submit(_safe_parse, fp): idx for idx, fp in enumerate(files)}
+            for fut in as_completed(futs):
+                idx = futs[fut]
+                g = fut.result()
+                if g is not None:
+                    out_map[idx] = g
+                done += 1
+                if on_progress is not None:
+                    on_progress("parse", done, total, str((g.title if g else files[idx].name) or ""))
+        graphs = [out_map[i] for i in sorted(out_map)]
+    else:
+        for idx, fp in enumerate(files, 1):
+            try:
+                g = parse_claude_code_session(fp)
+                graphs.append(g)
+            except (OSError, ValueError):
+                g = None
+            if on_progress is not None:
+                on_progress("parse", idx, max(total, 1), str((g.title if g else fp.name) or ""))
     return graphs
 
 

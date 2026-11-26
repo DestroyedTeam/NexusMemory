@@ -19,13 +19,17 @@ Read-only (protecting proprietary/live IDE stores):
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import json
 import mimetypes
+import os
 import re
 import sqlite3
+import urllib.parse
 import uuid
 import zipfile
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -56,26 +60,30 @@ from .security import sanitize_single_segment
 
 
 def _chain_linear(raw_items: list[dict[str, Any]]) -> tuple[tuple[MessageNode, ...], tuple[str, ...], str | None]:
-    nodes: list[MessageNode] = []
-    prev_id: str | None = None
+    """O(N) linear node chaining (uses a `set` for ID deduplication instead of O(N^2) scan)."""
+    if not raw_items:
+        return (), (), None
+    nids: list[str] = []
+    seen_ids: set[str] = set()
     for idx, item in enumerate(raw_items):
         nid = str(item.get("node_id") or f"n-{idx}")
-        if any(n.node_id == nid for n in nodes):
+        if nid in seen_ids:
             nid = f"{nid}-{idx}"
-        if nodes:
-            p = nodes[-1]
-            nodes[-1] = MessageNode(
-                p.node_id, p.parent_id, (nid,), p.role, p.text, p.timestamp, p.content, p.raw_record,
-                event_type=p.event_type, parent_tool_use_id=p.parent_tool_use_id,
-                attachments=p.attachments, links=p.links, usage=p.usage,
-                interrupted=p.interrupted, is_sidechain=p.is_sidechain,
-            )
+        seen_ids.add(nid)
+        nids.append(nid)
+
+    total = len(raw_items)
+    nodes: list[MessageNode] = []
+    for idx, item in enumerate(raw_items):
+        nid = nids[idx]
+        prev_id = nids[idx - 1] if idx > 0 else None
+        child_ids = (nids[idx + 1],) if idx + 1 < total else ()
         text = str(item.get("text") or "")
         nodes.append(
             MessageNode(
                 node_id=nid,
                 parent_id=prev_id,
-                child_ids=(),
+                child_ids=child_ids,
                 role=item.get("role"),
                 text=text,
                 timestamp=item.get("timestamp"),
@@ -88,10 +96,7 @@ def _chain_linear(raw_items: list[dict[str, Any]]) -> tuple[tuple[MessageNode, .
                 interrupted=bool(item.get("interrupted", False)),
             )
         )
-        prev_id = nid
-    roots = (nodes[0].node_id,) if nodes else ()
-    active = nodes[-1].node_id if nodes else None
-    return tuple(nodes), roots, active
+    return tuple(nodes), (nids[0],), nids[-1]
 
 
 def _collect_links(nodes: tuple[MessageNode, ...]) -> tuple[str, ...]:
@@ -163,8 +168,91 @@ def parse_portable_bundle(path: str | Path) -> list[ConversationGraph]:
 # ── 2. Antigravity (`transcript.jsonl` — strictly read-only!) ────────────────
 
 
-def parse_antigravity_transcript(path: str | Path) -> ConversationGraph:
-    """Strictly read-only reader for Google Antigravity `transcript.jsonl` + optional sidecar/artifacts/subagents."""
+def _decode_workspace_uri(raw_uris: str | None) -> str | None:
+    if not raw_uris:
+        return None
+    val = raw_uris.strip()
+    uris: list[str] = []
+    if val.startswith("["):
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                uris = [str(x) for x in parsed if isinstance(x, str) and x.strip()]
+        except json.JSONDecodeError:
+            pass
+    elif val:
+        uris = [val]
+    for u in uris:
+        if u.startswith("file://"):
+            decoded = urllib.parse.unquote(u[len("file://") :])
+            if decoded and decoded not in {"/", "\\"}:
+                return decoded
+        elif u.startswith("/") and u != "/":
+            return u
+    return None
+
+
+def _load_antigravity_summaries_db(ag_root: Path) -> dict[str, dict[str, Any]]:
+    """Read `~/.gemini/antigravity/conversation_summaries.db` (strictly read-only) for real titles, workspaces, projects, and parent/subagent lineage."""
+    db_path = ag_root / "conversation_summaries.db"
+    if not db_path.is_file():
+        return {}
+    rows_by_id: dict[str, dict[str, Any]] = {}
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+        con.row_factory = sqlite3.Row
+        try:
+            cols = {r[1] for r in con.execute("PRAGMA table_info(conversation_summaries)")}
+            if "conversation_id" not in cols:
+                return {}
+            for r in con.execute(
+                """
+                SELECT conversation_id, title, workspace_uris, project_id, agent_name,
+                       parent_conversation_id, nesting_depth, last_modified_time, group_id, step_count
+                FROM conversation_summaries
+                """
+            ):
+                cid = str(r["conversation_id"] or "")
+                if not cid:
+                    continue
+                ws = _decode_workspace_uri(r["workspace_uris"])
+                pid = str(r["project_id"] or "").strip()
+                if pid == "outside-of-project":
+                    pid = ""
+                parent_id = str(r["parent_conversation_id"] or "").strip() or None
+                rows_by_id[cid] = {
+                    "conversation_id": cid,
+                    "title": str(r["title"] or "").strip(),
+                    "workspace": ws,
+                    "project_id": pid or None,
+                    "project_name": Path(ws).name if ws else None,
+                    "subagent_role": str(r["agent_name"] or "").strip() or None,
+                    "parent_session_id": parent_id,
+                    "nesting_depth": int(r["nesting_depth"] or 0),
+                    "last_modified_time": str(r["last_modified_time"] or "").strip() or None,
+                    "section_id": str(r["group_id"] or "").strip() or None,
+                    "step_count": int(r["step_count"] or 0),
+                }
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return {}
+
+    for cid, rec in rows_by_id.items():
+        cur = cid
+        seen = {cur}
+        while True:
+            parent = (rows_by_id.get(cur) or {}).get("parent_session_id")
+            if not parent or parent in seen or parent not in rows_by_id:
+                break
+            seen.add(parent)
+            cur = parent
+        rec["root_session_id"] = cur
+    return rows_by_id
+
+
+def parse_antigravity_transcript(path: str | Path, *, summary: dict[str, Any] | None = None) -> ConversationGraph:
+    """Strictly read-only reader for Google Antigravity `transcript.jsonl` + `conversation_summaries.db`/sidecar/artifacts/subagents."""
     p = Path(path).expanduser()
     conv_dir = p
     if p.is_dir():
@@ -174,7 +262,10 @@ def parse_antigravity_transcript(path: str | Path) -> ConversationGraph:
         conv_dir = p.parents[2] if len(p.parents) >= 3 and p.parent.name == "logs" else p.parent
     conv_id = conv_dir.name if (conv_dir / ".system_generated" / "logs" / "transcript.jsonl").is_file() else p.stem
 
-    # Optional metadata sidecar (for section/project/parent subagent attribution without mutating anything)
+    if summary is None and conv_dir.parent.name == "brain":
+        summaries = _load_antigravity_summaries_db(conv_dir.parent.parent)
+        summary = summaries.get(conv_id)
+
     sidecar: dict[str, Any] = {}
     for meta_name in ("metadata.json", "conversation_meta.json"):
         mp = conv_dir / meta_name
@@ -186,6 +277,7 @@ def parse_antigravity_transcript(path: str | Path) -> ConversationGraph:
                     break
             except (json.JSONDecodeError, OSError):
                 pass
+    s = summary or {}
 
     raw_items: list[dict[str, Any]] = []
     records: list[dict[str, Any]] = []
@@ -204,8 +296,12 @@ def parse_antigravity_transcript(path: str | Path) -> ConversationGraph:
         ts = r.get("created_at")
         if rtype == "USER_INPUT":
             content = str(r.get("content") or "")
-            m = re.search(r"<USER_REQUEST>\s*([\s\S]*?)\s*</USER_REQUEST>", content)
-            clean_text = m.group(1).strip() if m else content.strip()
+            u_start = content.find("<USER_REQUEST>")
+            if u_start != -1:
+                u_end = content.find("</USER_REQUEST>", u_start + 14)
+                clean_text = content[u_start + 14 : u_end].strip() if u_end != -1 else content.strip()
+            else:
+                clean_text = content.strip()
             if clean_text:
                 raw_items.append({"node_id": f"ag-{idx}", "role": "user", "text": clean_text, "timestamp": ts, "content": clean_text, "raw_record": r, "event_type": "message"})
         elif rtype == "PLANNER_RESPONSE":
@@ -230,17 +326,21 @@ def parse_antigravity_transcript(path: str | Path) -> ConversationGraph:
                         "event_type": "tool_use",
                     })
         elif rtype == "GENERIC" and r.get("tool"):
+            out_str = str(r.get("content") or "")
+            if r.get("tool") == "invoke_subagent":
+                cm = re.search(r'"conversationId"\s*:\s*"([0-9a-f-]{36})"', out_str)
+                if cm:
+                    spawned_subagents.append({"child_conversation_id": cm.group(1), "call_id": str(r.get("call_id") or "")})
             raw_items.append({
                 "node_id": f"ag-{idx}",
                 "role": "tool_result",
-                "text": str(r.get("content") or ""),
+                "text": out_str,
                 "timestamp": ts,
-                "content": {"call_id": str(r.get("call_id") or r.get("tool_call_id") or ""), "tool": r.get("tool"), "output": r.get("content")},
+                "content": {"call_id": str(r.get("call_id") or r.get("tool_call_id") or ""), "tool": r.get("tool"), "output": out_str},
                 "raw_record": r,
                 "event_type": "tool_result",
             })
 
-    # Index any non-hidden artifact files alongside transcript (read-only)
     assets: list[AssetRecord] = []
     if conv_dir.is_dir():
         for af in sorted(conv_dir.iterdir()):
@@ -258,23 +358,32 @@ def parse_antigravity_transcript(path: str | Path) -> ConversationGraph:
 
     nodes, roots, active = _chain_linear(raw_items)
     first_user = next((n.text for n in nodes if n.role == "user" and n.text.strip()), None)
-    title = str(sidecar.get("title") or (first_user[:80].splitlines()[0].strip() if first_user else conv_id))
+    resolved_ws = sidecar.get("workspace") or sidecar.get("cwd") or s.get("workspace")
+    sub_role = sidecar.get("subagent_role") or s.get("subagent_role")
+    fallback_title = first_user[:80].splitlines()[0].strip() if first_user else conv_id
+    if not (sidecar.get("title") or s.get("title")) and sub_role:
+        fallback_title = f"[{sub_role}] {fallback_title}"
+    title = str(sidecar.get("title") or s.get("title") or fallback_title)
+    parent_sid = sidecar.get("parent_session_id") or s.get("parent_session_id")
     meta: dict[str, Any] = {
         "record_count": len(records),
         "source_file": p.name,
-        "project_id": sidecar.get("project_id"),
-        "project_name": sidecar.get("project_name"),
-        "section_id": sidecar.get("section_id"),
+        "project_id": sidecar.get("project_id") or s.get("project_id"),
+        "project_name": sidecar.get("project_name") or s.get("project_name") or (Path(resolved_ws).name if resolved_ws else None),
+        "section_id": sidecar.get("section_id") or s.get("section_id"),
         "section_name": sidecar.get("section_name"),
-        "parent_session_id": sidecar.get("parent_session_id"),
-        "subagent_role": sidecar.get("subagent_role"),
+        "parent_session_id": parent_sid,
+        "root_session_id": s.get("root_session_id") or conv_id,
+        "nesting_depth": int(sidecar.get("nesting_depth") or s.get("nesting_depth") or (1 if parent_sid else 0)),
+        "subagent_role": sub_role,
+        "last_modified_time": s.get("last_modified_time"),
         "spawned_subagents": spawned_subagents,
     }
     return ConversationGraph(
         source_format="antigravity_transcript",
         source_id=conv_id,
         title=title,
-        workspace=sidecar.get("workspace") or sidecar.get("cwd"),
+        workspace=resolved_ws,
         nodes=nodes,
         root_ids=roots,
         active_node_id=active,
@@ -286,15 +395,27 @@ def parse_antigravity_transcript(path: str | Path) -> ConversationGraph:
     )
 
 
-def parse_antigravity_brain_dir(brain_dir: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
-    """Read multi-session Antigravity `brain/` directory (preserves Section/Project/Subagent links)."""
-    root = Path(brain_dir).expanduser()
-    if (root / "brain").is_dir():
-        root = root / "brain"
+def parse_antigravity_brain_dir(
+    brain_dir: str | Path,
+    *,
+    limit: int | None = None,
+    include_subagents: bool = False,
+    project_filter: str | None = None,
+    section_filter: str | None = None,
+    on_progress: Callable[[str, int, int, str], None] | None = None,
+) -> list[ConversationGraph]:
+    """Read multi-session Antigravity `brain/` directory in parallel using `conversation_summaries.db`."""
+    base = Path(brain_dir).expanduser()
+    ag_root = base if (base / "brain").is_dir() else (base.parent if base.name == "brain" else base)
+    root = base / "brain" if (base / "brain").is_dir() else base
     if (root / ".system_generated" / "logs" / "transcript.jsonl").is_file() or (root / "transcript.jsonl").is_file():
         return [parse_antigravity_transcript(root)]
-    graphs: list[ConversationGraph] = []
-    for child in sorted(root.iterdir()):
+
+    summaries = _load_antigravity_summaries_db(ag_root)
+    candidates: list[tuple[Path, dict[str, Any] | None]] = []
+    children_by_parent: dict[str, list[tuple[Path, dict[str, Any] | None]]] = {}
+
+    for child in root.iterdir():
         if not child.is_dir():
             continue
         tfile = child / ".system_generated" / "logs" / "transcript.jsonl"
@@ -302,13 +423,98 @@ def parse_antigravity_brain_dir(brain_dir: str | Path, *, limit: int | None = No
             tfile = child / "transcript.jsonl"
         if not tfile.is_file():
             continue
+        s = summaries.get(child.name)
+        parent_id = (s or {}).get("parent_session_id")
+        depth = int((s or {}).get("nesting_depth") or (1 if parent_id else 0))
+        if depth > 0 and parent_id:
+            children_by_parent.setdefault(parent_id, []).append((child, s))
+        else:
+            candidates.append((child, s))
+
+    pf = (project_filter or "").strip().lower()
+    sf = (section_filter or "").strip().lower()
+    if pf or sf:
+        filtered: list[tuple[Path, dict[str, Any] | None]] = []
+        for child, s in candidates:
+            sd = s or {}
+            hay_p = " ".join(str(x or "") for x in (sd.get("project_name"), sd.get("workspace"), sd.get("title"), child.name)).lower()
+            hay_s = " ".join(str(x or "") for x in (sd.get("section_id"), sd.get("title"))).lower()
+            if pf and pf not in hay_p:
+                continue
+            if sf and sf not in hay_s:
+                continue
+            filtered.append((child, s))
+        candidates = filtered
+
+    candidates.sort(
+        key=lambda item: (
+            str((item[1] or {}).get("last_modified_time") or ""),
+            item[0].stat().st_mtime,
+        ),
+        reverse=True,
+    )
+    if limit:
+        candidates = candidates[:limit]
+
+    ordered_targets: list[tuple[Path, dict[str, Any] | None]] = []
+    if include_subagents:
+        # DFS pre-order so each parent session is immediately followed by its nested children (parent-before-child)
+        seen_ids: set[str] = set()
+        for top_path, top_sum in candidates:
+            stack: list[tuple[Path, dict[str, Any] | None]] = [(top_path, top_sum)]
+            while stack:
+                cur_path, cur_sum = stack.pop()
+                if cur_path.name in seen_ids:
+                    continue
+                seen_ids.add(cur_path.name)
+                ordered_targets.append((cur_path, cur_sum))
+                kids = sorted(
+                    children_by_parent.get(cur_path.name, []),
+                    key=lambda x: str((x[1] or {}).get("last_modified_time") or ""),
+                    reverse=True,
+                )
+                for ch_path, ch_sum in kids:
+                    if ch_path.name not in seen_ids:
+                        stack.append((ch_path, ch_sum))
+    else:
+        ordered_targets = list(candidates)
+
+    total = len(ordered_targets)
+    if on_progress:
+        on_progress("parse", 0, total, "准备并发解析 Antigravity 会话")
+
+    def _parse_one(idx_item: tuple[int, tuple[Path, dict[str, Any] | None]]) -> tuple[int, ConversationGraph | None]:
+        idx, (cpath, csum) = idx_item
         try:
-            graphs.append(parse_antigravity_transcript(child))
+            g = parse_antigravity_transcript(cpath, summary=csum)
+            direct_kids = children_by_parent.get(cpath.name, [])
+            if direct_kids:
+                g.metadata["child_subagent_count"] = len(direct_kids)
+            return idx, g
         except (OSError, ValueError):
-            continue
-        if limit and len(graphs) >= limit:
-            break
-    return graphs
+            return idx, None
+
+    results: list[tuple[int, ConversationGraph | None]] = []
+    if total >= 4:
+        workers = min(8, os.cpu_count() or 4, total)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            done_n = 0
+            for res in pool.map(_parse_one, enumerate(ordered_targets)):
+                results.append(res)
+                done_n += 1
+                if on_progress:
+                    lbl = res[1].title[:40] if res[1] else ""
+                    on_progress("parse", done_n, total, lbl)
+    else:
+        for i, item in enumerate(ordered_targets):
+            res = _parse_one((i, item))
+            results.append(res)
+            if on_progress:
+                lbl = res[1].title[:40] if res[1] else ""
+                on_progress("parse", i + 1, total, lbl)
+
+    results.sort(key=lambda r: r[0])
+    return [g for _, g in results if g is not None]
 
 
 def build_antigravity_sessions(
@@ -1011,6 +1217,8 @@ def load_any_source(
     section_filter: str | None = None,
     project_filter: str | None = None,
     limit: int | None = None,
+    include_subagents: bool = False,
+    on_progress: Callable[[str, int, int, str], None] | None = None,
 ) -> tuple[list[ConversationGraph], dict[str, bytes]]:
     p = Path(path).expanduser()
     fmt = (source_format or "auto").lower()
@@ -1018,11 +1226,26 @@ def load_any_source(
     if fmt == "chatgpt":
         return parse_export_with_assets(p)
     if fmt == "codex":
-        return (parse_codex_home(p, section_filter=section_filter, project_filter=project_filter, limit=limit) if p.is_dir() else [parse_rollout(p)]), {}
+        return (
+            parse_codex_home(
+                p,
+                section_filter=section_filter,
+                project_filter=project_filter,
+                limit=limit,
+                on_progress=on_progress,
+            )
+            if p.is_dir()
+            else [parse_rollout(p)]
+        ), {}
     if fmt == "codex-app":
         return parse_codex_app_snapshot(p), {}
     if fmt == "claude-code":
-        return (parse_claude_code_dir(p) if p.is_dir() else [parse_claude_code_session(p)]), {}
+        cc_limit = limit if not (project_filter or section_filter) else None
+        return (
+            parse_claude_code_dir(p, limit=cc_limit, on_progress=on_progress)
+            if p.is_dir()
+            else [parse_claude_code_session(p)]
+        ), {}
     if fmt in {"claude-desktop-3p", "claude-desktop-3p-chat", "claude-desktop-3p-cowork", "claude-desktop-3p-code"}:
         if p.is_dir() and p.name.startswith("local_"):
             return [parse_local_agent_session(p)], {}
@@ -1030,7 +1253,18 @@ def load_any_source(
         by_lane = parse_claude_desktop_3p_root(p, claude_dir=claude_dir, lanes=lanes)
         return [*by_lane["chat"], *by_lane["cowork"], *by_lane["code"]], {}
     if fmt == "antigravity":
-        return (parse_antigravity_brain_dir(p, limit=limit) if p.is_dir() else [parse_antigravity_transcript(p)]), {}
+        return (
+            parse_antigravity_brain_dir(
+                p,
+                limit=limit,
+                include_subagents=include_subagents,
+                project_filter=project_filter,
+                section_filter=section_filter,
+                on_progress=on_progress,
+            )
+            if p.is_dir()
+            else [parse_antigravity_transcript(p)]
+        ), {}
     if fmt == "workbuddy":
         return (parse_workbuddy_home(p, limit=limit) if p.is_dir() else [parse_workbuddy_session(p)]), {}
     if fmt in {"t3code", "t3-code"}:
@@ -1079,7 +1313,14 @@ def load_any_source(
         if (p / ".system_generated" / "logs" / "transcript.jsonl").is_file() or (p / "transcript.jsonl").is_file():
             return [parse_antigravity_transcript(p)], {}
         if (p / "brain").is_dir() or any((c / ".system_generated" / "logs" / "transcript.jsonl").is_file() for c in p.iterdir() if c.is_dir()):
-            return parse_antigravity_brain_dir(p, limit=limit), {}
+            return parse_antigravity_brain_dir(
+                p,
+                limit=limit,
+                include_subagents=include_subagents,
+                project_filter=project_filter,
+                section_filter=section_filter,
+                on_progress=on_progress,
+            ), {}
         if (p / "User" / "globalStorage" / "state.vscdb").is_file():
             return parse_cursor_vscdb(p / "User" / "globalStorage" / "state.vscdb"), {}
         if (p / "workbuddy.db").is_file() or (p / "edge-sync-mapping-v4.db").is_file():

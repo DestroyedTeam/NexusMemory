@@ -1169,6 +1169,168 @@ class NexusV1EndToEndTests(unittest.TestCase):
             self.assertTrue(rb["ok"], rb)
             self.assertFalse((t3_home / "userdata" / "statev2.sqlite").exists())
 
+    def test_antigravity_summaries_db_hierarchy_and_t3code_lineage(self) -> None:
+        import sqlite3
+        import time as _time
+
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            ag_root = tp / "antigravity"
+            brain = ag_root / "brain"
+            brain.mkdir(parents=True)
+
+            # Build realistic conversation_summaries.db with 2 top-level sessions across 2 projects + 2 codex-subagent children
+            db_path = ag_root / "conversation_summaries.db"
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                """
+                CREATE TABLE conversation_summaries (
+                    conversation_id TEXT PRIMARY KEY,
+                    title TEXT,
+                    workspace_uris TEXT,
+                    project_id TEXT,
+                    agent_name TEXT,
+                    parent_conversation_id TEXT,
+                    nesting_depth INTEGER DEFAULT 0,
+                    last_modified_time TEXT,
+                    group_id TEXT,
+                    step_count INTEGER DEFAULT 0
+                )
+                """
+            )
+            rows = [
+                ("top-alpha", "Alpha Feature", json.dumps(["file:///Users/dev/AlphaProj"]), "proj-alpha", "", None, 0, "2026-11-26T12:00:00Z", None, 2),
+                ("sub-alpha-1", "Codex Delegate 1", json.dumps(["file:///Users/dev/AlphaProj"]), "proj-alpha", "codex-subagent", "top-alpha", 1, "2026-11-26T12:01:00Z", None, 2),
+                ("top-beta", "Beta Fix", json.dumps(["file:///Users/dev/BetaProj"]), "proj-beta", "", None, 0, "2026-11-26T11:00:00Z", None, 2),
+                ("sub-beta-1", "Codex Delegate 2", json.dumps(["file:///Users/dev/BetaProj"]), "proj-beta", "codex-subagent", "top-beta", 1, "2026-11-26T11:05:00Z", None, 2),
+            ]
+            conn.executemany("INSERT INTO conversation_summaries VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
+            conn.commit()
+            conn.close()
+
+            for cid, prompt, reply in [
+                ("top-alpha", "Build Alpha feature", "Done building Alpha"),
+                ("sub-alpha-1", "Subtask Alpha check", "Subtask Alpha OK"),
+                ("top-beta", "Fix Beta bug", "Beta bug fixed"),
+                ("sub-beta-1", "Subtask Beta lint", "Subtask Beta OK"),
+            ]:
+                log_dir = brain / cid / ".system_generated" / "logs"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                recs = [
+                    {"step_index": 0, "type": "USER_INPUT", "created_at": "2026-11-26T12:00:00Z", "content": prompt},
+                    {"step_index": 1, "type": "PLANNER_RESPONSE", "created_at": "2026-11-26T12:00:05Z", "content": reply},
+                ]
+                (log_dir / "transcript.jsonl").write_text(
+                    "\n".join(json.dumps(r) for r in recs) + "\n", encoding="utf-8"
+                )
+
+            # 1. Default (include_subagents=False): only 2 top-level sessions with real per-session workspaces
+            top_only, _ = load_any_source(ag_root, source_format="antigravity", include_subagents=False)
+            self.assertEqual([g.source_id for g in top_only], ["top-alpha", "top-beta"])
+            self.assertEqual(top_only[0].workspace, "/Users/dev/AlphaProj")
+            self.assertEqual(top_only[1].workspace, "/Users/dev/BetaProj")
+            self.assertEqual(top_only[0].metadata.get("child_subagent_count"), 1)
+
+            # 2. include_subagents=True: parent-before-child order with all 4 sessions + progress callback
+            progress_events: list[tuple[str, int, int]] = []
+            with_subs, _ = load_any_source(
+                ag_root,
+                source_format="antigravity",
+                include_subagents=True,
+                on_progress=lambda ph, d, t, _lbl: progress_events.append((ph, d, t)),
+            )
+            self.assertEqual(len(with_subs), 4)
+            ids = [g.source_id for g in with_subs]
+            self.assertLess(ids.index("top-alpha"), ids.index("sub-alpha-1"))
+            self.assertLess(ids.index("top-beta"), ids.index("sub-beta-1"))
+            self.assertTrue(progress_events)
+
+            # Annotate a section name on one graph to verify StoredThreadTags persistence
+            with_subs[0].metadata["section_name"] = "Destruction Era"
+
+            # 3. Convert & batch-apply to T3 Code statev2.sqlite
+            bundle_dir = tp / "ag-t3-bundle"
+            t3_home = tp / "t3-home"
+            write_bundle(with_subs, target="t3code", cwd="/tmp/fallback", out=bundle_dir)
+            apply_events: list[tuple[str, int, int]] = []
+            tx = apply_bundle(
+                bundle_dir,
+                target_root=t3_home,
+                apply=True,
+                on_progress=lambda ph, d, t, _lbl: apply_events.append((ph, d, t)),
+            )
+            self.assertTrue(tx["post_write_verification"]["ok"], tx["post_write_verification"])
+            self.assertTrue(any(ph == "apply" for ph, _, _ in apply_events))
+
+            # Inspect real SQLite tables: 2 distinct projects, tags, and valid parentThreadId/subagent lineage!
+            sconn = sqlite3.connect(t3_home / "userdata" / "statev2.sqlite")
+            try:
+                proj_roots = {r[0] for r in sconn.execute("SELECT workspace_root FROM projection_projects")}
+                self.assertEqual(proj_roots, {"/Users/dev/AlphaProj", "/Users/dev/BetaProj"})
+
+                by_title = {}
+                for title, tid, pjson in sconn.execute(
+                    "SELECT title, thread_id, payload_json FROM orchestration_v2_projection_threads"
+                ):
+                    by_title[title] = (tid, json.loads(pjson))
+                self.assertEqual(len(by_title), 4)
+                alpha_tid, alpha_payload = by_title["Alpha Feature"]
+                sub_alpha_tid, sub_alpha_payload = by_title["Codex Delegate 1"]
+                self.assertEqual(alpha_payload["tags"], ["Destruction Era"])
+                self.assertEqual(alpha_payload["settledOverride"], "active")
+                self.assertIsNone(alpha_payload["lineage"]["parentThreadId"])
+                self.assertEqual(sub_alpha_payload["lineage"]["parentThreadId"], alpha_tid)
+                self.assertEqual(sub_alpha_payload["lineage"]["rootThreadId"], alpha_tid)
+                self.assertEqual(sub_alpha_payload["lineage"]["relationshipToParent"], "subagent")
+            finally:
+                sconn.close()
+
+            # 4. Async progress jobs endpoint end-to-end on Desktop UI server
+            srv, url, token = start_desktop_server(0)
+            th = threading.Thread(target=srv.serve_forever, daemon=True)
+            th.start()
+            try:
+                def call_api(ep: str, payload: dict | None = None) -> dict:
+                    req = urllib.request.Request(
+                        url + ep,
+                        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+                        headers={"X-Nexus-Token": token, "Content-Type": "application/json"},
+                        method="POST" if payload is not None else "GET",
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        return json.loads(resp.read().decode("utf-8"))
+
+                started = call_api(
+                    "api/jobs/preview",
+                    {
+                        "source": str(ag_root),
+                        "source_format": "antigravity",
+                        "target": "t3code",
+                        "include_subagents": True,
+                        "limit": 2,
+                        "cwd": str(tp),
+                    },
+                )
+                jid = started["job_id"]
+                final_state = None
+                for _ in range(100):
+                    st = call_api(f"api/jobs/{jid}")
+                    if st["status"] in {"done", "error"}:
+                        final_state = st
+                        break
+                    _time.sleep(0.03)
+                self.assertIsNotNone(final_state)
+                self.assertEqual(final_state["status"], "done", final_state)
+                self.assertEqual(final_state["percent"], 100.0)
+                convs = final_state["result"]["conversations_preview"]
+                self.assertEqual(len(convs), 4)
+                child_items = [c for c in convs if c["nesting_depth"] > 0]
+                self.assertEqual(len(child_items), 2)
+                self.assertEqual(child_items[0]["subagent_role"], "codex-subagent")
+            finally:
+                srv.shutdown()
+                srv.server_close()
+
 
 if __name__ == "__main__":
     unittest.main()
