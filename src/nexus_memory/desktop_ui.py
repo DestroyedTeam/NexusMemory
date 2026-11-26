@@ -1733,7 +1733,7 @@ def _open_standalone_window(url: str) -> None:
             found = shutil.which(browser)
             if found:
                 subprocess.Popen(
-                    [found, f"--app={url}", "--window-size=1260,820"],
+                    [found, f"--app={url}", "--window-size=1260,820", "--password-store=basic"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True,
