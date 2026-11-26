@@ -258,6 +258,24 @@ def discover_harnesses(
         skills_p: Path = item["skills_dir"]
         mcp_p: Path = item["mcp_config"]
         present = root_p.exists() or sess_p.exists() or skills_p.exists() or mcp_p.exists()
+        if item["id"] == "t3code":
+            sess_count = 0
+            t3_db = root_p / "userdata" / "statev2.sqlite"
+            if t3_db.is_file():
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(f"file:{t3_db}?mode=ro", uri=True)
+                    try:
+                        row = con.execute(
+                            "SELECT COUNT(*) FROM orchestration_v2_projection_threads WHERE deleted_at IS NULL"
+                        ).fetchone()
+                        sess_count = int(row[0]) if row else 0
+                    finally:
+                        con.close()
+                except Exception:
+                    sess_count = 0
+        else:
+            sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
         detected.append(
             {
                 "id": item["id"],
@@ -265,7 +283,7 @@ def discover_harnesses(
                 "detected": present,
                 "root_path": str(root_p),
                 "session_dir": str(sess_p),
-                "session_file_count": _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0,
+                "session_file_count": sess_count,
                 "skills_dir": str(skills_p),
                 "skill_count": _count_files(skills_p, "SKILL.md") if skills_p.is_dir() else 0,
                 "mcp_config_present": mcp_p.is_file(),

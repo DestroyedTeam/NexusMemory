@@ -273,11 +273,581 @@ def build_workbuddy_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tu
     return sessions, losses
 
 
-# ── 2. T3 Code (`~/.t3/userdata/threads/<id>.json` + `statev2.sqlite`) ───────
+# ── 2. T3 Code (`~/.t3/userdata/statev2.sqlite` + legacy thread JSON) ────────
+
+
+_T3CODE_PROVIDER_MAP = {
+    "antigravity": ("antigravity", "gemini-4-carbon"),
+    "codex": ("codex", "gpt-5-codex"),
+    "codex_rollout": ("codex", "gpt-5-codex"),
+    "codex_app_snapshot": ("codex", "gpt-5-codex"),
+    "claude": ("claudeAgent", "claude-sonnet-4-5"),
+    "claude_code_jsonl": ("claudeAgent", "claude-sonnet-4-5"),
+    "claude_desktop_3p": ("claudeAgent", "claude-sonnet-4-5"),
+    "cursor": ("cursor", "auto"),
+    "cursor_vscdb": ("cursor", "auto"),
+    "opencode": ("opencode", "default"),
+    "pi": ("pi", "default"),
+    "kiro": ("kiro", "default"),
+}
+
+
+def _t3code_provider_for_source(source_format: str | None) -> tuple[str, str]:
+    fmt = (source_format or "").lower()
+    for prefix, val in _T3CODE_PROVIDER_MAP.items():
+        if fmt == prefix or fmt.startswith(prefix):
+            return val
+    return ("codex", "gpt-5-codex")
+
+
+def _ensure_t3code_statev2_schema(conn: sqlite3.Connection) -> None:
+    """Ensure the real T3 Code v2 SQLite projection & event tables exist (for fresh sandboxes)."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS projection_projects (
+            project_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            workspace_root TEXT NOT NULL,
+            scripts_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT,
+            default_model_selection_json TEXT,
+            default_thread_env_mode TEXT,
+            favicon_path TEXT,
+            auto_pull INTEGER NOT NULL DEFAULT 0,
+            project_icon_json TEXT,
+            pinned_at TEXT,
+            archived_at TEXT,
+            has_custom_title INTEGER NOT NULL DEFAULT 0,
+            tracked_folders_json TEXT NOT NULL DEFAULT '[]'
+        );
+        CREATE TABLE IF NOT EXISTS orchestration_events (
+            sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id TEXT NOT NULL UNIQUE,
+            aggregate_kind TEXT NOT NULL,
+            stream_id TEXT NOT NULL,
+            stream_version INTEGER NOT NULL,
+            event_type TEXT NOT NULL,
+            occurred_at TEXT NOT NULL,
+            command_id TEXT,
+            causation_event_id TEXT,
+            correlation_id TEXT,
+            actor_kind TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            metadata_json TEXT NOT NULL,
+            application_event_version INTEGER NOT NULL DEFAULT 2
+        );
+        CREATE TABLE IF NOT EXISTS orchestration_v2_projection_metadata (
+            projection_name TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL,
+            last_sequence INTEGER NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS orchestration_v2_projection_threads (
+            thread_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            default_provider TEXT NOT NULL,
+            runtime_mode TEXT NOT NULL,
+            interaction_mode TEXT NOT NULL,
+            active_provider_thread_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            archived_at TEXT,
+            deleted_at TEXT,
+            payload_json TEXT NOT NULL,
+            provider_instance_id TEXT,
+            fork_run_ids_json TEXT
+        );
+        CREATE TABLE IF NOT EXISTS orchestration_v2_projection_runs (
+            run_id TEXT PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            provider_thread_id TEXT,
+            status TEXT NOT NULL,
+            requested_at TEXT NOT NULL,
+            completed_at TEXT,
+            payload_json TEXT NOT NULL,
+            provider_instance_id TEXT
+        );
+        CREATE TABLE IF NOT EXISTS orchestration_v2_projection_nodes (
+            node_id TEXT PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            run_id TEXT,
+            parent_node_id TEXT,
+            root_node_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL,
+            provider_thread_id TEXT,
+            provider_turn_id TEXT,
+            runtime_request_id TEXT,
+            checkpoint_scope_id TEXT,
+            started_at TEXT,
+            completed_at TEXT,
+            payload_json TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS orchestration_v2_projection_messages (
+            message_id TEXT PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            run_id TEXT,
+            node_id TEXT,
+            role TEXT NOT NULL,
+            streaming INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            search_text TEXT
+        );
+        CREATE TABLE IF NOT EXISTS orchestration_v2_projection_turn_items (
+            turn_item_id TEXT PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            run_id TEXT,
+            node_id TEXT,
+            provider_thread_id TEXT,
+            provider_turn_id TEXT,
+            parent_item_id TEXT,
+            ordinal INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            inline_work_output INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS orchestration_v2_turn_item_positions (
+            thread_id TEXT NOT NULL,
+            turn_item_id TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            PRIMARY KEY (thread_id, turn_item_id),
+            UNIQUE (thread_id, ordinal)
+        );
+        """
+    )
+
+
+def merge_t3code_thread_into_statev2(
+    db_path: str | Path,
+    payload: dict[str, Any],
+    *,
+    on_collision: str = "refuse",
+) -> dict[str, Any]:
+    """Merge a staged `t3code.thread.v2` JSON payload natively into T3 Code's `statev2.sqlite`.
+
+    Writes schema-authentic rows to `projection_projects`, `orchestration_v2_projection_threads`,
+    `orchestration_v2_projection_runs`, `orchestration_v2_projection_nodes`,
+    `orchestration_v2_projection_messages`, `orchestration_v2_projection_turn_items`,
+    `orchestration_v2_turn_item_positions`, `orchestration_events`, and advances
+    `orchestration_v2_projection_metadata.last_sequence`. Native T3 Code SQLite triggers
+    automatically keep FTS5 search and turn-item count tables synchronized.
+    """
+    from urllib.parse import quote
+
+    db = Path(db_path).expanduser()
+    db.parent.mkdir(parents=True, exist_ok=True)
+    now_dt = datetime.now(UTC)
+    now_iso = now_dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    now_ms = int(now_dt.timestamp() * 1000)
+
+    sid = str(payload.get("threadId") or uuid.uuid4())
+    title = str(payload.get("title") or sid)[:240]
+    workspace_path = str(payload.get("workspacePath") or "").strip()
+    created_at = str(payload.get("createdAt") or now_iso)
+    updated_at = str(payload.get("updatedAt") or now_iso)
+    parent_tid = payload.get("parentThreadId")
+    raw_provider = str(payload.get("provider") or "").strip()
+    provider_id, default_model = _t3code_provider_for_source(raw_provider)
+    if raw_provider in {"antigravity", "codex", "claudeAgent", "cursor", "opencode", "pi", "kiro"}:
+        provider_id = raw_provider
+    messages = payload.get("messages") if isinstance(payload.get("messages"), list) else []
+
+    conn = sqlite3.connect(str(db), timeout=15.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        _ensure_t3code_statev2_schema(conn)
+        existing = conn.execute(
+            "SELECT thread_id FROM orchestration_v2_projection_threads WHERE thread_id = ?",
+            (sid,),
+        ).fetchone()
+        if existing:
+            if on_collision == "refuse":
+                raise FileExistsError(f"t3code thread_id already exists in statev2.sqlite: {sid}")
+            if on_collision == "skip":
+                return {"thread_id": sid, "action": "skipped", "message_count": 0}
+            if on_collision == "rename":
+                sid = str(uuid.uuid4())
+
+        # Pick model from any existing thread using the same provider if present
+        existing_model_row = conn.execute(
+            "SELECT payload_json FROM orchestration_v2_projection_threads WHERE default_provider = ? LIMIT 1",
+            (provider_id,),
+        ).fetchone()
+        model_selection: dict[str, Any] = {
+            "instanceId": provider_id,
+            "model": default_model,
+            "options": [],
+        }
+        if existing_model_row:
+            try:
+                ep = json.loads(existing_model_row[0])
+                if isinstance(ep.get("modelSelection"), dict):
+                    model_selection = ep["modelSelection"]
+            except json.JSONDecodeError:
+                pass
+
+        # Resolve or create project in `projection_projects`
+        project_id: str | None = None
+        if workspace_path:
+            prow = conn.execute(
+                "SELECT project_id FROM projection_projects WHERE workspace_root = ? AND deleted_at IS NULL LIMIT 1",
+                (workspace_path,),
+            ).fetchone()
+            if prow:
+                project_id = str(prow["project_id"])
+            else:
+                project_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"nexus-t3code-project:{workspace_path}"))
+                proj_title = Path(workspace_path).name or "Imported Project"
+                proj_icon = {"kind": "lucide", "name": "folder", "color": "blue"}
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO projection_projects (
+                        project_id, title, workspace_root, scripts_json, created_at, updated_at,
+                        deleted_at, default_model_selection_json, default_thread_env_mode,
+                        favicon_path, auto_pull, project_icon_json, pinned_at, archived_at,
+                        has_custom_title, tracked_folders_json
+                    ) VALUES (?, ?, ?, '[]', ?, ?, NULL, NULL, NULL, NULL, 0, ?, NULL, NULL, 0, '[]')
+                    """,
+                    (project_id, proj_title, workspace_path, created_at, now_iso, json.dumps(proj_icon)),
+                )
+                proj_cmd = f"nexus-import-project:{project_id}"
+                proj_evt_payload = {
+                    "projectId": project_id,
+                    "title": proj_title,
+                    "workspaceRoot": workspace_path,
+                    "defaultModelSelection": None,
+                    "faviconPath": None,
+                    "projectIcon": proj_icon,
+                    "scripts": [],
+                    "createdAt": created_at,
+                    "updatedAt": now_iso,
+                }
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO orchestration_events (
+                        event_id, aggregate_kind, stream_id, stream_version, event_type,
+                        occurred_at, command_id, causation_event_id, correlation_id,
+                        actor_kind, payload_json, metadata_json, application_event_version
+                    ) VALUES (?, 'project', ?, 0, 'project.created', ?, ?, NULL, ?, 'client', ?, '{}', 2)
+                    """,
+                    (
+                        f"event:nexus-project:{project_id}:{uuid.uuid4()}",
+                        project_id,
+                        now_iso,
+                        proj_cmd,
+                        proj_cmd,
+                        json.dumps(proj_evt_payload, ensure_ascii=False),
+                    ),
+                )
+        if not project_id:
+            fallback_row = conn.execute(
+                "SELECT project_id FROM projection_projects WHERE deleted_at IS NULL ORDER BY created_at LIMIT 1"
+            ).fetchone()
+            if fallback_row:
+                project_id = str(fallback_row["project_id"])
+            else:
+                project_id = str(uuid.uuid4())
+                scratch_root = str(db.parent.parent / "scratch")
+                conn.execute(
+                    """
+                    INSERT INTO projection_projects (
+                        project_id, title, workspace_root, scripts_json, created_at, updated_at,
+                        deleted_at, project_icon_json, tracked_folders_json
+                    ) VALUES (?, 'No project', ?, '[]', ?, ?, NULL, '{"kind":"lucide","name":"message-square-dashed","color":"gray"}', '[]')
+                    """,
+                    (project_id, scratch_root, created_at, now_iso),
+                )
+
+        stream_ver = 0
+        cmd_id = f"nexus-import:{sid}"
+
+        def emit_event(event_type: str, evt_payload: dict[str, Any], meta: dict[str, Any], occurred: str) -> None:
+            nonlocal stream_ver
+            conn.execute(
+                """
+                INSERT INTO orchestration_events (
+                    event_id, aggregate_kind, stream_id, stream_version, event_type,
+                    occurred_at, command_id, causation_event_id, correlation_id,
+                    actor_kind, payload_json, metadata_json, application_event_version
+                ) VALUES (?, 'thread', ?, ?, ?, ?, ?, NULL, ?, 'server', ?, ?, 2)
+                """,
+                (
+                    f"event:thread:{sid}:nexus:{stream_ver}:{uuid.uuid4()}",
+                    sid,
+                    stream_ver,
+                    event_type,
+                    occurred,
+                    cmd_id,
+                    cmd_id,
+                    json.dumps(evt_payload, ensure_ascii=False),
+                    json.dumps(meta, ensure_ascii=False),
+                ),
+            )
+            stream_ver += 1
+
+        thread_payload = {
+            "createdBy": "user",
+            "creationSource": "web",
+            "id": sid,
+            "projectId": project_id,
+            "title": title,
+            "providerInstanceId": provider_id,
+            "modelSelection": model_selection,
+            "runtimeMode": "full-access",
+            "interactionMode": "default",
+            "branch": None,
+            "worktreePath": None,
+            "pullRequests": [],
+            "activeProviderThreadId": None,
+            "lineage": {
+                "parentThreadId": parent_tid if isinstance(parent_tid, str) else None,
+                "relationshipToParent": None,
+                "rootThreadId": sid,
+            },
+            "forkedFrom": None,
+            "createdAt": created_at,
+            "updatedAt": updated_at,
+            "archivedAt": None,
+            "settledOverride": None,
+            "settledAt": None,
+            "snoozedUntil": None,
+            "snoozedAt": None,
+            "lastVisitedAt": updated_at,
+            "opens": {"openedAt": now_ms, "score": 1, "picks": []},
+            "titleRegeneration": None,
+            "titleRenamed": True,
+            "deletedAt": None,
+        }
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO orchestration_v2_projection_threads (
+                thread_id, project_id, title, default_provider, runtime_mode, interaction_mode,
+                active_provider_thread_id, created_at, updated_at, archived_at, deleted_at,
+                payload_json, provider_instance_id, fork_run_ids_json
+            ) VALUES (?, ?, ?, ?, 'full-access', 'default', NULL, ?, ?, NULL, NULL, ?, ?, NULL)
+            """,
+            (
+                sid,
+                project_id,
+                title,
+                provider_id,
+                created_at,
+                updated_at,
+                json.dumps(thread_payload, ensure_ascii=False),
+                provider_id,
+            ),
+        )
+        emit_event("thread.created", thread_payload, {"providerInstanceId": provider_id}, created_at)
+
+        # Pair turns into T3 Code v2 runs (each run = user prompt + optional assistant response)
+        runs: list[list[dict[str, Any]]] = []
+        for m in messages:
+            if not isinstance(m, dict):
+                continue
+            role = str(m.get("role") or "user")
+            if role == "user" or not runs:
+                runs.append([m])
+            else:
+                runs[-1].append(m)
+
+        ordinal_counter = 1_000_000
+        inserted_msgs = 0
+        for run_idx, run_msgs in enumerate(runs, 1):
+            run_id = f"run:thread:{sid}:ordinal:{run_idx}"
+            root_node_id = f"node:run:{quote(run_id, safe='')}:root"
+            first_ts = str(run_msgs[0].get("createdAt") or now_iso)
+            last_ts = str(run_msgs[-1].get("createdAt") or first_ts)
+            first_msg_id = str(run_msgs[0].get("id") or uuid.uuid4())
+            if run_msgs[0].get("id") is None:
+                run_msgs[0] = {**run_msgs[0], "id": first_msg_id}
+
+            run_payload = {
+                "id": run_id,
+                "threadId": sid,
+                "ordinal": run_idx,
+                "providerInstanceId": provider_id,
+                "modelSelection": model_selection,
+                "providerThreadId": None,
+                "userMessageId": first_msg_id,
+                "rootNodeId": root_node_id,
+                "activeAttemptId": None,
+                "status": "completed",
+                "queuePosition": None,
+                "requestedAt": first_ts,
+                "startedAt": first_ts,
+                "completedAt": last_ts,
+                "checkpointId": None,
+                "contextHandoffId": None,
+                "workspacePreparation": None,
+            }
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO orchestration_v2_projection_runs (
+                    run_id, thread_id, ordinal, provider, provider_thread_id, status,
+                    requested_at, completed_at, payload_json, provider_instance_id
+                ) VALUES (?, ?, ?, ?, NULL, 'completed', ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    sid,
+                    run_idx,
+                    provider_id,
+                    first_ts,
+                    last_ts,
+                    json.dumps(run_payload, ensure_ascii=False),
+                    provider_id,
+                ),
+            )
+            run_meta = {"runId": run_id, "nodeId": root_node_id, "providerInstanceId": provider_id}
+            emit_event("run.created", run_payload, run_meta, first_ts)
+
+            node_payload = {
+                "id": root_node_id,
+                "threadId": sid,
+                "runId": run_id,
+                "parentNodeId": None,
+                "rootNodeId": root_node_id,
+                "kind": "root_turn",
+                "status": "completed",
+                "countsForRun": True,
+                "providerThreadId": None,
+                "providerTurnId": None,
+                "nativeItemRef": None,
+                "runtimeRequestId": None,
+                "checkpointScopeId": None,
+                "startedAt": first_ts,
+                "completedAt": last_ts,
+            }
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO orchestration_v2_projection_nodes (
+                    node_id, thread_id, run_id, parent_node_id, root_node_id, kind, status,
+                    provider_thread_id, provider_turn_id, runtime_request_id, checkpoint_scope_id,
+                    started_at, completed_at, payload_json
+                ) VALUES (?, ?, ?, NULL, ?, 'root_turn', 'completed', NULL, NULL, NULL, NULL, ?, ?, ?)
+                """,
+                (root_node_id, sid, run_id, root_node_id, first_ts, last_ts, json.dumps(node_payload, ensure_ascii=False)),
+            )
+            emit_event("node.updated", node_payload, run_meta, first_ts)
+
+            for m in run_msgs:
+                role = "assistant" if str(m.get("role") or "").lower() == "assistant" else "user"
+                msg_id = str(m.get("id") or uuid.uuid4())
+                text = content_text(m.get("content", m.get("text", "")))
+                mts = str(m.get("createdAt") or first_ts)
+                ordinal_counter += 1
+
+                msg_payload = {
+                    "createdBy": "agent" if role == "assistant" else "user",
+                    "creationSource": "provider" if role == "assistant" else "web",
+                    "id": msg_id,
+                    "threadId": sid,
+                    "runId": run_id,
+                    "nodeId": root_node_id,
+                    "role": role,
+                    "text": text,
+                    "attachments": [],
+                    "streaming": False,
+                    "createdAt": mts,
+                    "updatedAt": mts,
+                }
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO orchestration_v2_projection_messages (
+                        message_id, thread_id, run_id, node_id, role, streaming,
+                        created_at, updated_at, payload_json, search_text
+                    ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, NULL)
+                    """,
+                    (msg_id, sid, run_id, root_node_id, role, mts, mts, json.dumps(msg_payload, ensure_ascii=False)),
+                )
+                emit_event("message.updated", msg_payload, run_meta, mts)
+
+                item_id = f"turn-item:message:{msg_id}"
+                item_type = "assistant_message" if role == "assistant" else "user_message"
+                item_payload: dict[str, Any] = {
+                    "id": item_id,
+                    "threadId": sid,
+                    "runId": run_id,
+                    "nodeId": root_node_id,
+                    "providerThreadId": None,
+                    "providerTurnId": None,
+                    "nativeItemRef": None,
+                    "parentItemId": None,
+                    "ordinal": ordinal_counter,
+                    "status": "completed",
+                    "title": None,
+                    "startedAt": mts,
+                    "completedAt": mts,
+                    "updatedAt": mts,
+                    "type": item_type,
+                    "messageId": msg_id,
+                    "text": text,
+                }
+                if role == "user":
+                    item_payload["createdBy"] = "user"
+                    item_payload["creationSource"] = "web"
+                    item_payload["inputIntent"] = "turn_start"
+                    item_payload["attachments"] = []
+                else:
+                    item_payload["streaming"] = False
+
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO orchestration_v2_projection_turn_items (
+                        turn_item_id, thread_id, run_id, node_id, provider_thread_id, provider_turn_id,
+                        parent_item_id, ordinal, type, status, updated_at, payload_json, inline_work_output
+                    ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, 'completed', ?, ?, 0)
+                    """,
+                    (
+                        item_id,
+                        sid,
+                        run_id,
+                        root_node_id,
+                        ordinal_counter,
+                        item_type,
+                        mts,
+                        json.dumps(item_payload, ensure_ascii=False),
+                    ),
+                )
+                conn.execute(
+                    "INSERT OR REPLACE INTO orchestration_v2_turn_item_positions (thread_id, turn_item_id, ordinal) VALUES (?, ?, ?)",
+                    (sid, item_id, ordinal_counter),
+                )
+                emit_event("turn-item.updated", item_payload, run_meta, mts)
+                inserted_msgs += 1
+
+        # Keep projection sequence watermark aligned with orchestration_events
+        max_seq_row = conn.execute("SELECT COALESCE(MAX(sequence), 0) FROM orchestration_events").fetchone()
+        max_seq = int(max_seq_row[0]) if max_seq_row else 0
+        conn.execute(
+            """
+            INSERT INTO orchestration_v2_projection_metadata (projection_name, schema_version, last_sequence, updated_at)
+            VALUES ('thread-projections', 2, ?, ?)
+            ON CONFLICT(projection_name) DO UPDATE SET last_sequence = excluded.last_sequence, updated_at = excluded.updated_at
+            """,
+            (max_seq, now_iso),
+        )
+        conn.commit()
+        try:
+            conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except sqlite3.Error:
+            pass
+        return {"thread_id": sid, "project_id": project_id, "action": "merged", "message_count": inserted_msgs}
+    finally:
+        conn.close()
 
 
 def parse_t3code_source(path: str | Path) -> list[ConversationGraph]:
-    """Read T3 Code thread JSON OR `statev2.sqlite` (`threads`/`messages` tables)."""
+    """Read T3 Code `statev2.sqlite` (v2 `orchestration_v2_projection_*` or legacy tables) or thread JSON."""
     p = Path(path).expanduser()
     if p.is_dir():
         db = p / "userdata" / "statev2.sqlite"
@@ -298,8 +868,73 @@ def parse_t3code_source(path: str | Path) -> list[ConversationGraph]:
         graphs: list[ConversationGraph] = []
         try:
             tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            if "threads" in tables:
+            if "orchestration_v2_projection_threads" in tables:
+                projects_by_id: dict[str, dict[str, Any]] = {}
+                if "projection_projects" in tables:
+                    for pr in conn.execute("SELECT project_id, title, workspace_root FROM projection_projects"):
+                        projects_by_id[str(pr["project_id"])] = dict(pr)
                 msg_by_tid: dict[str, list[dict[str, Any]]] = {}
+                if "orchestration_v2_projection_messages" in tables:
+                    for mr in conn.execute(
+                        "SELECT message_id, thread_id, role, created_at, payload_json FROM orchestration_v2_projection_messages ORDER BY created_at, rowid"
+                    ):
+                        md = dict(mr)
+                        try:
+                            pj = json.loads(md.get("payload_json") or "{}")
+                        except json.JSONDecodeError:
+                            pj = {}
+                        md["_payload"] = pj
+                        msg_by_tid.setdefault(str(md["thread_id"]), []).append(md)
+                for tr in conn.execute(
+                    "SELECT * FROM orchestration_v2_projection_threads WHERE deleted_at IS NULL ORDER BY updated_at DESC"
+                ):
+                    td = dict(tr)
+                    tid = str(td["thread_id"])
+                    try:
+                        tp = json.loads(td.get("payload_json") or "{}")
+                    except json.JSONDecodeError:
+                        tp = {}
+                    proj = projects_by_id.get(str(td.get("project_id") or ""), {})
+                    raw_items = []
+                    for idx, m in enumerate(msg_by_tid.get(tid, [])):
+                        pj = m.get("_payload") or {}
+                        text = str(pj.get("text") or "")
+                        raw_items.append(
+                            {
+                                "node_id": str(m.get("message_id") or f"t3-{idx}"),
+                                "role": str(m.get("role") or pj.get("role") or "user"),
+                                "text": text,
+                                "timestamp": m.get("created_at") or pj.get("createdAt"),
+                                "content": text,
+                                "raw_record": pj or m,
+                            }
+                        )
+                    nodes, roots, active = _chain(raw_items)
+                    lineage = tp.get("lineage") if isinstance(tp.get("lineage"), dict) else {}
+                    graphs.append(
+                        ConversationGraph(
+                            source_format="t3code_thread",
+                            source_id=tid,
+                            title=str(td.get("title") or tid),
+                            workspace=tp.get("worktreePath") or proj.get("workspace_root"),
+                            nodes=nodes,
+                            root_ids=roots,
+                            active_node_id=active,
+                            metadata={
+                                "project_id": td.get("project_id"),
+                                "project_name": proj.get("title"),
+                                "parent_session_id": lineage.get("parentThreadId"),
+                                "provider": td.get("provider_instance_id") or td.get("default_provider"),
+                                "source_file": p.name,
+                            },
+                            raw_source={"thread": tp or td},
+                            links=_links(nodes),
+                            app_mode="desktop-app",
+                        )
+                    )
+                return graphs
+            if "threads" in tables:
+                msg_by_tid = {}
                 if "messages" in tables:
                     for mr in conn.execute("SELECT * FROM messages"):
                         md = dict(mr)
@@ -347,12 +982,13 @@ def parse_t3code_source(path: str | Path) -> list[ConversationGraph]:
 
 
 def build_t3code_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Project ConversationGraph into T3 Code thread JSON (`userdata/threads/<id>.json`)."""
+    """Project ConversationGraph into T3 Code v2 thread payloads (merged into `userdata/statev2.sqlite`)."""
     sessions: list[dict[str, Any]] = []
     losses: list[dict[str, Any]] = []
     paths = graph.branch_paths()
     resolved_cwd = str(Path(graph.workspace or cwd).expanduser().resolve())
     now_iso = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    provider_id, _ = _t3code_provider_for_source(graph.metadata.get("provider") or graph.source_format)
     for branch_index, path in enumerate(paths, 1):
         turns, _, _ = _coalesce_alternating_turns(path)
         sid = str(uuid.uuid4())
@@ -370,7 +1006,7 @@ def build_t3code_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tuple
             "projectName": graph.metadata.get("project_name"),
             "sectionName": graph.metadata.get("section_name"),
             "parentThreadId": graph.metadata.get("parent_session_id"),
-            "provider": "portable",
+            "provider": provider_id,
             "createdAt": now_iso,
             "updatedAt": now_iso,
             "messages": msgs,

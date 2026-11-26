@@ -940,9 +940,11 @@ class NexusV1EndToEndTests(unittest.TestCase):
                     reloaded, _ = load_any_source(pi_f)
                 elif target == "aider":
                     reloaded, _ = load_any_source(troot / ".aider.chat.history.md")
-                elif target in {"gemini-cli", "continue", "zed", "amp", "trae", "warp-oz", "windsurf", "t3code"}:
+                elif target in {"gemini-cli", "continue", "zed", "amp", "trae", "warp-oz", "windsurf"}:
                     jf = next(p for p in troot.rglob("*.json") if p.name != "projects.json")
                     reloaded, _ = load_any_source(jf)
+                elif target == "t3code":
+                    reloaded, _ = load_any_source(troot, source_format="t3code")
                 elif target in {"goose", "kiro", "workbuddy"}:
                     jl = next(troot.rglob("*.jsonl"))
                     reloaded, _ = load_any_source(jl)
@@ -1111,6 +1113,61 @@ class NexusV1EndToEndTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             cyc.branch_paths()
+
+    def test_t3code_statev2_sqlite_multi_session_merge_readback_and_rollback(self) -> None:
+        # Verify transactional apply merges multiple sessions into T3 Code v2 statev2.sqlite
+        # (projection_projects + orchestration_v2_projection_* + orchestration_events),
+        # readback parses all migrated threads & messages cleanly, and rollback restores pristine hash.
+        g1 = ConversationGraph(
+            source_format="antigravity",
+            source_id="ag-1",
+            title="Antigravity Session One",
+            workspace="/tmp/demo-proj",
+            nodes=(
+                MessageNode("u1", None, ("a1",), "user", "Hello T3 from AG 1", "2026-11-26T10:00:00Z", "Hello T3 from AG 1", {}),
+                MessageNode("a1", "u1", (), "assistant", "Reply from AG 1", "2026-11-26T10:00:05Z", "Reply from AG 1", {}),
+            ),
+            root_ids=("u1",),
+            active_node_id="a1",
+            metadata={},
+            raw_source={},
+        )
+        g2 = ConversationGraph(
+            source_format="antigravity",
+            source_id="ag-2",
+            title="Antigravity Session Two",
+            workspace="/tmp/demo-proj",
+            nodes=(
+                MessageNode("u2", None, ("a2",), "user", "Second thread prompt", "2026-11-26T10:05:00Z", "Second thread prompt", {}),
+                MessageNode("a2", "u2", (), "assistant", "Second thread reply", "2026-11-26T10:05:05Z", "Second thread reply", {}),
+            ),
+            root_ids=("u2",),
+            active_node_id="a2",
+            metadata={},
+            raw_source={},
+        )
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            bundle_dir = tp / "t3-bundle"
+            t3_home = tp / "t3-home"
+            write_bundle([g1, g2], target="t3code", cwd="/tmp/demo-proj", out=bundle_dir)
+            tx = apply_bundle(bundle_dir, target_root=t3_home, apply=True)
+            self.assertTrue(tx["post_write_verification"]["ok"], tx["post_write_verification"])
+            self.assertTrue((t3_home / "userdata" / "statev2.sqlite").is_file())
+
+            # Round-trip read back from real statev2.sqlite v2 projection tables
+            loaded, _ = load_any_source(t3_home, source_format="t3code")
+            self.assertEqual(len(loaded), 2)
+            titles = {g.title for g in loaded}
+            self.assertEqual(titles, {"Antigravity Session One", "Antigravity Session Two"})
+            all_texts = {n.text for g in loaded for n in g.nodes}
+            self.assertIn("Hello T3 from AG 1", all_texts)
+            self.assertIn("Second thread reply", all_texts)
+
+            # Exact rollback restores empty t3_home
+            rb = rollback_transaction(tx["journal_dir"])
+            self.assertTrue(rb["ok"], rb)
+            self.assertFalse((t3_home / "userdata" / "statev2.sqlite").exists())
 
 
 if __name__ == "__main__":

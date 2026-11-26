@@ -1393,6 +1393,8 @@ async function doStep4Apply() {
     else if (state.dstId === "codex") resumeTip = `在终端续聊：CODEX_HOME="${target_root}" codex exec resume ${firstSid}`;
     else if (state.dstId === "gemini-cli") resumeTip = `在终端查看：gemini --list-sessions`;
     else if (state.dstId.startsWith("claude-desktop-3p")) resumeTip = `重启或刷新 Claude Desktop 3P 客户端即可在对应通道看到已迁入会话`;
+    else if (state.dstId === "t3code") resumeTip = `已直接写入 T3 Code 原生数据库 statev2.sqlite（若 T3 Code 正在运行，完全退出后重新打开即可在左侧看到新迁入的会话）`;
+    else if (state.dstId === "cursor") resumeTip = `已直接写入 Cursor 原生数据库 state.vscdb（重启 Cursor 即可在历史列表中看到迁入会话）`;
 
     const sbox = document.getElementById("apply-success-box");
     sbox.innerHTML = `

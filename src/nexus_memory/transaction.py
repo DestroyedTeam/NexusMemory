@@ -298,8 +298,8 @@ def _plan_apply_operations(
             dst = ensure_within_root(target_root / "sessions" / Path(rel).name, target_root)
             ops.append((src, dst, "workbuddy-session"))
         elif lane == "t3code":
-            dst = ensure_within_root(target_root / "userdata" / "threads" / Path(rel).name, target_root)
-            ops.append((src, dst, "t3code-thread"))
+            db_dst = ensure_within_root(target_root / "userdata" / "statev2.sqlite", target_root)
+            ops.append((src, db_dst, "t3code-statev2-merge"))
         elif lane == "kiro":
             dst = ensure_within_root(target_root / "sessions" / "cli" / Path(rel).name, target_root)
             ops.append((src, dst, "kiro-session"))
@@ -343,20 +343,66 @@ def _plan_apply_operations(
     return ops
 
 
-def _create_pristine_backup(root: Path, archive_path: Path) -> str:
-    """Archive current state of `root` into a `0o600` tar.gz and return its SHA-256."""
+def _expand_sqlite_companions(paths: list[Path], root: Path) -> list[Path]:
+    """Include SQLite `-wal` and `-shm` companion paths for any SQLite DB destination."""
+    out: list[Path] = []
+    seen: set[Path] = set()
+    for p in paths:
+        for cand in (
+            [p, p.with_name(p.name + "-wal"), p.with_name(p.name + "-shm")]
+            if p.suffix in {".sqlite", ".db", ".vscdb"}
+            else [p]
+        ):
+            try:
+                safe = ensure_within_root(cand, root)
+            except ValueError:
+                continue
+            if safe not in seen:
+                seen.add(safe)
+                out.append(safe)
+    return out
+
+
+def _create_scoped_backup(
+    root: Path,
+    touched_paths: list[Path],
+    archive_path: Path,
+) -> dict[str, Any]:
+    """Archive ONLY pre-existing files in `touched_paths` (plus SQLite WAL/SHM companions) into a `0o600` tar.gz.
+
+    Never touches or wipes unrelated files in live Harness homes (e.g. `~/.t3/tools`, `~/.codex`).
+    """
     ensure_private_dir(archive_path.parent)
+    expanded = _expand_sqlite_companions(touched_paths, root)
+    created_rel: list[str] = []
+    modified_meta: list[dict[str, Any]] = []
     with tarfile.open(archive_path, "w:gz") as tf:
-        if root.exists():
-            for p in sorted(root.rglob("*")):
-                if p.is_symlink():
-                    continue
-                tf.add(p, arcname=p.relative_to(root).as_posix(), recursive=False)
+        for p in sorted(expanded):
+            rel = p.relative_to(root).as_posix()
+            if p.is_file() and not p.is_symlink():
+                tf.add(p, arcname=rel, recursive=False)
+                modified_meta.append(
+                    {
+                        "rel_path": rel,
+                        "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                        "mode": p.stat().st_mode & 0o777,
+                    }
+                )
+            else:
+                created_rel.append(rel)
     try:
         archive_path.chmod(0o600)
     except OSError:
         pass
-    return hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    h = hashlib.sha256()
+    for item in modified_meta:
+        h.update(f"{item['rel_path']}\x00{item['sha256']}\n".encode("utf-8"))
+    return {
+        "backup_sha256": hashlib.sha256(archive_path.read_bytes()).hexdigest(),
+        "scoped_pre_sha256": h.hexdigest(),
+        "created_rel_paths": created_rel,
+        "modified_files": modified_meta,
+    }
 
 
 def apply_bundle(
@@ -394,7 +440,7 @@ def apply_bundle(
         final_dst = dst
         action = "create"
         if dst.exists():
-            if kind in {"codex-session-index-merge", "gemini-projects-merge", "cursor-vscdb-merge"}:
+            if kind in {"codex-session-index-merge", "gemini-projects-merge", "cursor-vscdb-merge", "t3code-statev2-merge"}:
                 action = "merge_existing"
             elif kind == "gemini-project-root":
                 action = "skip_existing"
@@ -450,24 +496,38 @@ def apply_bundle(
     journal_root = Path(tx_dir).expanduser().resolve() if tx_dir else (broot / ".transactions" / tx_id)
     ensure_private_dir(journal_root)
 
-    # Record pre-apply pristine tree hashes and create 0o600 backup archives
+    # Record scoped pre-apply pristine backups (only touched files + SQLite WAL/SHM companions; never wipes unrelated files!)
     ensure_private_dir(troot)
-    pre_count, pre_sha = compute_tree_sha256(troot)
+    primary_touched = [
+        Path(op["dst"])
+        for op in resolved_ops
+        if op["action"] != "skip_existing" and Path(op["dst"]).resolve().is_relative_to(troot)
+    ]
     backup_tar = journal_root / "pristine_target_backup.tar.gz"
-    backup_sha = _create_pristine_backup(troot, backup_tar)
+    primary_bk = _create_scoped_backup(troot, primary_touched, backup_tar)
+    backup_sha = primary_bk["backup_sha256"]
+    pre_count = len(primary_bk["modified_files"])
+    pre_sha = primary_bk["scoped_pre_sha256"]
 
     extra_backup: dict[str, Any] | None = None
     if croot is not None:
         ensure_private_dir(croot)
-        c_pre_count, c_pre_sha = compute_tree_sha256(croot)
+        c_touched = [
+            Path(op["dst"])
+            for op in resolved_ops
+            if op["action"] != "skip_existing" and Path(op["dst"]).resolve().is_relative_to(croot)
+        ]
         c_backup_tar = journal_root / "pristine_claude_backup.tar.gz"
-        c_backup_sha = _create_pristine_backup(croot, c_backup_tar)
+        c_bk = _create_scoped_backup(croot, c_touched, c_backup_tar)
         extra_backup = {
             "root": str(croot),
-            "pre_file_count": c_pre_count,
-            "pre_tree_sha256": c_pre_sha,
+            "rollback_mode": "scoped",
+            "pre_file_count": len(c_bk["modified_files"]),
+            "pre_tree_sha256": c_bk["scoped_pre_sha256"],
             "backup_archive": str(c_backup_tar),
-            "backup_sha256": c_backup_sha,
+            "backup_sha256": c_bk["backup_sha256"],
+            "created_rel_paths": c_bk["created_rel_paths"],
+            "modified_files": c_bk["modified_files"],
         }
 
     # Execute atomic writes
@@ -525,6 +585,13 @@ def apply_bundle(
                 dst.chmod(0o600)
             except OSError:
                 pass
+        elif op["kind"] == "t3code-statev2-merge":
+            from .harnesses_extended import merge_t3code_thread_into_statev2
+
+            payload = json.loads(src.read_text(encoding="utf-8-sig"))
+            ensure_private_dir(dst.parent)
+            merge_meta = merge_t3code_thread_into_statev2(dst, payload, on_collision=on_collision)
+            op = {**op, "t3code_thread_id": merge_meta.get("thread_id")}
         elif op["action"] == "merge_existing" and op["kind"] == "gemini-projects-merge":
             try:
                 cur_obj = json.loads(dst.read_text(encoding="utf-8-sig"))
@@ -543,9 +610,24 @@ def apply_bundle(
             atomic_write_bytes(dst, data, mode=0o600)
         written_files.append({**op, "written_sha256": hashlib.sha256(dst.read_bytes()).hexdigest()})
 
-    post_count, post_sha = compute_tree_sha256(troot)
+    # Refresh final SHA-256 on shared merge targets (e.g. multiple sessions merged into one SQLite DB)
+    final_hash_cache: dict[str, str] = {}
+    for wf in written_files:
+        if wf.get("action") == "merge_existing" or str(wf.get("kind") or "").endswith("-merge"):
+            dpath = str(wf["dst"])
+            if dpath not in final_hash_cache and Path(dpath).is_file():
+                final_hash_cache[dpath] = hashlib.sha256(Path(dpath).read_bytes()).hexdigest()
+            if dpath in final_hash_cache:
+                wf["written_sha256"] = final_hash_cache[dpath]
+
+    post_count = len(written_files)
+    post_h = hashlib.sha256()
+    for wf in written_files:
+        post_h.update(f"{wf['dst']}\x00{wf['written_sha256']}\n".encode("utf-8"))
+    post_sha = post_h.hexdigest()
     tx_record: dict[str, Any] = {
-        "schema": "nexus-memory.transaction.v1",
+        "schema": "nexus-memory.transaction.v2",
+        "rollback_mode": "scoped",
         "transaction_id": tx_id,
         "applied_at": datetime.now(UTC).isoformat(),
         "bundle": str(broot),
@@ -557,6 +639,8 @@ def apply_bundle(
         "post_tree_sha256": post_sha,
         "backup_archive": str(backup_tar),
         "backup_sha256": backup_sha,
+        "created_rel_paths": primary_bk["created_rel_paths"],
+        "modified_files": primary_bk["modified_files"],
         "claude_dir_backup": extra_backup,
         "written_files": written_files,
         "journal_dir": str(journal_root),
@@ -586,9 +670,20 @@ def verify_transaction(tx_dir: str | Path) -> dict[str, Any]:
             errors.append(f"missing written file: {dst}")
             continue
         actual = hashlib.sha256(dst.read_bytes()).hexdigest()
-        expected_hash = wf["written_sha256"] if (wf.get("action") == "merge_existing" or wf.get("kind") == "cursor-vscdb-merge") else wf["src_sha256"]
+        expected_hash = wf["written_sha256"] if (wf.get("action") == "merge_existing" or str(wf.get("kind") or "").endswith("-merge")) else wf["src_sha256"]
         if actual != expected_hash:
             errors.append(f"hash mismatch on {dst}: expected {expected_hash}, got {actual}")
+        if wf.get("kind") == "t3code-statev2-merge" and wf.get("t3code_thread_id"):
+            conn = sqlite3.connect(f"file:{dst}?mode=ro", uri=True)
+            try:
+                trow = conn.execute(
+                    "SELECT 1 FROM orchestration_v2_projection_threads WHERE thread_id = ?",
+                    (wf["t3code_thread_id"],),
+                ).fetchone()
+                if not trow:
+                    errors.append(f"t3code thread missing after merge: {wf['t3code_thread_id']}")
+            finally:
+                conn.close()
         if wf.get("kind") == "desktop-3p-code-index":
             jres = verify_desktop_3p_code_join(dst, cc_root / "projects")
             if not jres["ok"]:
@@ -606,24 +701,92 @@ def verify_transaction(tx_dir: str | Path) -> dict[str, Any]:
     }
 
 
-def _restore_from_backup(root: Path, archive_path: Path, expected_archive_sha: str, expected_tree_sha: str) -> dict[str, Any]:
+def _prune_empty_parents(path: Path, stop_root: Path) -> None:
+    cur = path.parent
+    stop = stop_root.resolve()
+    while cur.resolve() != stop and cur.resolve().is_relative_to(stop):
+        try:
+            cur.rmdir()
+        except OSError:
+            break
+        cur = cur.parent
+
+
+def _restore_scoped_backup(
+    root: Path,
+    archive_path: Path,
+    expected_archive_sha: str,
+    expected_scoped_sha: str,
+    created_rel_paths: list[str],
+    modified_files: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Surgically roll back ONLY files created/modified by this transaction — NEVER wipes unrelated files."""
     actual_arch_sha = hashlib.sha256(archive_path.read_bytes()).hexdigest()
     if actual_arch_sha != expected_archive_sha:
         raise ValueError(f"backup archive SHA-256 mismatch: expected {expected_archive_sha}, got {actual_arch_sha}")
-    if root.exists():
-        shutil.rmtree(root)
-    ensure_private_dir(root)
+
+    # 1. Remove files newly created by this transaction
+    for rel in created_rel_paths:
+        target_path = ensure_within_root(root / rel, root)
+        if target_path.is_file() or target_path.is_symlink():
+            target_path.unlink(missing_ok=True)
+            _prune_empty_parents(target_path, root)
+
+    # 2. Restore exact pre-apply bytes & permissions of modified files
+    mode_by_rel = {item["rel_path"]: int(item.get("mode", 0o600)) for item in modified_files}
     with tarfile.open(archive_path, "r:gz") as tf:
         for member in tf.getmembers():
             if member.issym() or member.islnk():
                 raise ValueError(f"refusing symlink in backup archive: {member.name}")
+            if member.isfile():
+                target_path = ensure_within_root(root / member.name, root)
+                extracted = tf.extractfile(member)
+                if extracted is not None:
+                    mode = mode_by_rel.get(member.name, (member.mode & 0o777) or 0o600)
+                    atomic_write_bytes(target_path, extracted.read(), mode=mode)
+
+    # 3. Verify every created file is removed and every modified file matches its pre-apply SHA-256
+    h = hashlib.sha256()
+    all_gone = True
+    for rel in created_rel_paths:
+        if ensure_within_root(root / rel, root).exists():
+            all_gone = False
+    for item in modified_files:
+        p = ensure_within_root(root / item["rel_path"], root)
+        if not p.is_file():
+            h.update(b"MISSING\n")
+        else:
+            h.update(f"{item['rel_path']}\x00{hashlib.sha256(p.read_bytes()).hexdigest()}\n".encode("utf-8"))
+    restored_sha = h.hexdigest()
+    return {
+        "root": str(root),
+        "rollback_mode": "scoped",
+        "restored_file_count": len(modified_files),
+        "removed_created_count": len(created_rel_paths),
+        "restored_tree_sha256": restored_sha,
+        "expected_pristine_sha256": expected_scoped_sha,
+        "exact_match": all_gone and (restored_sha == expected_scoped_sha),
+    }
+
+
+def _restore_from_backup(root: Path, archive_path: Path, expected_archive_sha: str, expected_tree_sha: str) -> dict[str, Any]:
+    """Legacy full-tree restore (safe non-destructive extraction preserving original file modes)."""
+    actual_arch_sha = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    if actual_arch_sha != expected_archive_sha:
+        raise ValueError(f"backup archive SHA-256 mismatch: expected {expected_archive_sha}, got {actual_arch_sha}")
+    ensure_private_dir(root)
+    with tarfile.open(archive_path, "r:gz") as tf:
+        for member in tf.getmembers():
+            if member.issym() or member.islnk():
+                continue
             target_path = ensure_within_root(root / member.name, root, allow_root=True)
             if member.isdir():
-                ensure_private_dir(target_path)
+                target_path.mkdir(parents=True, exist_ok=True)
             elif member.isfile():
                 extracted = tf.extractfile(member)
                 if extracted is not None:
-                    atomic_write_bytes(target_path, extracted.read(), mode=0o600)
+                    mode = (member.mode & 0o777) or 0o600
+                    atomic_write_bytes(target_path, extracted.read(), mode=mode)
     restored_count, restored_sha = compute_tree_sha256(root)
     return {
         "root": str(root),
@@ -640,21 +803,41 @@ def rollback_transaction(tx_dir: str | Path) -> dict[str, Any]:
     tx_file = jroot / "transaction.json" if jroot.is_dir() else jroot
     tx = json.loads(tx_file.read_text(encoding="utf-8"))
 
-    primary = _restore_from_backup(
-        Path(tx["target_root"]),
-        Path(tx["backup_archive"]),
-        tx["backup_sha256"],
-        tx["pre_tree_sha256"],
-    )
+    if tx.get("rollback_mode") == "scoped":
+        primary = _restore_scoped_backup(
+            Path(tx["target_root"]),
+            Path(tx["backup_archive"]),
+            tx["backup_sha256"],
+            tx["pre_tree_sha256"],
+            tx.get("created_rel_paths", []),
+            tx.get("modified_files", []),
+        )
+    else:
+        primary = _restore_from_backup(
+            Path(tx["target_root"]),
+            Path(tx["backup_archive"]),
+            tx["backup_sha256"],
+            tx["pre_tree_sha256"],
+        )
     extra = None
     if tx.get("claude_dir_backup"):
         cb = tx["claude_dir_backup"]
-        extra = _restore_from_backup(
-            Path(cb["root"]),
-            Path(cb["backup_archive"]),
-            cb["backup_sha256"],
-            cb["pre_tree_sha256"],
-        )
+        if cb.get("rollback_mode") == "scoped":
+            extra = _restore_scoped_backup(
+                Path(cb["root"]),
+                Path(cb["backup_archive"]),
+                cb["backup_sha256"],
+                cb["pre_tree_sha256"],
+                cb.get("created_rel_paths", []),
+                cb.get("modified_files", []),
+            )
+        else:
+            extra = _restore_from_backup(
+                Path(cb["root"]),
+                Path(cb["backup_archive"]),
+                cb["backup_sha256"],
+                cb["pre_tree_sha256"],
+            )
 
     ok = primary["exact_match"] and (extra["exact_match"] if extra is not None else True)
     return {
