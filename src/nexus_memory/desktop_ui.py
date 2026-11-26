@@ -1711,19 +1711,25 @@ def start_desktop_server(port: int = 0) -> tuple[ThreadingHTTPServer, str, str]:
 
 
 def _open_standalone_window(url: str) -> None:
-    """Open URL in chromeless app mode (Edge/Chrome/Chromium `--app=`) on Windows/Linux, else system browser."""
+    """Open URL in chromeless app mode (Vivaldi/Edge/Chrome/Chromium `--app=`) on Windows/Linux, else system browser."""
     if sys.platform == "win32":
+        local_app = os.environ.get("LOCALAPPDATA", "")
+        pf = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+        pf86 = os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
         candidates = [
-            Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Microsoft/Edge/Application/msedge.exe",
-            Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Microsoft/Edge/Application/msedge.exe",
-            Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Google/Chrome/Application/chrome.exe",
+            Path(local_app) / "Vivaldi/Application/vivaldi.exe" if local_app else Path(),
+            Path(pf) / "Vivaldi/Application/vivaldi.exe",
+            Path(pf86) / "Vivaldi/Application/vivaldi.exe",
+            Path(pf86) / "Microsoft/Edge/Application/msedge.exe",
+            Path(pf) / "Microsoft/Edge/Application/msedge.exe",
+            Path(pf) / "Google/Chrome/Application/chrome.exe",
         ]
         for exe in candidates:
-            if exe.is_file():
+            if exe and exe.is_file():
                 subprocess.Popen([str(exe), f"--app={url}", "--window-size=1260,820"])
                 return
     elif sys.platform.startswith("linux"):
-        for browser in ("chromium", "chromium-browser", "google-chrome", "microsoft-edge", "brave-browser"):
+        for browser in ("vivaldi", "vivaldi-stable", "chromium", "chromium-browser", "google-chrome", "microsoft-edge", "brave-browser"):
             found = shutil.which(browser)
             if found:
                 subprocess.Popen(
