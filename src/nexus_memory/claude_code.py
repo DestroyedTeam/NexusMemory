@@ -39,16 +39,21 @@ def writeable_leaf_paths(graph: ConversationGraph) -> list[list[MessageNode]]:
 
 
 def has_non_text_content(value: Any) -> bool:
-    """Detect content that the text-only native projection cannot carry."""
-    if isinstance(value, list):
-        return any(has_non_text_content(item) for item in value)
-    if isinstance(value, dict):
-        if any(key in value for key in ("image", "image_url", "asset_pointer", "file_id", "attachment", "audio", "video")):
-            return True
-        block_type = value.get("type")
-        if isinstance(block_type, str) and block_type not in {"text", "input_text", "output_text"}:
-            return True
-        return any(has_non_text_content(item) for key, item in value.items() if key != "text")
+    """Detect content that the text-only native projection cannot carry (iterative)."""
+    stack: list[Any] = [value]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, list):
+            stack.extend(cur)
+        elif isinstance(cur, dict):
+            if any(key in cur for key in ("image", "image_url", "asset_pointer", "file_id", "attachment", "audio", "video")):
+                return True
+            block_type = cur.get("type")
+            if isinstance(block_type, str) and block_type not in {"text", "input_text", "output_text"}:
+                return True
+            for key, item in cur.items():
+                if key != "text" and isinstance(item, (list, dict)):
+                    stack.append(item)
     return False
 
 

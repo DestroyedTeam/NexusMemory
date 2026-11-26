@@ -1050,6 +1050,68 @@ class NexusV1EndToEndTests(unittest.TestCase):
             srv.shutdown()
             srv.server_close()
 
+    def test_deep_conversation_graph_no_recursion_error(self) -> None:
+        # Build a 3,500-node deep conversation (>3x Python's default 1000 recursion limit)
+        # with a fork near the tail and verify branch_paths() + t3code/claude-code conversion succeed fast.
+        nodes: list[MessageNode] = []
+        depth = 3500
+        for i in range(depth):
+            nid = f"n{i}"
+            parent = f"n{i - 1}" if i > 0 else None
+            if i == depth - 2:
+                children: tuple[str, ...] = (f"n{depth - 1}", "n_fork")
+            elif i < depth - 1:
+                children = (f"n{i + 1}",)
+            else:
+                children = ()
+            role = "user" if i % 2 == 0 else "assistant"
+            nodes.append(
+                MessageNode(nid, parent, children, role, f"turn {i}", f"2026-11-26T00:00:{i % 60:02d}Z", f"turn {i}", {})
+            )
+        nodes.append(
+            MessageNode("n_fork", f"n{depth - 2}", (), "assistant", "fork leaf", "2026-11-26T00:01:00Z", "fork leaf", {})
+        )
+        graph = ConversationGraph(
+            source_format="antigravity",
+            source_id="deep-conv-3500",
+            title="Deep Antigravity Session",
+            workspace="/tmp/workspace",
+            nodes=tuple(nodes),
+            root_ids=("n0",),
+            active_node_id=f"n{depth - 1}",
+            metadata={},
+            raw_source={},
+        )
+        paths = graph.branch_paths()
+        self.assertEqual(len(paths), 2)
+        self.assertEqual(len(paths[0]), depth)
+        self.assertEqual(len(paths[1]), depth)
+        self.assertEqual(paths[1][-1].node_id, "n_fork")
+
+        # Preview into t3code and claude-code without RecursionError
+        p_t3 = preview([graph], target="t3code", cwd="/tmp/workspace")
+        self.assertEqual(p_t3["native_session_count"], 2)
+        p_cc = preview([graph], target="claude-code", cwd="/tmp/workspace")
+        self.assertEqual(p_cc["native_session_count"], 2)
+
+        # Verify iterative cycle detection still raises ValueError cleanly
+        cyc = ConversationGraph(
+            source_format="antigravity",
+            source_id="cyclic",
+            title="Cyclic",
+            workspace=None,
+            nodes=(
+                MessageNode("a", None, ("b",), "user", "hi", None, "hi", {}),
+                MessageNode("b", "a", ("a",), "assistant", "yo", None, "yo", {}),
+            ),
+            root_ids=("a",),
+            active_node_id="b",
+            metadata={},
+            raw_source={},
+        )
+        with self.assertRaises(ValueError):
+            cyc.branch_paths()
+
 
 if __name__ == "__main__":
     unittest.main()

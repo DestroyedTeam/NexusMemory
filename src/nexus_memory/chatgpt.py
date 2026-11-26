@@ -262,19 +262,19 @@ def _extract_node_attachments(
         records.append(rec)
         refs.append({"asset_id": rec.asset_id, "source_ref": source_ref, "filename": rec.filename, "disposition": rec.disposition})
 
-    def walk(val: Any) -> None:
+    stack: list[Any] = [content]
+    while stack:
+        val = stack.pop()
         if isinstance(val, list):
-            for item in val:
-                walk(item)
+            for item in reversed(val):
+                stack.append(item)
         elif isinstance(val, dict):
             ptr = _first_string(val.get("asset_pointer"), val.get("file_id"), val.get("image_url"))
             if ptr:
                 register(ptr, _first_string(val.get("name"), val.get("filename")), _first_string(val.get("mime_type"), val.get("content_type")))
-            for k, v in val.items():
-                if k not in {"text", "asset_pointer", "file_id"}:
-                    walk(v)
-
-    walk(content)
+            children = [v for k, v in val.items() if k not in {"text", "asset_pointer", "file_id"} and isinstance(v, (list, dict))]
+            for child in reversed(children):
+                stack.append(child)
     for att in msg_meta.get("attachments", []) if isinstance(msg_meta.get("attachments"), list) else []:
         if isinstance(att, dict):
             ptr = _first_string(att.get("id"), att.get("file_id"), att.get("name"))

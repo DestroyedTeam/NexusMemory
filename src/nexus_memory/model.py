@@ -121,7 +121,11 @@ class ConversationGraph:
         ]
 
     def branch_paths(self, *, max_paths: int = 256) -> list[list[MessageNode]]:
-        """Return root-to-leaf paths without flattening source branches."""
+        """Return root-to-leaf paths iteratively without flattening source branches.
+
+        Uses an explicit stack with O(N) path/ancestor tracking so deep conversations
+        with thousands of turns/tool events never trigger Python's recursion limit.
+        """
         by_id = {node.node_id: node for node in self.nodes}
         if len(by_id) != len(self.nodes):
             raise ValueError("conversation contains duplicate node IDs")
@@ -132,23 +136,42 @@ class ConversationGraph:
         paths: list[list[MessageNode]] = []
         reached: set[str] = set()
 
-        def visit(node_id: str, path: list[MessageNode], ancestors: frozenset[str]) -> None:
-            if node_id in ancestors:
-                raise ValueError(f"conversation graph contains a cycle at {node_id}")
-            node = by_id[node_id]
-            reached.add(node_id)
-            next_path = [*path, node]
-            children = [child for child in node.child_ids if child in by_id]
-            if not children:
-                paths.append(next_path)
-                if len(paths) > max_paths:
-                    raise ValueError(f"conversation has more than {max_paths} leaf paths")
-                return
-            for child_id in children:
-                visit(child_id, next_path, ancestors | {node_id})
-
         for root_id in roots:
-            visit(root_id, [], frozenset())
+            root_node = by_id[root_id]
+            reached.add(root_id)
+            path: list[MessageNode] = [root_node]
+            ancestors: set[str] = {root_id}
+            root_children = [c for c in root_node.child_ids if c in by_id]
+            stack: list[tuple[str, list[str], int]] = [(root_id, root_children, 0)]
+
+            while stack:
+                node_id, children, idx = stack[-1]
+                if not children:
+                    paths.append(list(path))
+                    if len(paths) > max_paths:
+                        raise ValueError(f"conversation has more than {max_paths} leaf paths")
+                    stack.pop()
+                    path.pop()
+                    ancestors.remove(node_id)
+                    continue
+
+                if idx >= len(children):
+                    stack.pop()
+                    path.pop()
+                    ancestors.remove(node_id)
+                    continue
+
+                child_id = children[idx]
+                stack[-1] = (node_id, children, idx + 1)
+                if child_id in ancestors:
+                    raise ValueError(f"conversation graph contains a cycle at {child_id}")
+                child_node = by_id[child_id]
+                reached.add(child_id)
+                path.append(child_node)
+                ancestors.add(child_id)
+                child_children = [c for c in child_node.child_ids if c in by_id]
+                stack.append((child_id, child_children, 0))
+
         if len(reached) != len(self.nodes):
             missing = sorted(set(by_id) - reached)
             raise ValueError(f"conversation has unreachable or cyclic nodes: {missing[:5]}")
@@ -339,25 +362,39 @@ class HarnessDescriptor:
 
 
 def content_text(value: Any) -> str:
-    """Extract readable text while the original typed content remains in `content`."""
+    """Extract readable text iteratively while the original typed content remains in `content`."""
     if isinstance(value, str):
         return value
-    if isinstance(value, list):
-        return "\n".join(text for part in value if (text := content_text(part)))
-    if isinstance(value, dict):
-        direct = value.get("text")
-        if isinstance(direct, str):
-            return direct
-        parts = value.get("parts")
-        if isinstance(parts, list):
-            return content_text(parts)
-        thinking = value.get("thinking")
-        if isinstance(thinking, str) and value.get("type") == "thinking":
-            return thinking
-        content = value.get("content")
-        if isinstance(content, (str, list)):
-            return content_text(content)
-    return ""
+    chunks: list[str] = []
+    stack: list[Any] = [value]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, str):
+            if cur:
+                chunks.append(cur)
+        elif isinstance(cur, list):
+            for part in reversed(cur):
+                stack.append(part)
+        elif isinstance(cur, dict):
+            direct = cur.get("text")
+            if isinstance(direct, str):
+                if direct:
+                    chunks.append(direct)
+                continue
+            parts = cur.get("parts")
+            if isinstance(parts, list):
+                for part in reversed(parts):
+                    stack.append(part)
+                continue
+            thinking = cur.get("thinking")
+            if isinstance(thinking, str) and cur.get("type") == "thinking":
+                if thinking:
+                    chunks.append(thinking)
+                continue
+            content = cur.get("content")
+            if isinstance(content, (str, list)):
+                stack.append(content)
+    return "\n".join(chunks)
 
 
 def extract_links(value: Any) -> tuple[str, ...]:
