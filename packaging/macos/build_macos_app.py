@@ -204,6 +204,9 @@ if let first = cliArgs.first, first == "--self-test" || first == "--cli" || firs
     let p = Process()
     p.executableURL = URL(fileURLWithPath: pyBin)
     p.arguments = [backendScript] + cliArgs
+    var cliEnv = ProcessInfo.processInfo.environment
+    cliEnv["PYTHONDONTWRITEBYTECODE"] = "1"
+    p.environment = cliEnv
     p.standardInput = FileHandle.standardInput
     p.standardOutput = FileHandle.standardOutput
     p.standardError = FileHandle.standardError
@@ -224,6 +227,7 @@ from __future__ import annotations
 import json, sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 APP_DIR = Path(__file__).resolve().parent / "app"
 if APP_DIR.is_dir() and str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))

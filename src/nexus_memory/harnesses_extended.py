@@ -1571,11 +1571,222 @@ def _scan_dir_sessions(
     return out
 
 
+def parse_kiro_sqlite(db_path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
+    """Read real AWS Kiro CLI `data.sqlite3` (`conversations_v2` / `conversations`, strictly read-only, never reads `auth_kv`)."""
+    p = Path(db_path).expanduser()
+    if not p.is_file():
+        return []
+    graphs: list[ConversationGraph] = []
+    conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        seen: set[str] = set()
+        if "conversations_v2" in tables:
+            sql = "SELECT key, conversation_id, value, created_at, updated_at FROM conversations_v2 ORDER BY updated_at DESC"
+            if limit and limit > 0:
+                sql += f" LIMIT {int(limit)}"
+            for row in conn.execute(sql):
+                cid = str(row["conversation_id"] or "")
+                if not cid or cid in seen:
+                    continue
+                seen.add(cid)
+                ws = str(row["key"] or "").strip() or None
+                try:
+                    val = json.loads(row["value"] or "{}")
+                except json.JSONDecodeError:
+                    val = {}
+                if not isinstance(val, dict):
+                    val = {}
+                raw_items: list[dict[str, Any]] = []
+                for idx, entry in enumerate(val.get("history", val.get("messages", []))):
+                    if not isinstance(entry, dict):
+                        continue
+                    if "user" in entry or "assistant" in entry:
+                        if entry.get("user") is not None:
+                            u_txt = content_text(entry["user"].get("content", entry["user"]) if isinstance(entry["user"], dict) else entry["user"])
+                            if u_txt.strip():
+                                raw_items.append({"node_id": f"kiro-u-{idx}", "role": "user", "text": u_txt, "content": entry["user"], "raw_record": entry})
+                        if entry.get("assistant") is not None:
+                            a_obj = entry["assistant"]
+                            a_txt = content_text(a_obj.get("Response", a_obj.get("content", a_obj)) if isinstance(a_obj, dict) else a_obj)
+                            if a_txt.strip():
+                                raw_items.append({"node_id": f"kiro-a-{idx}", "role": "assistant", "text": a_txt, "content": a_obj, "raw_record": entry})
+                    elif "role" in entry:
+                        c = entry.get("content", "")
+                        raw_items.append({"node_id": str(entry.get("id") or f"kiro-{idx}"), "role": str(entry["role"]), "text": content_text(c), "timestamp": entry.get("timestamp"), "content": c, "raw_record": entry})
+                nodes, roots, active = _chain(raw_items)
+                first_u = next((n.text for n in nodes if n.role == "user" and n.text.strip()), "")
+                title = str(val.get("title") or (first_u.splitlines()[0][:80].strip() if first_u else cid))
+                graphs.append(
+                    ConversationGraph(
+                        source_format="kiro_session",
+                        source_id=cid,
+                        title=title,
+                        workspace=ws or val.get("cwd") or val.get("workspace"),
+                        nodes=nodes,
+                        root_ids=roots,
+                        active_node_id=active,
+                        metadata={
+                            "source_file": p.name,
+                            "project_name": Path(ws).name if ws and ws not in {"/", "\\"} else None,
+                            "parent_session_id": val.get("root_conversation_id") if val.get("root_conversation_id") != cid else None,
+                        },
+                        raw_source={"conversation_id": cid, "created_at": row["created_at"], "updated_at": row["updated_at"]},
+                        links=_links(nodes),
+                        app_mode="cli",
+                    )
+                )
+        if "conversations" in tables and (not limit or len(graphs) < limit):
+            for row in conn.execute("SELECT key, value FROM conversations"):
+                ws = str(row["key"] or "").strip() or None
+                try:
+                    val = json.loads(row["value"] or "{}")
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(val, dict):
+                    continue
+                cid = str(val.get("conversation_id") or ws or uuid.uuid4())
+                if cid in seen:
+                    continue
+                seen.add(cid)
+                raw_items = []
+                for idx, entry in enumerate(val.get("history", val.get("messages", []))):
+                    if isinstance(entry, dict) and "role" in entry:
+                        c = entry.get("content", "")
+                        raw_items.append({"node_id": f"kiro-v1-{idx}", "role": str(entry["role"]), "text": content_text(c), "content": c, "raw_record": entry})
+                nodes, roots, active = _chain(raw_items)
+                graphs.append(
+                    ConversationGraph(
+                        source_format="kiro_session",
+                        source_id=cid,
+                        title=str(val.get("title") or cid),
+                        workspace=ws,
+                        nodes=nodes,
+                        root_ids=roots,
+                        active_node_id=active,
+                        metadata={"source_file": p.name},
+                        raw_source={"conversation_id": cid},
+                        links=_links(nodes),
+                        app_mode="cli",
+                    )
+                )
+                if limit and len(graphs) >= limit:
+                    break
+    finally:
+        conn.close()
+    return graphs
+
+
+def merge_kiro_sessions_batch(
+    db_path: str | Path,
+    entries: list[dict[str, Any]],
+    *,
+    on_collision: str = "refuse",
+) -> list[dict[str, Any]]:
+    """Batch-merge Kiro sessions into Kiro CLI `data.sqlite3` (`conversations_v2` table)."""
+    db = Path(db_path).expanduser()
+    db.parent.mkdir(parents=True, exist_ok=True)
+    now_ms = int(time.time() * 1000)
+    conn = sqlite3.connect(str(db), timeout=20.0)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS conversations_v2 (
+                key TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                value TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (key, conversation_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_conversations_v2_key_updated ON conversations_v2(key, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_conversations_v2_updated_at ON conversations_v2(updated_at DESC);
+            """
+        )
+        existing = {
+            (str(r[0]), str(r[1])) for r in conn.execute("SELECT key, conversation_id FROM conversations_v2")
+        }
+        results: list[dict[str, Any]] = []
+        for entry in entries:
+            sid = str(entry.get("session_id") or uuid.uuid4())
+            cwd_key = str(entry.get("cwd") or "")
+            if (cwd_key, sid) in existing:
+                if on_collision == "refuse":
+                    raise FileExistsError(f"kiro conversation already exists in data.sqlite3: {sid}")
+                if on_collision == "skip":
+                    results.append({"session_id": sid, "action": "skipped"})
+                    continue
+                if on_collision == "rename":
+                    sid = str(uuid.uuid4())
+            records = entry.get("records") or []
+            msgs = [r for r in records if isinstance(r, dict) and r.get("role") in {"user", "assistant"}]
+            history: list[dict[str, Any]] = []
+            i = 0
+            while i < len(msgs):
+                u_txt = str(msgs[i].get("content") or "") if msgs[i].get("role") == "user" else ""
+                a_txt = ""
+                if i + 1 < len(msgs) and msgs[i + 1].get("role") == "assistant":
+                    a_txt = str(msgs[i + 1].get("content") or "")
+                    i += 2
+                else:
+                    if msgs[i].get("role") == "assistant":
+                        a_txt = str(msgs[i].get("content") or "")
+                    i += 1
+                history.append(
+                    {
+                        "user": {"content": {"Prompt": {"prompt": u_txt}}, "env_context": {"env_state": {"operating_system": sys.platform, "current_working_directory": cwd_key}}},
+                        "assistant": {"Response": {"message_id": str(uuid.uuid4()), "content": a_txt}},
+                    }
+                )
+            val_obj = {
+                "conversation_id": sid,
+                "title": entry.get("title") or sid,
+                "cwd": cwd_key,
+                "history": history,
+                "messages": msgs,
+                "transcript": [m.get("content", "") for m in msgs],
+            }
+            conn.execute(
+                "INSERT OR REPLACE INTO conversations_v2 (key, conversation_id, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (cwd_key, sid, json.dumps(val_obj, ensure_ascii=False), now_ms, now_ms),
+            )
+            existing.add((cwd_key, sid))
+            results.append({"session_id": sid, "action": "merged"})
+        conn.commit()
+        return results
+    finally:
+        conn.close()
+
+
 def parse_kiro_home(path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
     p = Path(path).expanduser()
     if p.is_file():
+        if p.suffix in {".sqlite3", ".sqlite", ".db"}:
+            return parse_kiro_sqlite(p, limit=limit)
         return [parse_kiro_session(p)]
-    return _scan_dir_sessions(p, ("sessions",), ("*.jsonl", "*.json"), parse_kiro_session, exclude_names={"mcp.json", "settings.json"}, limit=limit)
+    graphs = _scan_dir_sessions(p, ("sessions",), ("*.jsonl", "*.json"), parse_kiro_session, exclude_names={"mcp.json", "settings.json", "cli.json"}, limit=limit)
+    if limit and len(graphs) >= limit:
+        return graphs[:limit]
+    seen = {g.source_id for g in graphs}
+    rem = (limit - len(graphs)) if limit else None
+    candidate_dbs = [p / "data.sqlite3"]
+    if p.name == ".kiro":
+        if sys.platform == "darwin":
+            candidate_dbs.append(p.parent / "Library/Application Support/kiro-cli/data.sqlite3")
+        elif sys.platform == "win32":
+            candidate_dbs.append(p.parent / "AppData/Local/kiro-cli/data.sqlite3")
+        else:
+            candidate_dbs.append(p.parent / ".local/share/kiro-cli/data.sqlite3")
+    for kdb in candidate_dbs:
+        if kdb.is_file():
+            for g in parse_kiro_sqlite(kdb, limit=rem):
+                if g.source_id not in seen:
+                    seen.add(g.source_id)
+                    graphs.append(g)
+                    if limit and len(graphs) >= limit:
+                        return graphs[:limit]
+    return graphs
 
 
 def parse_amp_home(path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:

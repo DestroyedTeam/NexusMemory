@@ -1616,6 +1616,77 @@ class NexusV1EndToEndTests(unittest.TestCase):
                 self.assertTrue(rb["ok"], dst)
                 self.assertEqual(compute_tree_sha256(troot)[1], pre_sha, dst)
 
+    def test_v002_sqlite_and_index_writers_for_opencode_goose_cline_continue_zed_kiro(self) -> None:
+        from nexus_memory.ecosystem import parse_cline_home, parse_goose_home, parse_opencode_sqlite, parse_zed_home
+        from nexus_memory.harnesses_extended import parse_kiro_home
+
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            ws = tp / "RealWs"
+            ws.mkdir()
+            subprocess.run(["git", "-C", str(ws), "init", "-q"], check=True)
+            subprocess.run(
+                ["git", "-C", str(ws), "-c", "user.name=Nexus", "-c", "user.email=n@example.com", "commit", "--allow-empty", "-qm", "init"],
+                check=True,
+            )
+            seed = [
+                ConversationGraph(
+                    source_format="seed",
+                    source_id="v002-sqlite-01",
+                    title="SQLite v0.0.2 Compatibility",
+                    workspace=str(ws),
+                    nodes=(
+                        MessageNode("u1", None, ("a1",), "user", "Verify SQLite stores", "2026-11-26T01:00:00Z", "Verify SQLite stores", {}),
+                        MessageNode("a1", "u1", (), "assistant", "Verified cleanly", "2026-11-26T01:00:05Z", "Verified cleanly", {}),
+                    ),
+                    root_ids=("u1",),
+                    active_node_id="a1",
+                    metadata={"project_name": "RealWs"},
+                    raw_source={},
+                )
+            ]
+
+            for tgt in ("opencode", "goose", "cline-roo", "continue", "zed", "kiro"):
+                bdir = tp / f"b-{tgt}"
+                troot = tp / f"t-{tgt}"
+                troot.mkdir()
+                write_bundle(seed, out=bdir, cwd=ws, target=tgt)
+                self.assertTrue(verify_bundle(bdir)["ok"], tgt)
+                tx = apply_bundle(bdir, target_root=troot, apply=True)
+                self.assertTrue(tx["post_write_verification"]["ok"], tgt)
+
+                if tgt == "opencode":
+                    self.assertTrue((troot / "opencode.db").is_file())
+                    oc = parse_opencode_sqlite(troot / "opencode.db")
+                    self.assertEqual(len(oc), 1)
+                    self.assertEqual(oc[0].nodes[0].text, "Verify SQLite stores")
+                elif tgt == "goose":
+                    self.assertTrue((troot / "sessions" / "sessions.db").is_file())
+                    gs = parse_goose_home(troot)
+                    self.assertEqual(len(gs), 1)
+                    self.assertEqual(gs[0].nodes[1].text, "Verified cleanly")
+                elif tgt == "cline-roo":
+                    self.assertTrue((troot / "data" / "db" / "sessions.db").is_file())
+                    cl = parse_cline_home(troot)
+                    self.assertEqual(len(cl), 1)
+                elif tgt == "continue":
+                    idx = json.loads((troot / "sessions" / "sessions.json").read_text(encoding="utf-8"))
+                    self.assertEqual(len(idx), 1)
+                    cn_all, _ = load_any_source(troot / "sessions" / "sessions.json")
+                    self.assertEqual(len(cn_all), 1)
+                elif tgt == "zed":
+                    self.assertTrue((troot / "threads" / "threads.db").is_file())
+                    zd = parse_zed_home(troot)
+                    self.assertEqual(len(zd), 1)
+                elif tgt == "kiro":
+                    self.assertTrue((troot / "data.sqlite3").is_file())
+                    kr = parse_kiro_home(troot)
+                    self.assertEqual(len(kr), 1)
+
+                rb = rollback_transaction(tx["journal_dir"])
+                self.assertTrue(rb["ok"], tgt)
+                self.assertEqual(compute_tree_sha256(troot)[0], 0, tgt)
+
 
 if __name__ == "__main__":
     unittest.main()
