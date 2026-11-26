@@ -432,28 +432,47 @@ def merge_t3code_thread_into_statev2(
     *,
     on_collision: str = "refuse",
 ) -> dict[str, Any]:
-    """Merge a staged `t3code.thread.v2` JSON payload natively into T3 Code's `statev2.sqlite`.
+    """Merge a staged `t3code.thread.v2` payload natively into T3 Code's `statev2.sqlite`.
 
-    Writes schema-authentic rows to `projection_projects`, `orchestration_v2_projection_threads`,
-    `orchestration_v2_projection_runs`, `orchestration_v2_projection_nodes`,
-    `orchestration_v2_projection_messages`, `orchestration_v2_projection_turn_items`,
-    `orchestration_v2_turn_item_positions`, `orchestration_events`, and advances
-    `orchestration_v2_projection_metadata.last_sequence`. Native T3 Code SQLite triggers
-    automatically keep FTS5 search and turn-item count tables synchronized.
+    Follows T3 Code's official `agentSessionImporter.ts` (`importRecentAgentThreadsV2` +
+    `messageEvents`) contract verbatim:
+    - Creates/reuses a valid `projection_projects` entry (never `/` root; falls back to `No project`)
+    - Emits `historyOrigin: "v1_import"` thread into `orchestration_v2_projection_threads` + `thread.created`
+    - Emits run-less (`runId: null, nodeId: null`) messages & turn items (`ordinal = 1..N`) into
+      `orchestration_v2_projection_messages`, `orchestration_v2_projection_turn_items`,
+      `orchestration_v2_turn_item_positions`, and `orchestration_events` (`application_event_version = 2`)
+    - Advances `orchestration_v2_projection_metadata.last_sequence`; native SQLite triggers
+      automatically maintain FTS5 search and turn-item count tables.
     """
-    from urllib.parse import quote
-
     db = Path(db_path).expanduser()
     db.parent.mkdir(parents=True, exist_ok=True)
     now_dt = datetime.now(UTC)
     now_iso = now_dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    now_ms = int(now_dt.timestamp() * 1000)
+    import_prefix = "agent-session-import:v2"
 
     sid = str(payload.get("threadId") or uuid.uuid4())
-    title = str(payload.get("title") or sid)[:240]
+    raw_title = str(payload.get("title") or "").strip()
+    title = (raw_title or "Untitled thread")[:240]
     workspace_path = str(payload.get("workspacePath") or "").strip()
-    created_at = str(payload.get("createdAt") or now_iso)
-    updated_at = str(payload.get("updatedAt") or now_iso)
+    # Never create a bogus "/" filesystem-root project in T3 Code
+    if workspace_path in {"", "/", "\\"}:
+        workspace_path = ""
+    else:
+        wp = Path(workspace_path)
+        if len(wp.parts) <= 1:
+            workspace_path = ""
+
+    def _iso_utc(val: Any, fallback: str) -> str:
+        if isinstance(val, str) and val.strip():
+            s = val.strip()
+            if s.endswith("Z") or "+" in s[10:]:
+                return s
+            if "T" in s:
+                return s + "Z"
+        return fallback
+
+    created_at = _iso_utc(payload.get("createdAt"), now_iso)
+    updated_at = _iso_utc(payload.get("updatedAt"), created_at)
     parent_tid = payload.get("parentThreadId")
     raw_provider = str(payload.get("provider") or "").strip()
     provider_id, default_model = _t3code_provider_for_source(raw_provider)
@@ -477,7 +496,7 @@ def merge_t3code_thread_into_statev2(
             if on_collision == "rename":
                 sid = str(uuid.uuid4())
 
-        # Pick model from any existing thread using the same provider if present
+        # Reuse configured modelSelection from an existing thread using the same provider if present
         existing_model_row = conn.execute(
             "SELECT payload_json FROM orchestration_v2_projection_threads WHERE default_provider = ? LIMIT 1",
             (provider_id,),
@@ -485,7 +504,6 @@ def merge_t3code_thread_into_statev2(
         model_selection: dict[str, Any] = {
             "instanceId": provider_id,
             "model": default_model,
-            "options": [],
         }
         if existing_model_row:
             try:
@@ -495,7 +513,7 @@ def merge_t3code_thread_into_statev2(
             except json.JSONDecodeError:
                 pass
 
-        # Resolve or create project in `projection_projects`
+        # Resolve or create project in `projection_projects` (matching T3 Code's project.created schema)
         project_id: str | None = None
         if workspace_path:
             prow = conn.execute(
@@ -507,7 +525,6 @@ def merge_t3code_thread_into_statev2(
             else:
                 project_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"nexus-t3code-project:{workspace_path}"))
                 proj_title = Path(workspace_path).name or "Imported Project"
-                proj_icon = {"kind": "lucide", "name": "folder", "color": "blue"}
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO projection_projects (
@@ -515,9 +532,9 @@ def merge_t3code_thread_into_statev2(
                         deleted_at, default_model_selection_json, default_thread_env_mode,
                         favicon_path, auto_pull, project_icon_json, pinned_at, archived_at,
                         has_custom_title, tracked_folders_json
-                    ) VALUES (?, ?, ?, '[]', ?, ?, NULL, NULL, NULL, NULL, 0, ?, NULL, NULL, 0, '[]')
+                    ) VALUES (?, ?, ?, '[]', ?, ?, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 0, '[]')
                     """,
-                    (project_id, proj_title, workspace_path, created_at, now_iso, json.dumps(proj_icon)),
+                    (project_id, proj_title, workspace_path, created_at, now_iso),
                 )
                 proj_cmd = f"nexus-import-project:{project_id}"
                 proj_evt_payload = {
@@ -526,7 +543,7 @@ def merge_t3code_thread_into_statev2(
                     "workspaceRoot": workspace_path,
                     "defaultModelSelection": None,
                     "faviconPath": None,
-                    "projectIcon": proj_icon,
+                    "projectIcon": None,
                     "scripts": [],
                     "createdAt": created_at,
                     "updatedAt": now_iso,
@@ -562,7 +579,7 @@ def merge_t3code_thread_into_statev2(
                     INSERT INTO projection_projects (
                         project_id, title, workspace_root, scripts_json, created_at, updated_at,
                         deleted_at, project_icon_json, tracked_folders_json
-                    ) VALUES (?, 'No project', ?, '[]', ?, ?, NULL, '{"kind":"lucide","name":"message-square-dashed","color":"gray"}', '[]')
+                    ) VALUES (?, 'No project', ?, '[]', ?, ?, NULL, NULL, '[]')
                     """,
                     (project_id, scratch_root, created_at, now_iso),
                 )
@@ -570,7 +587,7 @@ def merge_t3code_thread_into_statev2(
         stream_ver = 0
         cmd_id = f"nexus-import:{sid}"
 
-        def emit_event(event_type: str, evt_payload: dict[str, Any], meta: dict[str, Any], occurred: str) -> None:
+        def emit_event(event_id: str, event_type: str, evt_payload: dict[str, Any], meta: dict[str, Any], occurred: str) -> None:
             nonlocal stream_ver
             conn.execute(
                 """
@@ -581,7 +598,7 @@ def merge_t3code_thread_into_statev2(
                 ) VALUES (?, 'thread', ?, ?, ?, ?, ?, NULL, ?, 'server', ?, ?, 2)
                 """,
                 (
-                    f"event:thread:{sid}:nexus:{stream_ver}:{uuid.uuid4()}",
+                    event_id,
                     sid,
                     stream_ver,
                     event_type,
@@ -594,9 +611,10 @@ def merge_t3code_thread_into_statev2(
             )
             stream_ver += 1
 
+        # Exact `appThread` shape from T3 Code's `agentSessionImporter.ts`
         thread_payload = {
-            "createdBy": "user",
-            "creationSource": "web",
+            "createdBy": "system",
+            "creationSource": "server",
             "id": sid,
             "projectId": project_id,
             "title": title,
@@ -606,10 +624,12 @@ def merge_t3code_thread_into_statev2(
             "interactionMode": "default",
             "branch": None,
             "worktreePath": None,
-            "pullRequests": [],
+            "linkedPullRequest": None,
+            "branchPullRequest": None,
             "activeProviderThreadId": None,
+            "historyOrigin": "v1_import",
             "lineage": {
-                "parentThreadId": parent_tid if isinstance(parent_tid, str) else None,
+                "parentThreadId": parent_tid if isinstance(parent_tid, str) and parent_tid.strip() else None,
                 "relationshipToParent": None,
                 "rootThreadId": sid,
             },
@@ -617,14 +637,15 @@ def merge_t3code_thread_into_statev2(
             "createdAt": created_at,
             "updatedAt": updated_at,
             "archivedAt": None,
-            "settledOverride": None,
+            "settledOverride": "active",
             "settledAt": None,
+            "unsettledAt": updated_at,
             "snoozedUntil": None,
             "snoozedAt": None,
-            "lastVisitedAt": updated_at,
-            "opens": {"openedAt": now_ms, "score": 1, "picks": []},
-            "titleRegeneration": None,
-            "titleRenamed": True,
+            "pinnedAt": None,
+            "pinOrderKey": None,
+            "activeOrderKey": None,
+            "lastVisitedAt": None,
             "deletedAt": None,
         }
         conn.execute(
@@ -646,184 +667,114 @@ def merge_t3code_thread_into_statev2(
                 provider_id,
             ),
         )
-        emit_event("thread.created", thread_payload, {"providerInstanceId": provider_id}, created_at)
+        emit_event(
+            f"{import_prefix}:thread:{sid}:created",
+            "thread.created",
+            thread_payload,
+            {"providerInstanceId": provider_id},
+            created_at,
+        )
 
-        # Pair turns into T3 Code v2 runs (each run = user prompt + optional assistant response)
-        runs: list[list[dict[str, Any]]] = []
-        for m in messages:
+        # Exact run-less `messageEvents` shape from T3 Code's `agentSessionImporter.ts`
+        inserted_msgs = 0
+        for idx, m in enumerate(messages):
             if not isinstance(m, dict):
                 continue
-            role = str(m.get("role") or "user")
-            if role == "user" or not runs:
-                runs.append([m])
-            else:
-                runs[-1].append(m)
+            role = "assistant" if str(m.get("role") or "").lower() == "assistant" else "user"
+            text = content_text(m.get("content", m.get("text", "")))
+            if not text.strip():
+                continue
+            ordinal = inserted_msgs + 1
+            suffix = f"{inserted_msgs:06d}"
+            msg_id = f"{sid}:{suffix}"
+            turn_item_id = f"{import_prefix}:turn-item:{sid}:{suffix}"
+            mts = _iso_utc(m.get("createdAt"), updated_at)
 
-        ordinal_counter = 1_000_000
-        inserted_msgs = 0
-        for run_idx, run_msgs in enumerate(runs, 1):
-            run_id = f"run:thread:{sid}:ordinal:{run_idx}"
-            root_node_id = f"node:run:{quote(run_id, safe='')}:root"
-            first_ts = str(run_msgs[0].get("createdAt") or now_iso)
-            last_ts = str(run_msgs[-1].get("createdAt") or first_ts)
-            first_msg_id = str(run_msgs[0].get("id") or uuid.uuid4())
-            if run_msgs[0].get("id") is None:
-                run_msgs[0] = {**run_msgs[0], "id": first_msg_id}
-
-            run_payload = {
-                "id": run_id,
+            msg_payload = {
+                "createdBy": "user" if role == "user" else "agent",
+                "creationSource": "server",
+                "id": msg_id,
                 "threadId": sid,
-                "ordinal": run_idx,
-                "providerInstanceId": provider_id,
-                "modelSelection": model_selection,
-                "providerThreadId": None,
-                "userMessageId": first_msg_id,
-                "rootNodeId": root_node_id,
-                "activeAttemptId": None,
-                "status": "completed",
-                "queuePosition": None,
-                "requestedAt": first_ts,
-                "startedAt": first_ts,
-                "completedAt": last_ts,
-                "checkpointId": None,
-                "contextHandoffId": None,
-                "workspacePreparation": None,
+                "runId": None,
+                "nodeId": None,
+                "role": role,
+                "text": text,
+                "attachments": [],
+                "streaming": False,
+                "createdAt": mts,
+                "updatedAt": mts,
             }
             conn.execute(
                 """
-                INSERT OR REPLACE INTO orchestration_v2_projection_runs (
-                    run_id, thread_id, ordinal, provider, provider_thread_id, status,
-                    requested_at, completed_at, payload_json, provider_instance_id
-                ) VALUES (?, ?, ?, ?, NULL, 'completed', ?, ?, ?, ?)
+                INSERT OR REPLACE INTO orchestration_v2_projection_messages (
+                    message_id, thread_id, run_id, node_id, role, streaming,
+                    created_at, updated_at, payload_json, search_text
+                ) VALUES (?, ?, NULL, NULL, ?, 0, ?, ?, ?, NULL)
                 """,
-                (
-                    run_id,
-                    sid,
-                    run_idx,
-                    provider_id,
-                    first_ts,
-                    last_ts,
-                    json.dumps(run_payload, ensure_ascii=False),
-                    provider_id,
-                ),
+                (msg_id, sid, role, mts, mts, json.dumps(msg_payload, ensure_ascii=False)),
             )
-            run_meta = {"runId": run_id, "nodeId": root_node_id, "providerInstanceId": provider_id}
-            emit_event("run.created", run_payload, run_meta, first_ts)
+            emit_event(f"{import_prefix}:message:{sid}:{suffix}", "message.updated", msg_payload, {}, mts)
 
-            node_payload = {
-                "id": root_node_id,
+            common_item: dict[str, Any] = {
+                "id": turn_item_id,
                 "threadId": sid,
-                "runId": run_id,
-                "parentNodeId": None,
-                "rootNodeId": root_node_id,
-                "kind": "root_turn",
-                "status": "completed",
-                "countsForRun": True,
+                "runId": None,
+                "nodeId": None,
                 "providerThreadId": None,
                 "providerTurnId": None,
                 "nativeItemRef": None,
-                "runtimeRequestId": None,
-                "checkpointScopeId": None,
-                "startedAt": first_ts,
-                "completedAt": last_ts,
+                "parentItemId": None,
+                "ordinal": ordinal,
+                "status": "completed",
+                "title": None,
+                "startedAt": mts,
+                "completedAt": mts,
+                "updatedAt": mts,
             }
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO orchestration_v2_projection_nodes (
-                    node_id, thread_id, run_id, parent_node_id, root_node_id, kind, status,
-                    provider_thread_id, provider_turn_id, runtime_request_id, checkpoint_scope_id,
-                    started_at, completed_at, payload_json
-                ) VALUES (?, ?, ?, NULL, ?, 'root_turn', 'completed', NULL, NULL, NULL, NULL, ?, ?, ?)
-                """,
-                (root_node_id, sid, run_id, root_node_id, first_ts, last_ts, json.dumps(node_payload, ensure_ascii=False)),
-            )
-            emit_event("node.updated", node_payload, run_meta, first_ts)
-
-            for m in run_msgs:
-                role = "assistant" if str(m.get("role") or "").lower() == "assistant" else "user"
-                msg_id = str(m.get("id") or uuid.uuid4())
-                text = content_text(m.get("content", m.get("text", "")))
-                mts = str(m.get("createdAt") or first_ts)
-                ordinal_counter += 1
-
-                msg_payload = {
-                    "createdBy": "agent" if role == "assistant" else "user",
-                    "creationSource": "provider" if role == "assistant" else "web",
-                    "id": msg_id,
-                    "threadId": sid,
-                    "runId": run_id,
-                    "nodeId": root_node_id,
-                    "role": role,
+            if role == "user":
+                item_type = "user_message"
+                item_payload = {
+                    **common_item,
+                    "createdBy": "user",
+                    "creationSource": "server",
+                    "type": "user_message",
+                    "messageId": msg_id,
+                    "inputIntent": "turn_start",
                     "text": text,
                     "attachments": [],
-                    "streaming": False,
-                    "createdAt": mts,
-                    "updatedAt": mts,
                 }
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO orchestration_v2_projection_messages (
-                        message_id, thread_id, run_id, node_id, role, streaming,
-                        created_at, updated_at, payload_json, search_text
-                    ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, NULL)
-                    """,
-                    (msg_id, sid, run_id, root_node_id, role, mts, mts, json.dumps(msg_payload, ensure_ascii=False)),
-                )
-                emit_event("message.updated", msg_payload, run_meta, mts)
-
-                item_id = f"turn-item:message:{msg_id}"
-                item_type = "assistant_message" if role == "assistant" else "user_message"
-                item_payload: dict[str, Any] = {
-                    "id": item_id,
-                    "threadId": sid,
-                    "runId": run_id,
-                    "nodeId": root_node_id,
-                    "providerThreadId": None,
-                    "providerTurnId": None,
-                    "nativeItemRef": None,
-                    "parentItemId": None,
-                    "ordinal": ordinal_counter,
-                    "status": "completed",
-                    "title": None,
-                    "startedAt": mts,
-                    "completedAt": mts,
-                    "updatedAt": mts,
-                    "type": item_type,
+            else:
+                item_type = "assistant_message"
+                item_payload = {
+                    **common_item,
+                    "type": "assistant_message",
                     "messageId": msg_id,
                     "text": text,
+                    "streaming": False,
                 }
-                if role == "user":
-                    item_payload["createdBy"] = "user"
-                    item_payload["creationSource"] = "web"
-                    item_payload["inputIntent"] = "turn_start"
-                    item_payload["attachments"] = []
-                else:
-                    item_payload["streaming"] = False
 
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO orchestration_v2_projection_turn_items (
-                        turn_item_id, thread_id, run_id, node_id, provider_thread_id, provider_turn_id,
-                        parent_item_id, ordinal, type, status, updated_at, payload_json, inline_work_output
-                    ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, 'completed', ?, ?, 0)
-                    """,
-                    (
-                        item_id,
-                        sid,
-                        run_id,
-                        root_node_id,
-                        ordinal_counter,
-                        item_type,
-                        mts,
-                        json.dumps(item_payload, ensure_ascii=False),
-                    ),
-                )
-                conn.execute(
-                    "INSERT OR REPLACE INTO orchestration_v2_turn_item_positions (thread_id, turn_item_id, ordinal) VALUES (?, ?, ?)",
-                    (sid, item_id, ordinal_counter),
-                )
-                emit_event("turn-item.updated", item_payload, run_meta, mts)
-                inserted_msgs += 1
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO orchestration_v2_projection_turn_items (
+                    turn_item_id, thread_id, run_id, node_id, provider_thread_id, provider_turn_id,
+                    parent_item_id, ordinal, type, status, updated_at, payload_json, inline_work_output
+                ) VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, 'completed', ?, ?, 0)
+                """,
+                (
+                    turn_item_id,
+                    sid,
+                    ordinal,
+                    item_type,
+                    mts,
+                    json.dumps(item_payload, ensure_ascii=False),
+                ),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO orchestration_v2_turn_item_positions (thread_id, turn_item_id, ordinal) VALUES (?, ?, ?)",
+                (sid, turn_item_id, ordinal),
+            )
+            emit_event(turn_item_id, "turn-item.updated", item_payload, {}, mts)
+            inserted_msgs += 1
 
         # Keep projection sequence watermark aligned with orchestration_events
         max_seq_row = conn.execute("SELECT COALESCE(MAX(sequence), 0) FROM orchestration_events").fetchone()
