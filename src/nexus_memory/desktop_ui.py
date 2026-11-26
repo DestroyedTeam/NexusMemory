@@ -222,7 +222,11 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
     --danger-soft: rgba(225, 29, 72, 0.10);
     --shadow-card: 0 8px 24px rgba(15, 23, 42, 0.06);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,0.28) transparent; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.26); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.44); }
   html, body { height: 100%; margin: 0; }
   body {
     font-family: var(--font-sans);
@@ -1726,6 +1730,17 @@ def _open_standalone_window(url: str) -> None:
                     [found, f"--app={url}", "--window-size=1260,820"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                return
+        for opener in ("xdg-open", "firefox-esr", "firefox"):
+            found = shutil.which(opener)
+            if found:
+                subprocess.Popen(
+                    [found, url],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
                 )
                 return
     webbrowser.open(url)

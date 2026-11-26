@@ -43,7 +43,7 @@ jobs:
           "dist/Nexus Memory.app/Contents/MacOS/nexus-memory-app" --self-test
           mkdir -p release-assets
           ditto -c -k --sequesterRsrc --keepParent "dist/Nexus Memory.app" "release-assets/Nexus-Memory-macOS-arm64.zip"
-          shasum -a 256 release-assets/Nexus-Memory-macOS-arm64.zip > release-assets/SHA256SUMS-macos.txt
+          (cd release-assets && shasum -a 256 Nexus-Memory-macOS-arm64.zip > SHA256SUMS-macos.txt)
       - uses: actions/upload-artifact@v4
         with:
           name: macos-bundle
@@ -94,7 +94,7 @@ jobs:
           Compress-Archive -Path "dist/NexusMemory.exe" -DestinationPath "release-assets/NexusMemory-Windows-x64.zip" -Force
           $h1 = (Get-FileHash "release-assets/NexusMemory-Windows-x64.exe" -Algorithm SHA256).Hash.ToLower()
           $h2 = (Get-FileHash "release-assets/NexusMemory-Windows-x64.zip" -Algorithm SHA256).Hash.ToLower()
-          "$h1  NexusMemory-Windows-x64.exe`n$h2  NexusMemory-Windows-x64.zip" | Out-File -Encoding ascii "release-assets/SHA256SUMS-windows.txt"
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) "release-assets/SHA256SUMS-windows.txt"), "$h1  NexusMemory-Windows-x64.exe`n$h2  NexusMemory-Windows-x64.zip`n")
       - uses: actions/upload-artifact@v4
         with:
           name: windows-bundle
