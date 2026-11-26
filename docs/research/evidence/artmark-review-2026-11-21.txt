@@ -1,0 +1,57 @@
+# sboorlagadda/artmark — local artifact catalog review (2026-11-21)
+
+## Identity and review boundary
+
+- Repository: https://github.com/sboorlagadda/artmark
+- Reviewed `main` HEAD and `origin/main`: `231313e914be18a17c3bb4a028fe6bd9698acf66`; local tree clean after indexing. Pinned release is v0.2.3 (published 2026-10-14). GitHub snapshot: Apache-2.0, 5 stars, 0 forks, 51 commits. README labels the product early v0.2 and warns that CLI/JSON/database schema are not stable before 1.0.
+- Disposable checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sboorlagadda-artmark-20261121`. CodeGraph current at 17 files, 241 nodes, 642 edges (Rust/Python/YAML).
+- This is a local bookmark/catalog for durable external artifacts, not a transcript or session store. No chat-history importer/exporter, provider-session writer, or active connector exists.
+
+## Verdict
+
+**Retain as a high-value adjacent artifact-memory reference; do not rank as a cross-Harness session-migration engine.** It can help Nexus remember and later rediscover a source document, Figma design, issue, file, etc. It cannot move the conversation that found it, preserve its Project/Section or session ancestry, or resume a target-native ChatGPT/Codex/Claude conversation. The memory-card and source-pointer concepts can complement a canonical conversation graph but must stay a separate entity plane.
+
+## Implementation review at the pinned commit
+
+- The Rust CLI supports `add`, `get`, `index`, `search`, `recent`, `forget`, `reindex`, `doctor`, `stats`, and `context init`; DB defaults to `$HOME/.artmark/artmark.db`, with `--database`/`ARTMARK_DB` override. It uses local SQLite + FTS5. The v1 schema contains `artifacts`, URI aliases, topics/entities/tags and an FTS index; no Project, Section, Session, message, branch, attachment, token-usage or schedule tables.
+- `add` canonicalizes an artifact pointer and records an alias/explicit-save bit; `index` accepts an agent-authored card after the source was inspected. Card fields include concise summary/search text, topics/entities/tags and source/retrieval metadata. Search returns cards and a locator; the existing agent harness fetches the live source. `artmark` itself has no provider auth and does not fetch or copy source documents. `forget` deletes only its catalog record, not the underlying artifact.
+- Canonical identity supports local paths and provider patterns including Google Drive/Docs, Figma, GitHub, Notion and Slack; ordinary HTTP(S) URLs retain query identity while fragments are dropped. Add uses transactions and SQLite prepared parameters; canonical aliases deduplicate known resources. Schema is early v0.x and README explicitly says the CLI/data schema may change before 1.0.
+- `IndexInput` requires nonempty summary/search text, bounds their lengths and metadata, rejects recursively named source-body and credential fields. A separate bounded iterative URI scanner rejects recognizable credentials in URLs, nested/encoded query/fragment/path forms and userinfo before persistence; tests assert rejected adds do not change a populated DB/FTS. This is conservative defense, not arbitrary-secret detection. Catalog titles/search descriptions can still reveal sensitive topics, and local DB backups need protection.
+- The bundled `skills/artmark/SKILL.md` gives a behavioral workflow: quick-register user-supplied durable locators; inspect current source with the user's existing provider tools; only then index a small card; query the catalog before provider search for vague rediscovery; ask before storing artifacts discovered through research. README documents manual installation for Codex and Claude Code local skill directories. It is an instruction-plane integration, not target session serialization. No Claude Desktop Chat/Cowork/Code or ChatGPT Project/Sections adapter is present.
+- No MCP server implementation or MCP dependency is present in this release; README calls stdio MCP a planned next step. The GitHub `mcp` topic is not evidence of a shipped MCP surface.
+- CI includes format/clippy/Python tests, Linux/macOS/Windows builds, release packaging/clean-install checks, dependency audit, and a PR semver/lockfile gate. The GitHub Actions UI shows two recent scheduled `cargo audit` steps failed on 2026-11-09 and 2026-11-16 (exit 1); the public page did not expose the detailed log, so the cause and any affected dependency are unknown. Other statuses should not be inferred from these two runs. Latest published release is v0.2.3.
+
+## Local verification (synthetic only; no provider/API calls)
+
+- `rtk cargo test --locked` — exit 0; 27 Rust tests passed across 2 suites.
+- `rtk test python3 -m unittest discover -s tests` — exit 0; 6 Python tests passed.
+- `rtk cargo fmt --check` — exit 0, no output.
+- `rtk cargo clippy --locked --all-targets -- -D warnings` — exit 0, “No issues found”.
+- `rtk cargo build --release --locked` — exit 0; release profile finished, 79 crates compiled.
+- Synthetic CLI smoke with a temporary `/tmp` SQLite database: `add` -> `index` -> `search` -> `get` -> `forget` -> search again; all six exits 0, no stderr. `add` returned `{{"canonical_key":"gdrive:doc:NMTEST123","id":"art_01a1fb3866507727b6a23817b1ad8184","state":"registered"}}`; `search` found the synthetic SAML card; after forget, output was `{{"results":[]}}`. The DB file was mode `0600`. No real Google Drive URL, credential, source fetch, or remote service was used.
+- GitHub Actions page shows `cargo audit` exit 1 on schedule for run #54 (Nov 9) and #55 (Nov 16), on this same main commit. Logs were inaccessible in the unauthenticated page; do not claim the reason or security impact. No local `cargo audit` was run.
+
+## Nexus Memory disposition
+
+Keep only as an optional **ArtifactCatalog / retrieval-hint** design reference, not a dependency assumption or a SessionAdapter. Nexus should model `{ArtifactPointer, canonical source identity, source facts, separately-provenanced retrieval card, resolver/auth reference}` independently from `{Project, SectionGroup, ConversationThread, Message, Branch, ToolEvent, Attachment, Schedule}`. A conversation may reference an artifact; its pointer or search card must not be injected as a substitute for its history. Preserve source URLs only after credential filtering; persist no secrets; require consent for research-discovered items; and fetch the live source through a target-authorized provider tool before answering. Artmark has no import/export accuracy score because it implements no session conversion.
+
+## Pinned source links
+
+- Repository / README: https://github.com/sboorlagadda/artmark
+- Reviewed source commit: https://github.com/sboorlagadda/artmark/commit/231313e914be18a17c3bb4a028fe6bd9698acf66
+- CLI and `context init`: https://github.com/sboorlagadda/artmark/blob/231313e914be18a17c3bb4a028fe6bd9698acf66/src/main.rs
+- SQLite schema and transactional catalog: https://github.com/sboorlagadda/artmark/blob/231313e914be18a17c3bb4a028fe6bd9698acf66/src/db.rs
+- Canonical identity rules: https://github.com/sboorlagadda/artmark/blob/231313e914be18a17c3bb4a028fe6bd9698acf66/src/canonical.rs
+- Search-card schema/validation: https://github.com/sboorlagadda/artmark/blob/231313e914be18a17c3bb4a028fe6bd9698acf66/src/model.rs
+- Bounded credential scanner: https://github.com/sboorlagadda/artmark/blob/231313e914be18a17c3bb4a028fe6bd9698acf66/src/credentials.rs
+- Bundled agent Skill: https://github.com/sboorlagadda/artmark/blob/231313e914be18a17c3bb4a028fe6bd9698acf66/skills/artmark/SKILL.md
+- Data-boundary design: https://github.com/sboorlagadda/artmark/blob/231313e914be18a17c3bb4a028fe6bd9698acf66/docs/design.md
+- CI workflow: https://github.com/sboorlagadda/artmark/blob/231313e914be18a17c3bb4a028fe6bd9698acf66/.github/workflows/cli.yml
+- Release v0.2.3: https://github.com/sboorlagadda/artmark/releases/tag/v0.2.3
+- Failed scheduled audit run #54: https://github.com/sboorlagadda/artmark/actions/runs/42666784885
+- Failed scheduled audit run #55: https://github.com/sboorlagadda/artmark/actions/runs/43915553758
+
+## Tool-correction ledger
+
+- Initial CodeGraph invocation passed the checkout path after the query string. The command exited 0 but interpreted that path as query text and returned the *active NexusMemory* Python source (`src/nexus_memory/...`), not Artmark. This output was discarded. Corrected invocation ran with the Artmark checkout as the command working directory; its source paths then resolved to `src/db.rs`, `src/main.rs`, and `src/canonical.rs` as expected.
+- `rtk codegraph node AGENTS.md` is a symbol lookup, not a Markdown reader: exit 0 with `Symbol "AGENTS.md" not found in the codebase`. Corrected using `rtk read AGENTS.md`, exit 0; contributor instructions were read. No product conclusion relies on the mismatched calls.

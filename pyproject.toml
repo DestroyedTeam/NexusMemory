@@ -1,0 +1,29 @@
+[project]
+name = "nexus-memory"
+version = "1.0.0"
+description = "Local-first, deterministic, loss-aware portability across AI agent Harnesses (Projects, Section Groups, Session DAGs, Assets, Skills, and sanitized MCP configs)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+zstd = ["zstandard>=0.22"]
+dev = ["pytest>=8.0"]
+packaging = ["pyinstaller>=6.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+nexus-memory = "nexus_memory.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.unittest]
+start-directory = "tests"

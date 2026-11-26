@@ -1,0 +1,30 @@
+Nexus Memory candidate #181 source review — jp-999/dev-team
+Review date: 2026-11-23
+Pinned repository state: https://github.com/jp-999/dev-team/tree/d4b132ea32ccdafec64c7bfa6aa0de8e4aa081e4
+HEAD and refs/heads/main: d4b132ea32ccdafec64c7bfa6aa0de8e4aa081e4; shallow clone exit 0. Repository was clean before CodeGraph initialization; after initialization only `.codegraph/` was untracked. Per repository instructions, removed only the `.codegraph/.gitignore` self-preserving `!.gitignore` exception; transient index remains ignored. CodeGraph: 10 files, 171 nodes, 374 edges, current.
+
+Decision
+--------
+Not a Harness migration or transcript importer. Keep as a low-priority design reference for a canonical role-definition source, per-target Cursor/Claude Code resource generation, sequential task artifacts, and a file-backed project blackboard. It provides no ChatGPT/Codex Projects/Section Groups/Session graph writer and no Claude Desktop third-party-gateway Chat, Cowork, or Code importer. It does not implement user's Destruction Era migration.
+
+Implementation observations
+---------------------------
+* README describes `agents/*.md` as the single role source, synchronized to `.cursor/rules/` and `.claude/agents/`; a separate CrewAI engine consumes the same definitions. `.devteam/` contains task artifacts (spec/tasks/architecture/design/implementation/review/QA/delivery/state/log), not conversation/session objects. README itself calls the office UI a local simulation.
+* `crew/devteam/crew.py` constructs CrewAI Agents with `allow_delegation=False`; no tool list is passed. Tasks run `Process.sequential`, receive only declared dependency task contexts, and write a role output file. This is a useful task handoff pattern but not preservation/replay of a source conversation graph.
+* `crew/devteam/main.py --plan` ran exit 0 without LLM/API key and enumerated 11 runtime roles, including L&D roles; README describes seven delivery roles and a separate 12-hour L&D cycle. Source inspection shows actual run uses `kickoff` then writes final merge state; it does not reconstruct or resume a prior session from existing state/log/memory. No messages, parent/child sessions, forks, user interruptions, images/files/links, token/cost records, or transcript archive are modeled.
+* `scripts/sync_harnesses.py` smoke-tested only in a disposable copy: exit 0; generated 11 Claude Code agents, 12 Cursor rules, and installed 4 Skills; generated role files matched committed artifacts. Positive resource-plane seam, not a history adapter. No ChatGPT/Codex or Claude Desktop 3P targets.
+* `scripts/upskill.py` scrapes GitHub/Medium/HN in production, but this network path was not run. Two offline synthetic probes with different findings both selected the same first static `IMPROVEMENTS` entry (“TDD by default on risky logic”), because adoption is cycle-indexed, not evidence-selected. The LaunchAgent plist hardcodes the author's home/tool paths; it was not installed or loaded.
+* No test directory/test workflow was found. Full CrewAI execution was not run; no API key, user data, external LLM, launchd job, or networked upskill run was used. No credentials were read or changed.
+
+Observed checks
+---------------
+* `rtk git clone --depth 1 https://github.com/jp-999/dev-team <isolated #181 checkout>`: exit 0.
+* `rtk git log -1 --format=%H%n%cI`: d4b132ea32ccdafec64c7bfa6aa0de8e4aa081e4; 2026-11-12T18:06:15+05:30.
+* `rtk codegraph status <checkout>`: current, 10 files / 171 nodes / 374 edges.
+* `python3 -m devteam.main --plan`: exit 0; 11 roles; no provider call.
+* Disposable `python3 scripts/sync_harnesses.py` smoke: exit 0; generated files matched committed counterparts; HOME was not modified.
+* Synthetic upskill probes: exit 0; different mocked input findings gave identical first selected improvement; no network.
+
+Recommendation
+--------------
+Retain only as a task-workflow/blackboard and multi-target resource-generation example. Do not count its file artifacts or `state.json` as native Harness Sessions, Projects, Section Groups, or a migration fidelity result. For Nexus Memory, preserve canonical resources and target adapters as one plane, while requiring separately versioned SessionGraph serializers/writers, source/target reconciliation, attachment hashes, fork/parent edges, rollback, and target-runtime resume checks.

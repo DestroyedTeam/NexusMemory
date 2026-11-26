@@ -1,0 +1,46 @@
+# devansh0703/skill-router — Skill shelf tools, not session migration (2026-11-23)
+
+## Identity and provenance
+
+- Repository: https://github.com/devansh0703/skill-router
+- Isolated shallow checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-devansh0703-skill-router-20261123`
+- Captured `main` HEAD: `f545fe5aff9abb7a0362bf16403ac299ac3de14e`; commit date 2026-09-21; subject `Add skill-router and skill-manager agent skills`.
+- GitHub metadata snapshot: Shell repo, MIT, 0 stars / 0 forks, not archived. Tree at captured HEAD contains two Skill folders, two shell helpers, README and LICENSE; no package manifest, test suite, CI workflow, application/session parser, or build system. The local tree was not edited; after CodeGraph initialization, retained `.codegraph/.gitignore`, removed only its `!.gitignore` exception, and `git status --short` was empty.
+- CodeGraph index is up-to-date but has 0 files/nodes/edges because the repository's implementation is Bash and Markdown, not a supported indexed source language. All four substantive files were read directly.
+- Repository includes a real MIT `LICENSE`.
+
+## What it does / fit to Nexus Memory
+
+This repository provides two Agent Skills: `skill-router` instructs an agent to scan the current installed skill shelf and rank/load up to three descriptions; `skill-manager` provides shell operations to list/count/search/info/validate/disable/enable/install skills. `catalog.sh` prints descriptions; `manage.sh` manipulates skill files in the same shelf. These are local ResourcePlane/shelf-management and workflow-routing patterns.
+
+There is no ChatGPT/Codex Project, Section, Session, turn/event, parent/child/fork graph, transcript, attachment/artifact, token/cost, MCP/plugin, memory, provider, or scheduled-task migration. “Works for every agent” means proposed SKILL.md discovery conventions, not one native adapter per agent and not a portable session format. No Desktop 3P Chat/Cowork/Code archive reader/writer or local Claude Code session adapter exists. Treat it as an adjacent Skill UX reference, not a Nexus Memory migrator.
+
+## Static and runtime checks
+
+No upstream tests or CI exist. On the actual review host, `rtk bash --version` reported `GNU bash, version 3.2.57(1)-release (arm64-apple-darwin26)`. Both shell files pass `bash -n`; running commands on this Bash 3.2 host finds concrete compatibility failures:
+
+- `rtk bash .agents/skills/skill-router/catalog.sh` — exit **0**, but emits `declare: -A: invalid option`, then an associative-array subscript `syntax error: operand expected .../.agents/skills/skill-manager`, and prints no catalog entries. The code uses `declare -A`, introduced after the host's Bash 3.2.
+- `rtk bash .agents/skills/skill-manager/manage.sh list` — exit 0 and correctly lists the two built-in skills; `validate --all` — exit 0, “OK — all 2 skills have valid frontmatter”; `doctor` — exit 0. These pass on the observed Bash version.
+- `rtk bash .agents/skills/skill-manager/manage.sh search no-such-needle` — exit **1**, stderr `.agents/skills/skill-manager/manage.sh: line 140: ${desc,,}: bad substitution`. The lowercase expansion is not supported by Bash 3.2. A search that matches the name short-circuits before expanding the description, so a successful match does not prove arbitrary search works.
+
+## Disposable synthetic safety probes
+
+All paths below were under `/tmp/nm-skill-router-synthetic-20261123-*`; no real skill home or user file was touched. Tests invoked the actual checked-out `manage.sh` with `SKILLS_HOME` pointing to the disposable fixture.
+
+1. **Path escape in skill-name resolution:** Created `<tmp>/outside/victim/SKILL.md` and set `SKILLS_HOME=<tmp>/home`. `rtk bash .../manage.sh disable ../outside/victim` exited 0 and printed `disabled: ../outside/victim (SKILL.md -> SKILL.md.disabled)`. Post-state: outside `SKILL.md` absent and outside `SKILL.md.disabled` present. `skill_dir()` accepts a name containing `../` and mutating commands operate beyond the skill home; `info`, `enable` have the same resolver.
+2. **Disable overwrites an existing disabled backup:** Created `home/collision/SKILL.md` containing `ACTIVE_SENTINEL` and `SKILL.md.disabled` containing `OLD_DISABLED_SENTINEL`. Actual `disable collision` exited 0, reported success, removed the active filename and silently replaced the existing disabled file with the active contents. The prior disabled copy was lost.
+3. **Enable overwrites an existing active skill:** With the displaced disabled copy present, created a competing active `SKILL.md` containing `ACTIVE_RESTORED_CONFLICT_SENTINEL`. Actual `enable collision` exited 0 and reported success; it replaced the active file with the disabled copy and removed `SKILL.md.disabled`. The competing active file was lost.
+
+No source skill script was invoked by either skill workflow; no MCP server, API key, network service, or model endpoint was accessed.
+
+## Disposition
+
+Keep the idea of runtime inventory and skill description matching as a separately versioned Skill ResourcePlane feature; require per-Harness directory capability maps and separately test whichever installer the user actually chooses. Reject the current helper as a safe mutator without (a) canonical containment of all names under the selected skill home, (b) no-overwrite checks for both disable and enable, and (c) Bash/macOS compatibility fixes plus nonzero exit on scan failure. Do not claim skills can restore any session context. The four Claude destination tracks remain `desktop-3p/chat`, `desktop-3p/cowork`, `desktop-3p/code`, and `claude-code-local`; none is implemented here.
+
+## Primary sources
+
+- [Pinned README](https://github.com/devansh0703/skill-router/blob/f545fe5aff9abb7a0362bf16403ac299ac3de14e/README.md)
+- [Pinned router Skill](https://github.com/devansh0703/skill-router/blob/f545fe5aff9abb7a0362bf16403ac299ac3de14e/.agents/skills/skill-router/SKILL.md)
+- [Pinned catalog helper](https://github.com/devansh0703/skill-router/blob/f545fe5aff9abb7a0362bf16403ac299ac3de14e/.agents/skills/skill-router/catalog.sh)
+- [Pinned manager helper](https://github.com/devansh0703/skill-router/blob/f545fe5aff9abb7a0362bf16403ac299ac3de14e/.agents/skills/skill-manager/manage.sh)
+- [Pinned manager Skill](https://github.com/devansh0703/skill-router/blob/f545fe5aff9abb7a0362bf16403ac299ac3de14e/.agents/skills/skill-manager/SKILL.md)

@@ -1,0 +1,51 @@
+# Candidate #149 — anverse/agentskills-manager (2026-11-22)
+
+## Identity and current state
+
+- Repository: https://github.com/anverse/agentskills-manager
+- Default branch main; isolated shallow checkout HEAD fbfa1dca5612dd4a348d85e05f6b02aff6065e64.
+- License: Apache-2.0.
+- GitHub release page shows v0.0.1 as latest (2026-07-19). GitHub CI run #2 on main commit prefix fbfa1dc is green (2026-07-24).
+- README explicitly marks the project concept/development phase and says most commands are not implemented. The v0.1 milestone defines production criteria but is not complete.
+- Disposition: sound future design notes for the Skills ResourcePlane, but not an implemented manager and not a Nexus Memory migration backend.
+
+## Implementation vs. specification
+
+The README/spec describe a package manager for Agent Skills using agentskills.yml + agentskills.lock, Git/local sources, reproducible installs, and project-level agent targets such as .agents/skills, .claude/skills, and .cursor/skills. However, the current Go implementation only exposes help and version. internal/cli.New registers only the version subcommand and --version flag; its no-args action prints help. The binary's actual help lists only completion, help, and version. No init, install, add, remove, upgrade, validate, diff, agents list, YAML/JSON schema parser, lockfile reader/writer, Git source resolver, content-addressed store, target materializer, ownership reconciler, or filesystem mutator exists in this checkout.
+
+The desired target is still Skills-only. It models no ChatGPT/Codex Project/Section/session tree, branches, parent-child task relations, messages/events, interruption/resume, attachments or media, token usage, memory, MCP configuration, plugin state, schedules, Claude Desktop 3P Chat/Cowork/Code, or local Claude Code transcript records. The README's .claude/skills path is specifically the Claude Code Skills directory, not a Claude Desktop 3P session adapter. Its v0.1 milestone also explicitly defers user/global scope.
+
+## Useful design material (specification only)
+
+These are ideas worth considering, but none has an implementation to reuse:
+
+1. ADR-018 defines a deterministic SHA-256 tree hash over raw file bytes and normalized relative paths; it refuses symlinks/non-regular files, excludes file modes, and treats content rather than filesystem representation as the reproducibility identity.
+2. ADR-017 proposes an immutable, content-addressed per-user store with stage -> verify lock hash -> atomic rename, per-skill links, and copy as the portable fallback. It correctly prohibits symlinking the Skills root because some clients do not traverse symlinked roots.
+3. ADR-019 proposes lock records with resolved Git commit SHA, resolved skill path, and content hash, and excludes machine-local materialization strategy/timestamps.
+4. ADR-023 proposes provenance-based ownership: remove/replace only entries proven managed; fail on unmanaged name collisions; retain hand-edited copies as unmanaged. A receipt/state file is considered but deferred.
+5. The project-relative-only scope is intentionally constrained; ADR-012 defers global/user installs. There is no cross-session or transcript graph model.
+
+## Local quality checks
+
+The host had no Go executable: rtk go version exited 1 with “No such file or directory”. To run checks without modifying PATH or installing a global toolchain, Go 1.26.11 darwin-arm64 was downloaded to /tmp, its SHA-256 was verified against go.dev/dl, and temporary GOROOT/GOMODCACHE/GOCACHE/GOPATH were used. Upstream CI is pinned to Go 1.26.2; local checks used the newer compatible Go 1.26.11.
+
+- go test ./... — exit 0. Packages: cmd/asm has no test files; internal/buildinfo, internal/cli, and test/e2e pass.
+- go test -cover ./... — exit 0: cmd/asm 0.0% statements; buildinfo 100%; cli 100%; test/e2e 100%. This is high coverage of the small skeleton, not feature coverage.
+- go vet ./... — exit 0, stdout/stderr empty.
+- gofmt -l . — exit 0, stdout/stderr empty.
+- go build -o /tmp/nm-asm-anverse-agentskills-manager-20261122 ./cmd/asm — exit 0.
+- Actual binary --version and version each print dev none unknown. --help lists only completion/help/version; exit 0.
+- The two testscript scenario files are help.txtar and version.txtar; E2E therefore validates only help/version, not a Skill install.
+- No install/lock/target write was attempted because those commands do not exist in the built binary.
+
+## Conclusion
+
+This is a design/spec reference for future reproducible Skills dependency management, especially content-addressing, lock provenance, portable copy fallback, and non-destructive ownership. It cannot be counted as a cross-harness session/project migration project or as demonstrated Skills compatibility: the installer does not yet exist. Full migration coverage is absent, including all user-confirmed Claude Desktop 3P surfaces and local/self-hosted Claude Code sessions.
+
+## Sources
+
+- GitHub releases: https://github.com/anverse/agentskills-manager/releases
+- Exact upstream CI workflow: https://github.com/anverse/agentskills-manager/actions/workflows/ci.yml
+- Go release history and official package hashes: https://go.dev/doc/devel/release and https://go.dev/dl/
+- Local source at exact checkout and commit above; source changes were not made.
+

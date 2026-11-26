@@ -1,0 +1,58 @@
+# Review evidence — NeoHsu/mnemark (#241; 2026-11-24)
+
+## Bound scope
+
+The source is ChatGPT Project Destruction Era with Project/Section Group hierarchy, full Sessions, subtasks/forks, user follow-ups, tool events, attachments/assets and resource dependencies. The target is Claude Desktop using third-party inference in Chat, Cowork and Code, plus local/self-hosted Claude Code via API key/gateway. This review treats cross-agent curated memory as a separate plane from conversation/session migration.
+
+## Identity, provenance and maturity
+
+- Repository https://github.com/NeoHsu/mnemark; checkout /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-NeoHsu-mnemark-20261124-followup241.
+- Branch main; HEAD 12d6656b4511d161e83c091e40b313ac25be062e; commit 2026-08-05T10:38:13+08:00, “fix(ci): pin portable Python patch release”; clone clean, origin/main matched. MIT license.
+- Package/source version 0.10.1; Rust MSRV 1.97.1; release docs and GitHub tag identify the same commit. GitHub release v0.10.1 is dated 2026-08-04 and shows a verified committer signature. Review snapshot: 4 stars, 1 fork, 187 commits, 0 open issues, and 2 open Dependabot PRs (#22 GitHub Actions opened Nov 2, #20 Rust dependencies opened Oct 19). The latest visible CI run is a failed Dependabot PR run (#94/#22); this is not evidence that the signed v0.10.1 release fails.
+
+## What is actually portable
+
+Mnemark is a local-first knowledge-store CLI. SQLite is durable state; Tantivy and materialized relationship graphs are rebuildable. Its record model stores curated facts/preferences/project knowledge/workflow memories with name, content, tags, global or project scope, source trust, confidence, confirmation, lifecycle/version and provenance. The schema includes memories, ambiguities, changelog, workflow runs, graph assertions/revisions and rebuildable graph tables; it has no conversation/message/session/turn/fork/subagent/attachment tables.
+
+“Project” means a memory type or a scope of the form project:owner/repo; it is not a ChatGPT Project entity and cannot encode Section Groups or nested Session ownership. Graph edges relate curated memory/artifact/workflow records; they are not a transcript event graph. Workflow runbooks and run records are not scheduled tasks. The CLI and bundled Skill do not call an LLM/provider, configure API keys/gateways, or expose a documented MCP server.
+
+The generic JSON import wire format is a memory object requiring name and optional type/content/tags/scope/description/expiry. mem export returns a JSON array of these memory records. Bundle v2 exports Mnemark’s own SQLite memory store plus optional config, manifest and user-created artifacts; bundle import validates hashes/schema and merges or replaces an Mnemark store. These are useful memory backup/transfer capabilities, not ChatGPT conversation import or cross-Harness session migration.
+
+## Agent wiring and target fit
+
+The reviewed setup registry supports five coding CLIs: Claude Code, Codex, Pi, Gemini CLI and OpenCode. Claude Code wiring installs a policy file and bundled Mnemark Skill, and adds a SessionStart hook that checks the exact CLI/Skill version and runs read-only memory priming. It reads prior curated memory; it does not capture the current conversation or import/transcribe past sessions. The other four adapters use instruction/policy prose and Skills where supported. No Claude Desktop 3P Chat/Cowork/Code mode writer, Desktop Code metadata integration, ChatGPT source adapter, Cloud session API, MCP migration or API-key gateway configuration was found.
+
+Security/operational positives: explicit store discovery and preflight; explicit backup-first migration; read-only gate; transaction/rollback setup; memory source-trust and manual-attestation rules; default-reject secret scanning; bounded bundle paths, integrity hashes, and opt-in destructive replace. Security limitation: SQLite stores and bundles are plaintext; there is no at-rest encryption. Bundle SHA-256 is integrity checking, not publisher authentication, so the repository requires private storage/trusted transfer or disk encryption. Secret scanning is defense-in-depth, not complete DLP.
+
+## Isolated probes (synthetic fixtures only)
+
+All CLI probes used the built 0.10.1 binary and explicit stores below /tmp/nm-mnemark-review241; no user memory store, ChatGPT export, Claude Desktop files, credentials, provider endpoint or live agent app was used.
+
+1. Compatibility gate: mem --json-errors contract --skill-version 0.10.1 exited 0 and returned cli_version=0.10.1, skill_compatibility.compatible=true, recommended_action=proceed.
+2. A synthetic manual preference was saved in a fresh isolated store; memory JSON export contained one typed memory object. Importing that JSON into another empty store succeeded and the resulting record carried source=agent, origin=import, user_confirmed_at=null: trust was not silently elevated.
+3. A synthetic ChatGPT-shaped conversation array with id/title/project_id/mapping/current_node was passed to mem import --source agent. The command exited 0 but returned status=import_complete, counts.failed=1, error “invalid import item: missing field name”. A follow-up read showed the original test store still had exactly one memory. This is a schema mismatch, not successful conversation ingestion; errors are item-level and the overall import command can still exit 0.
+4. Bundle export/inspect/import was exercised on the test store. Bundle v2 was accepted, checksums_verified=true, mode=clean, import status=imported; a read-only query on the destination returned the exact synthetic preference. This verifies store-level Mnemark portability only. The observed bundle contained bundle.json and memory.db; its manifest showed no config, manifest or artifacts.
+5. setup list returned exactly the five CLI adapters above. setup claude-code --base-dir /tmp/nm-mnemark-review241/agenthome --dry-run planned a policy, bundled Skill/symlink and SessionStart read-only prime hook; no target files were created. This verifies the CLI wiring plan, not native resume/session import.
+6. A synthetic content value “api_key=abc123supersecret” was rejected with exit 2 and a safety error that did not echo the value. A subsequent export still contained only the prior synthetic memory.
+
+## Local verification and limits
+
+- Repository CodeGraph initialized after the MIT/provenance gate; current index: 180 files, 2,616 nodes, 8,693 edges. .codegraph/.gitignore retained; only the !.gitignore exception was removed. Candidate Git status remained clean.
+- Isolated Rust 1.97.1 toolchain: cargo test --workspace --locked --quiet exited 0, 273 passed across 57 + 14 + 10 + 192 tests, 0 failed; doctests 0. cargo fmt --all -- --check passed. cargo clippy --workspace --locked --all-targets -- -D warnings passed. cargo test -p mnemark --locked --test doc_drift --quiet passed 10/10. cargo build --locked -p mnemark --bin mem exited 0.
+- mise was not installed, so the canonical mise run check:pr gate was not run; cargo-audit/cargo-deny/gitleaks/nextest and the full release security gate are not claimed as locally passed. GitHub source indicates the release workflow and signed exact-version release; the local tests do not prove live cross-agent behavior.
+- The first rustup install attempt set CARGO_HOME to a fresh temp path; rustup installed the pinned toolchain but then exited 1 because the rustup proxy was not installed under that temporary CARGO_HOME. Retried with the existing CARGO_HOME and isolated RUSTUP_HOME; Rust 1.97.1 and rustfmt/clippy installed under /tmp and all checks above passed. Crates were cached in the existing Cargo registry; build output and runtime stores were under /tmp.
+- rtk codegraph init --yes . failed with exit 2 because this installed CodeGraph CLI does not accept --yes; rtk codegraph init . succeeded. One command used --setup instead of setup (exit 2); corrected command returned the five-platform list and dry run. These are retained command corrections, not source failures.
+
+## Disposition
+
+High-value, legally reusable MIT **curated memory-plane prior art / optional memory adapter candidate**, not a ChatGPT-to-Claude conversation migrator. It could receive only explicitly curated memory records or a Mnemark-format store, after provenance, scope and trust are mapped; it cannot reconstruct Destruction Era Project/Section/Session hierarchy, branches, messages, tool events, attachments, token usage, permissions, Skills/MCP/plugins, schedules or desktop gateway settings. Do not count it as migration success. Keep the canonical immutable source archive and SessionGraph separate; any optional projection into a Mnemark-like store must be user-approved, per-record loss-audited, trust-downgraded where appropriate, and protected as plaintext sensitive data.
+
+## References
+
+- Repository and current README: https://github.com/NeoHsu/mnemark
+- Signed v0.10.1 release/tag: https://github.com/NeoHsu/mnemark/releases
+- Current issues: https://github.com/NeoHsu/mnemark/issues
+- Current pull requests: https://github.com/NeoHsu/mnemark/pulls
+- CI history: https://github.com/NeoHsu/mnemark/actions/workflows/ci.yml
+- Pinned source: https://github.com/NeoHsu/mnemark/tree/12d6656b4511d161e83c091e40b313ac25be062e
+- Source map: schema/memory-schema.sql; crates/mem-core/src/memory_domain.rs, scope.rs, db.rs, util/secrets.rs; crates/mem-cli/src/commands/io.rs, commands/bundle/, commands/setup/; skills/mnemark/SKILL.md; docs/compatibility.md; docs/runtime-model.md; SECURITY.md.

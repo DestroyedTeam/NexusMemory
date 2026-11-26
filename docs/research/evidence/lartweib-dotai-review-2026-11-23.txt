@@ -1,0 +1,55 @@
+# Candidate #190 — Lartweib/dotai review and Claude Desktop target-scope addendum
+
+Review date: 2026-11-23
+Pinned repository: https://github.com/Lartweib/dotai/tree/36eabaec4d4a1d2e840d37c873f3054767be3860
+Pinned HEAD/main: `36eabaec4d4a1d2e840d37c873f3054767be3860` (2026-11-23T02:07:31+01:00), MIT. The isolated shallow clone was clean. CodeGraph was initialized and verified (355 files, 6,843 nodes, 27,222 edges); the candidate `.codegraph/.gitignore` was retained.
+
+## Candidate function and migration fit
+
+Dotai is a Go configuration-pack engine for Claude Code CLI, Google Antigravity CLI (`agy`), and OpenCode. A pack can render rules, agents, Skills, MCP server configuration, hooks, permissions, settings, tools, and Claude Code plugin mods, with variants and project profiles. `dotai apply/install` are plan-first; dry-run, isolated versus replace modes, backup/journal and restore/rollback are valuable safety patterns. The word “project” in this tool means local project configuration/profile, not a ChatGPT Project or Section Group.
+
+No ChatGPT/Codex adapter, Project/Section hierarchy, parent/child/branch/task SessionGraph, event/transcript/media/attachment/token transfer, cross-harness durable memory sync, or scheduler migration was found. Claude Desktop Chat/Cowork/Code are not harness adapters here. The Claude adapter is the Claude Code command line.
+
+## API-key / third-party endpoint behavior probe
+
+Built the pinned binary with official Go 1.26.7 darwin-arm64 (temporary archive SHA-256 `020a1e8224811be75163e920bc77e0926a1390a6aeea19bdcf23f74b9d749f6d`; isolated toolchain and caches). Ran only against fake HOME, fake `claude` executable, and synthetic values: `SYNTHETIC_ONLY_NOT_A_CREDENTIAL` and `http://127.0.0.1:9999`. The fake user `~/.claude/CLAUDE.md` sentinel/hash was recorded before and after.
+
+- `dotai install examples/minimal-pack --mode isolated --harness claudecode --yes`: exit 0; 8 creates, 0 replacements/removals, isolated config in fake HOME; existing user config remained byte-identical; synthetic key was absent from installed files.
+- `dotai run claudecode -- probe-arg`: exit 0; fake CLI observed `CLAUDE_CONFIG_DIR=<fake HOME>/.dotai/isolated/claude`, `ANTHROPIC_API_KEY=SYNTHETIC_ONLY_NOT_A_CREDENTIAL`, `ANTHROPIC_BASE_URL=http://127.0.0.1:9999`, `ARGS=probe-arg`. Dotai warned by variable names only and did not display values. No real Claude invocation or API request occurred.
+- `dotai restore`: exit 0; reported `undid 1 install` and 8 deletes; isolated config/state removed and fake user config remained unchanged. A cautionary “close claudecode before restoring” warning also printed although only the fake command had run.
+
+This validates a local CLI credential pass-through and isolated configuration pattern only. It does not mean Dotai migrates credentials, conversation data, or Claude Desktop 3P state. Pack `dotai/settings.yaml` can carry environment values; never commit real secrets.
+
+## Test and quality results
+
+All executed with isolated Go caches: `go test ./...` exit 0 (15 packages); `go test -race ./...` exit 0 (15 packages); `go vet ./...` exit 0, empty stdout/stderr; `go mod verify` exit 0, `all modules verified`; `gofmt -l .` exit 0, empty output. `DOTAI_E2E=1 go test ./...` exit 0 with six real-rulesync E2E tests; `DOTAI_NET_TESTS=1 go test ./internal/app -run TestFetchPackFromGitHub -count=1` exit 0, 2.644s, fetching only public `octocat/Hello-World`. `scripts/release.sh --self-test` exit 0 / `self-test: ok`; `scripts/release.sh --check-notices` exit 0 / `notices: ok`. ShellCheck was not run because the binary was unavailable. No actual model, user profile, or production credential was used.
+
+## Current Claude Desktop scope confirmed from official Anthropic sources
+
+The user's clarified target is **all Claude Desktop capabilities (Chat, Cowork, Code) through Claude Desktop on third-party inference (3P)**, plus **local/self-hosted Claude Code**, not Anthropic-hosted `claude.ai` chat or Anthropic-hosted Claude Code Cloud. This is a valid first-party-supported target concept: Anthropic's current admin migration docs explicitly describe Claude Desktop on 3P routing all model inference to the configured provider, which may be Bedrock, Google Cloud Agent Platform, Microsoft Foundry, or the organization's own LLM gateway. The supported Desktop feature set lists Chat, Cowork, projects, artifacts, memory, scheduled tasks, file upload, Skills, plugins, connectors, and Code. API-key/static-key use is documented for proof of concept; production provider identity should be per-user or through a controlled credential helper/authenticating gateway.
+
+Current UI model: Unified Claude is rolling out and merges Chat and Cowork into one conversation/home. Therefore the migration schema must retain the source mode and target capabilities, but must not assume Chat and Cowork are always separate target roots. Code remains a distinct mode and its local CLI transcript store is shared with Code tab transcripts under `~/.claude/`. Anthropic-hosted Claude Code Cloud sessions are a different plane (GitHub-backed cloud runner); they must not be conflated with Desktop 3P/local sessions.
+
+Official `Import history from claude.ai` is **not** a ChatGPT/Codex universal importer. It imports the signed-in user's own Claude chats/projects (one-time copy, repeatable without duplicates) and local Cowork/Code sessions from the same machine or an added folder. It omits cloud Cowork/Code sessions; project knowledge/attachments in a personal member export are omitted; memory/personal instructions require manual transfer; skills/plugins/connectors require reconfiguration or a separate local-data move. This path proves cross-mode move workflows within Claude only, not ChatGPT-to-Claude compatibility. A ChatGPT/Codex adapter must translate into target-specific local/session format or provide a provenance-preserving archive plus resumable handoff, then verify each item.
+
+Official local layout clues for the target adapter:
+- Desktop 3P app data: macOS `~/Library/Application Support/Claude-3p/`, Windows `%LOCALAPPDATA%\Claude-3p\`, Linux `~/.config/Claude-3p/`. The 3P app-data namespace is separate from standard Claude Desktop.
+- Chat and Cowork session: state file + working directory under `local-agent-mode-sessions/`; working directory includes transcript, `uploads/`, `outputs/`, and `audit.jsonl`. Audit/transcript can hold prompt/response/tool inputs/results, and session detail such as model, token usage, thinking and permission decisions is recorded for Cowork/Chat.
+- Projects and memory: project-scoped memory under `local-agent-mode-sessions/.../spaces/<projectId>/memory/`; global Cowork memory/instructions are distinct. Chat only reads/updates project memory when inside that project.
+- Code: `claude-code-sessions/` stores session record metadata (working folder, settings, title, sometimes summary); actual Code transcripts live in Claude Code's own `~/.claude/projects/` store. `~/.claude/` and `~/.claude.json` also hold shared Code/CLI settings, Skills/plugins/hooks/permissions/MCP/trust state. Do not conflate Desktop session summaries with the actual transcript.
+- Desktop local session export is not encrypted. It may carry secrets embedded in files/arguments; saved provider API keys, sign-ins, connector credentials and env-var values do not move and must be re-established. A safe Nexus format must encrypt or redact at rest, never copy provider keys by default, and re-consent to connectors/MCP/tool permissions.
+
+### Official source references (accessed 2026-11-23)
+
+- Anthropic Help Center, [Move from Claude Enterprise to Claude Desktop on a cloud provider](https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider): 3P scope, migration matrix, attachments/cloud session omissions, memory/skills/connectors steps.
+- Anthropic docs, [Import history from claude.ai](https://claude.com/docs/third-party/claude-desktop/import): exactly what imports; local Cowork/Code session step; Chat/Cowork/Code export details; source/target folder and unencrypted ZIP caveats.
+- Anthropic docs, [User identity and local data](https://claude.com/docs/third-party/claude-desktop/data-storage): local storage namespaces and session record/transcript/audit split.
+- Anthropic docs, [MCP, plugins, skills, and hooks](https://claude.com/docs/third-party/claude-desktop/extensions): Desktop capability distribution and per-mode hooks/extension differences.
+- Anthropic Help Center, [Use Claude Cowork on web, desktop, and mobile](https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile): projects/sessions/local connector/scheduled task surfaces.
+- Anthropic Help Center, [Claude Cowork and chat are one Claude](https://support.claude.com/en/articles/16761823-claude-cowork-and-chat-are-one-claude): staged unified UX; chats/tasks/projects carry over during account transition.
+- Anthropic Help Center, [Manage API key environment variables in Claude Code](https://support.claude.com/en/articles/12304248-manage-api-key-environment-variables-in-claude-code): API-key charging precedence applies to Code; use `/status` to verify auth.
+- Anthropic Docs, [Legal and compliance — Claude Code](https://code.claude.com/docs/en/legal-and-compliance): permitted self-managed API-key / third-party inference use and non-resale restrictions.
+
+## Disposition
+
+Retain Dotai as a high-quality ResourcePlane, pack format, dry-run/rollback, and local Claude Code API-key launch pattern; do not reuse it as a SessionGraph importer. The official Anthropic Desktop 3P docs materially improve Nexus's target contract: model Desktop 3P as a separate local data plane with three mode capabilities and explicit cross-mode relationships. The initial prototype should emit an immutable archival package, a normalized source SessionGraph, target-specific artifacts for Skills/MCP/Projects/Chat/Cowork/Code, a loss ledger per item/field, and a user-approved resumable handoff for items whose target format is undocumented or not safely writeable.

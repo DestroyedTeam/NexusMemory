@@ -1,0 +1,36 @@
+# AidarKhusainov/agent-skills-manager — source and behavioral-scope review
+
+Date: 2026-11-22. Candidate #112 of the 303-name primary GitHub corpus. The user reconfirmed that Claude Desktop Chat, Cowork and Code are all in scope; this candidate review does not change that scope. No real ChatGPT export, Desktop session, API key, user collection, or target application data was accessed.
+
+## Bound source and provenance
+- Repository: https://github.com/AidarKhusainov/agent-skills-manager
+- Clone command: `rtk git clone https://github.com/AidarKhusainov/agent-skills-manager.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-aidarkhusainov-agent-skills-manager-20261122`; exit 0.
+- Branch `master`, clean checkout before CodeGraph initialization, pinned HEAD `df260b1003cea5a30fdc7a78dacaf93efb9e8e69`, tag `v0.2.4`; local manifest VERSION is `0.2.4`. MIT license. GitHub page at review time showed 1 star, 0 forks and one open PR.
+- CodeGraph initialized for this candidate: 4 files, 66 nodes, 194 edges; status up to date. Removed CodeGraph’s `!.gitignore` self-preserving exception while retaining `.codegraph/.gitignore`; generated index remains locally ignored.
+
+## What it is / is not
+- README calls it a public, stateless, skills-only plugin. It ships exactly one `skills/manage/SKILL.md`, no preset third-party skills, no shared user state and no backend. The skill has DISCOVER, STATUS and approval-gated MUTATE workflows for GitHub-hosted `SKILL.md` items. It can optionally use a verified user-owned USER/PRIVATE Plugin Creator collection with `sources.json` v1; the public plugin itself is not a repository/session database.
+- It is a Codex/ChatGPT plugin/skill manager, not a Harness interchange or migration product. No chat/session parser, Project/Section/Session schema, parent-child/branch graph, media/attachment transfer, token-usage records, memory/schedule migration, native restore adapter, Claude Desktop Chat/Cowork/Code adapter, or local Claude Code target adapter exists. The only Python product code is `scripts/validate.py`, a source-package/manifest validator; runtime actions depend on whichever host tools are available. README explicitly says it does not E2E-test conversations, installations, Plugin Creator writes or activation.
+- Useful design concepts only: separate read-only discovery from mutation; compare full relevant inventories; pinned source revisions; preserve local edits; one approval for a concrete write plan; truthful `Unavailable`/`Not checked` status. These are ResourcePlane UX/security patterns, not a transferable SessionGraph.
+
+## Tests and release status
+- Environment: Python 3.12.10, PyYAML 6.0.3 already available; no project or global dependency installation.
+- `rtk proxy python3 -m unittest discover -s tests -v` → exit 0; 26 tests passed, 0 failed.
+- `rtk proxy python3 scripts/validate.py` → exit 0; stdout: `OK: package structure, manifests, YAML, references, marketplace, and public boundary`; stderr empty.
+- Workflow `.github/workflows/validate.yml` is one `ubuntu-latest`, Python 3.12 job: install PyYAML, `compileall`, unit tests, validator. Tests focus on package manifests, paths, frontmatter/YAML, secrets/symlinks and marketplace metadata; they do not validate model skill-selection decisions, live GitHub access, user writes or migration fidelity. `docs/regression-test-plan.md` labels the E2E rows manual and NOT RUN.
+- At source review, GitHub Actions showed run #28 on master and run #29 on PR #8 succeeded. Repository had one open PR, #8 `fix: route GitHub bulk skill management to Agent Skills Manager (v0.2.5)`. It edits descriptions/prompts and an acceptance plan because host selection is not guaranteed by SKILL.md; the PR says no backend or user-data mutation and runtime routing scenarios remain unexecuted. It does not change the migration classification.
+
+## Disposition
+Do not adopt as a migration dependency and do not describe it as Cloud/Claude session support. Retain as a narrow design reference for a future Skill ResourcePlane. It cannot satisfy the user's request to port ChatGPT Projects, Section Groups, Destruction Era session hierarchy, or session contents to Claude Desktop's three separate modes or local/self-hosted Claude Code.
+
+## Corrected inspection errors
+- `rtk grep` first received directory paths for `docs/` and `tests/`, exit 2; reran against explicit Markdown/test files, exit 0.
+- First attempted `.github/workflows/ci.yml`, which does not exist, exit 1; corrected using `rtk ls -R .github` to actual `.github/workflows/validate.yml`, then reopened it.
+- Web fetch of GitHub's workflow tree returned a restricted-URL fetch error; workflow contents were read from the pinned local checkout, and current Actions status was verified from the repository's official Actions page.
+
+## Primary sources
+- Pinned README: https://github.com/AidarKhusainov/agent-skills-manager/blob/df260b1003cea5a30fdc7a78dacaf93efb9e8e69/README.md
+- Pinned skill: https://github.com/AidarKhusainov/agent-skills-manager/blob/df260b1003cea5a30fdc7a78dacaf93efb9e8e69/skills/manage/SKILL.md
+- Pinned manual test/E2E plan: https://github.com/AidarKhusainov/agent-skills-manager/blob/df260b1003cea5a30fdc7a78dacaf93efb9e8e69/docs/regression-test-plan.md
+- Official Actions: https://github.com/AidarKhusainov/agent-skills-manager/actions
+- Open PR #8 and diff: https://github.com/AidarKhusainov/agent-skills-manager/pull/8

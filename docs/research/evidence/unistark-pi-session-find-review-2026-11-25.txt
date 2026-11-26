@@ -1,0 +1,33 @@
+# Candidate #262 review — uniStark/pi-session-find (2026-11-25)
+
+## Decision
+**Useful Pi-specific session-content search and branch-awareness prior art; not a migration adapter.** It exposes Pi's current session history in a TUI `/find` overlay, including optional abandoned-branch search, but does not export a provider-neutral record, import sessions, create Projects/Sections, or move any data to Claude Desktop or Claude Code.
+
+## Provenance and package/source match
+- Repository: https://github.com/uniStark/pi-session-find; public. Local checkout `main` HEAD and remote `refs/heads/main`: `d9c62c227560c9516faf2e61483284b19e0811c9`, commit date 2026-09-24. Remote tag `v0.1.0` points to the same commit. GitHub page reports two commits, one star and zero forks; the official releases page lists v0.1.0 as latest (2026-09-24).
+- `LICENSE` and `package.json` declare MIT; npm latest is `pi-session-find@0.1.0`. It is a Pi extension package with peer dependencies on `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui`; no runtime dependencies or `test` script. The README says it was developed against Pi 0.87.1.
+- Official NPM metadata reports `gitHead` `492f27a9d05900c3663a7fd6d3cdc44d3d417ac7`, earlier than current `main`/`v0.1.0` commit `d9c62c227560c9516faf2e61483284b19e0811c9`. `npm pack pi-session-find@0.1.0` retrieved a 5-file package (LICENSE, READMEs, index.ts, package.json; 34,117 unpacked bytes). Packaged `index.ts`, package.json and LICENSE match the checked-out source byte-for-byte. Both packed READMEs differ only by three badge lines added in GitHub source; the published code itself matches.
+- No real user Pi install, transcript, or Claude account was accessed.
+
+## Implementation behavior
+- Registers a Pi TUI `/find` extension. In non-TUI mode it only notifies that interactive mode is required. It reads the current session from `ctx.sessionManager.getBranch()`; `--all` instead uses `getEntries()`, then labels each hit active/inactive from entry IDs. This supports reading abandoned branch entries but does not preserve parent IDs, branch topology, or cross-session relationships in its own output.
+- Splits entries into `user`, `ai`, `thinking`, `tool`, and `meta` searchable pieces. It keeps per-entry IDs and display timestamps. Text/thinking/tool-call arguments/tool results/`!cmd` and summaries can be searched; image data is reduced to a `[图片]` placeholder and unsupported block types are dropped. It does not retain model/provider/usage/tokens, attachments, links as typed assets, or any export manifest.
+- The default view hides thinking/tools; Ctrl+K/Ctrl+T or options can show them. `--all` is about abandoned branches, not all categories. The UI can open a selected entry through `ctx.navigateTree`; that intentionally moves the user's session position on Enter. Browsing/querying itself does not write the session file or add text to model context.
+- Code defect/coverage gap: `entryPieces` creates the `meta` category for `custom_message`, `compaction`, `branch_summary`, and image placeholders; `ALL_CATS` displays a System label. But all presets omit `meta`, there is no CLI option or key to toggle it, and hidden-match messaging only offers thinking/tool toggles. Thus this category is currently unreachable in the UI.
+- No ChatGPT source parser, Projects/Section Groups, session export/import, Claude Desktop Chat/Cowork/Code target, Claude Code API-key/gateway adapter, or Skills/MCP/plugin/schedule transfer exists. This is a single-Pi reader extension.
+
+## Validation
+- `npm view pi-session-find version dist-tags.latest --json --registry=https://registry.npmjs.org` reports 0.1.0; `npm view ... gitHead ...` reports the earlier `492f27a...` provenance above.
+- Published artifact compare: `npm pack pi-session-find@0.1.0 --json --registry=https://registry.npmjs.org`; 5 entries; executable code and manifest files match this checkout; only README badge additions differ.
+- `npm test` exits 1 with `npm error Missing script: "test"`; no tests directory or package test script is present. The source README says helpers are exported for testing, but no in-repo tests are included.
+- No TUI runtime test against Pi 0.87.1/current release, no live session, no real attachment, and no migration/round-trip test was performed. CodeGraph indexed the only TypeScript source file (46 nodes); the tracked source remained unchanged, with only `.codegraph/` as local analysis state.
+
+## Nexus Memory disposition
+Keep as a **small conceptual source-reader/UI reference**. Its content-block categorization and active-vs-abandoned view point toward a canonical model that separates ordered events, typed content blocks and branch membership. Its own `Hit` projection flattens branch links to a boolean and drops media/source metadata; do not use it as a lossless SessionGraph or transfer path. The inaccessible `meta` view and lack of tests should be recorded, not silently generalized as robust coverage.
+
+## Primary sources
+- https://github.com/uniStark/pi-session-find
+- https://github.com/uniStark/pi-session-find/releases
+- https://github.com/uniStark/pi-session-find/blob/d9c62c227560c9516faf2e61483284b19e0811c9/index.ts
+- https://github.com/uniStark/pi-session-find/blob/d9c62c227560c9516faf2e61483284b19e0811c9/package.json
+- https://www.npmjs.com/package/pi-session-find

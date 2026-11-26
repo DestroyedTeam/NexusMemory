@@ -1,0 +1,44 @@
+# Review evidence — maideps/ai-harness-framework (#238) and Claude Desktop 3P mode confirmation
+Date: 2026-11-24 (Asia/Shanghai)
+
+## User-bound scope
+The user's exact source object remains ChatGPT Project **Destruction Era**, including its Section Group and full Session/subtask/fork/resource hierarchy. Destination scope is Claude Desktop configured for third-party inference in **Chat, Cowork, and Code**, with each mode kept independently modeled/versioned, plus a separate local/self-hosted Claude Code API-key/gateway profile. This is distinct from Anthropic-hosted Claude Code/Cowork cloud environments. User separately confirmed the three Desktop modes in this thread.
+
+## Candidate identity and provenance
+- Repository: https://github.com/maideps/ai-harness-framework
+- Local shallow clone: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-maideps-ai-harness-framework-20261124-followup238`
+- Branch `master`; HEAD `e0de706a240892ea2d3a66e5d7a56ec59d75d48e`; commit date `2026-11-19`; subject `Merge pull request #48 from maideps/fix/copycore-skip-optional-components`; local `git status --short --branch`: clean `## master...origin/master`; origin URL matches the repository.
+- MIT license at the pinned HEAD. GitHub repository page at check: 2 stars, 0 forks; 6 open issues; latest release v0.5.0 (17 Oct 2026). Activity/popularity is low and not a quality proxy.
+
+## Implementation reviewed
+This is a project-local engineering workflow harness, not a universal cross-agent/session adapter. It describes support for Claude Code, Codex, and Gemini CLI and implements reusable templates, bootstrap/upgrade/audit commands, verification gates and optional workspace components.
+
+- Durable project state is feature declarations (`feature_list.json`), mutable per-feature shards (`.harness/state/<id>.json`), generated `PROGRESS.md`, `progress/` notes, `DECISIONS.md`, and `session-handoff.md`. Work is feature/task state, not a provider conversation archive.
+- `session-trace start|end` writes/merges `.harness/traces/session-*.json` records containing timestamps, git branch/commit, active feature, verification summary, changed-file paths, and decision counts/titles. `harness-report` aggregates those records. These traces do **not** contain user/assistant turns, native conversation IDs, event order, branch/fork/subtask/session-parent lineage, message attachments/media, token usage, or transcript replay data.
+- WIP=1 is enforced per worktree lane; optional parallel lanes use separate worktrees and sharded feature state. The project hierarchy is a software delivery workflow, not a port of ChatGPT Projects/Section Groups or native Harness sessions.
+- Twelve packaged Skills support the workflow. The optional MCP component emits Context7 config for Claude Code and Gemini CLI, and its devcontainer registers a server with Codex. These are not source-resource importers or Claude Desktop gateway config. No parser/writer found for ChatGPT export, Projects/Sections, session graphs, attachments, model usage, MCP/plugin/Skills cross-platform migration, scheduled tasks, memory migration, or target-native session resume.
+- `create-harness` preserves existing files on adoption; `harness-upgrade` makes a backup before overwriting framework-owned files and preserves project-owned/instance state. Useful safe-adoption/rollback patterns only; no cross-Harness migration mechanism.
+- CodeGraph targeted exploration found `sessionTrace` has one caller and no direct covering test in the candidate's tests. The test suite includes adoption and upgrade behavior but does not demonstrate native session migration.
+
+## Candidate validation and maturity
+- Full check: `rtk test npm run check`; observed exit 0. RTK's visible final output reports coverage 74.93 ≥ 65. The filtered output did not show a final test count; do not claim one.
+- CodeGraph init/status exit 0 after correctly removing only the `!.gitignore` exception while keeping `.codegraph/.gitignore`: 44 files, 656 nodes, 2,511 edges; index current. Generated `.codegraph` data is ignored; candidate git status remained clean.
+- No real ChatGPT export, user project/session, Claude Desktop profile, gateway URL, API key, or remote model request was used. No live app state was changed.
+
+## Official scope check: Claude Desktop third-party inference (2026-11-24)
+First-party Claude Desktop docs explicitly state that Chat, Cowork, and Code sessions run on Claude Code and route requests through the configured gateway. The self-hosted LLM gateway contract requires `POST /v1/messages` with streaming and tool use; `GET /v1/models` is optional. Gateways should preserve Anthropic Messages API fields, prompt-cache `cache_control`, and usage cache fields. The Developer → Configure Third-Party Inference UI supports Gateway base URL, static API key, auth scheme (Bearer or x-api-key), or interactive IdP login. The official Code docs clarify Desktop uses this third-party inference config, **not** CLI `ANTHROPIC_BASE_URL` / `settings.json`; when 3P gateway is active, Anthropic-hosted cloud environments and Remote Control are unavailable. Therefore Chat/Cowork/Code are real in-scope Desktop modes under a supported compatible gateway, but each still needs separate data/hierarchy/feature-resume tests.
+
+This is not the same as API-key access to Anthropic-hosted cloud sessions. Cowork's current documentation says cloud sessions run on Anthropic servers and follow the account across surfaces; local-folder sessions and on-device legacy Cowork data are separate. Claude Code local sessions have a local project-bound transcript/session model and can resume via session ID or transcript path. Do not claim that an API key moves ChatGPT history into a Cloud session or that a model gateway restores native history.
+
+## Decision
+`maideps/ai-harness-framework` is a useful, low-maturity adjacent reference for auditable project workflow state, resumable *work briefs*, Skills packaging, safe adoption/upgrade and verification evidence. Reject it as a ChatGPT-to-Claude session migrator, Projects/Sections converter, universal adapter, or session hierarchy store. Do not count its session-trace feature as transcript fidelity or a migration success.
+
+## Primary source links
+- Candidate README/source: https://github.com/maideps/ai-harness-framework/tree/e0de706a240892ea2d3a66e5d7a56ec59d75d48e
+- Candidate release: https://github.com/maideps/ai-harness-framework/releases
+- Candidate issues: https://github.com/maideps/ai-harness-framework/issues
+- Claude Desktop 3P gateway: https://claude.com/docs/third-party/claude-desktop/gateway
+- Claude Code gateway/client differences: https://code.claude.com/docs/en/llm-gateway-connect
+- Claude Code session structure/resume: https://code.claude.com/docs/en/sessions
+- Cowork cross-surface/cloud/local behavior: https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+- Unified Cowork and Chat changes: https://support.claude.com/en/articles/16761823-claude-cowork-and-chat-are-one-claude

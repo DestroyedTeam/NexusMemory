@@ -1,0 +1,48 @@
+# Review evidence — dawnnnnnnnnnnnnnnnn/agent-hoard (#240; 2026-11-24)
+
+## Bound user scope
+
+Source: ChatGPT Project Destruction Era, its Project/Section Group hierarchy, complete Sessions, subtasks/forks, follow-up/interrupt events, artifacts/attachments, Skills/MCP/plugins/memory/schedules. Target: Claude Desktop via third-party inference in Chat, Cowork, and Code, plus local/self-hosted Claude Code with an API key or gateway. A local disk-usage/session-inventory utility is not a history importer or native target writer.
+
+## Candidate identity and provenance
+
+- Repository: https://github.com/dawnnnnnnnnnnnnnnnn/agent-hoard
+- Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-dawnnnnnnnnnnnnnnnn-agent-hoard-20261124-followup240
+- Branch main; HEAD e3b43df1898e9c0af3db38ac226fc3ce9f15eeca; commit 2026-11-18T19:36:51+08:00; subject feat(v1.1.0): first-run guide, scan progress, async scan. Clone was clean and tracking origin/main.
+- MIT license; package v1.1.0; Node >=18.15; no runtime dependencies. GitHub at review: 3 stars, 0 forks, 3 commits, no open issues; latest release v1.1.0 (2026-11-18). README says Windows 10/11 tested; macOS/Linux are not tested. Treat repository activity and stars as screening signals, not quality evidence.
+
+## What the implementation actually does
+
+AgentHoard inventories local AI coding-agent storage, categorizes disk use, presents risk-tiered cleanup, manages a recycle-bin/restore path and Git worktrees, and exposes Web UI, CLI and stdio MCP entrypoints. README/configuration names 22 agents, but that is local path discovery/cleanup coverage, not 22 import/export adapters.
+
+The source is a flat session inventory, not a portable history model. lib/core.mjs allSessions() (lines 839-855) collects DSH, Codex CLI, Claude Code CLI plus several flat path scans and returns file metadata such as id, directory, size, workspace, archived and pinned. listDshSessions() derives workspace/title from DSH workspace.json and session folder IDs; listCodexSessions() lists JSONL paths; listClaudeSessions() lists ~/.claude/projects JSONL paths. No transcript/event export, parent/fork/subtask edges, message sequence, asset payload, token usage, or cross-tool identity graph is written by this feature.
+
+archiveSessions() (lib/core.mjs:857-879) only changes DSH archivedSessionIds or moves Codex rollout files between local folders; other platforms are rejected. It is a source-local archive/hide action, not a copy or target import. No ChatGPT Project, Section Group, user-supplied ChatGPT export, Claude Desktop 3P Chat/Cowork store, Claude Desktop Code metadata, or Claude Code API-key profile writer exists. No capability found for carrying Skills, MCP configs, plugins, memory, permission grants, connector login, schedules, attachments, tool results, usage or gateway credentials. No user project was migrated.
+
+## Safety review and isolated synthetic probes
+
+The HTTP server defaults to HOST=127.0.0.1 but permits HOST override (server.mjs:14). This limits default network exposure but is not authentication. The handler has no explicit Origin/CSRF/authentication middleware. readBody() parses JSON independent of Content-Type (server.mjs:28-34). POST /api/trash accepts any non-empty list of filesystem paths without confirm and calls moveToTrash(); moveToTrash() rejects roots and already-trashed paths, but does not require a target to be within configured agent roots (lib/core.mjs:631-663; server.mjs:172-179). POST /api/trash/purge also has no confirm check (server.mjs:189-193). MCP confirmation is stronger for space_clean and space_trash_purge, but space_worktree_remove has no confirm argument/check and force can override dirty/unmerged protections (mcp-server.mjs:63-75, 171-174). CodeGraph found no direct covering tests for moveToTrash(), restoreBatch(), or purgeBatch().
+
+In a disposable server with fake HOME/config/data/trash directories and only synthetic files, a request to /api/trash used Content-Type: text/plain, Origin: http://attacker.invalid and Sec-Fetch-Site: cross-site, with a JSON body naming an external-to-configured-roots fixture. Observed: HTTP 200, okCount=1, synthetic file moved; /api/trash/restore returned HTTP 200, ok=1, and restored the exact synthetic-only content. This proves that the local HTTP route accepts a simple cross-origin-shaped, no-confirm mutation against an arbitrary path; it is not a browser exploit demonstration. No real file was passed to this probe.
+
+A second synthetic request moved a fake file and then called /api/trash/purge with the batch basename, same cross-site Origin, text/plain, and no confirm. Observed: move HTTP 200; purge HTTP 200 with {ok:true, freed:424}; batch absent. The first attempt passed the returned absolute batch path and got HTTP 400 {error:批次名非法}; it was corrected to the documented basename. This is an input-shape correction, not evidence that confirmation is enforced.
+
+## Local validation and limitations
+
+- CodeGraph initialized in this exact clone; status current: 20 files / 471 nodes / 1,009 edges.
+- First npm test attempt used the real HOME and was interrupted with exit 130 after default-home session/worktree endpoint checks remained active. Do not claim no host-profile reads occurred in that attempt; no mutating API action succeeded. The candidate's scripted API calls use a temporary trash/config, but session/worktree inventory can read default HOME paths unless HOME is isolated.
+- Corrected run used a disposable HOME, CODEX_HOME and CLAUDE_CONFIG_DIR: timeout 130s env HOME=/tmp/nm-agent-hoard-home-20261124 CODEX_HOME=/tmp/nm-agent-hoard-home-20261124/.codex CLAUDE_CONFIG_DIR=/tmp/nm-agent-hoard-home-20261124/.claude npm test. Exit 0; output 5 passed, 0 failed, 1 skipped in 121s. The API verifier reported 19 pass / 0 warning / 0 fail; MCP and CLI help checks passed; UI was skipped because Edge was unavailable. Generated demo/data/scan.json was removed after the run; temp test storage was cleaned by the script.
+- The 121-second duration is explained by scripts/verify-mcp.mjs setting a 120-second timer for each RPC and never clearing it after replies. A separate 8-second timeout run printed all protocol markers but exited 124 due to this live timer. That verifier's own criterion only checks initialize/tools-list/confirm-refusal/unknown-method markers. In the isolated standalone run, space_plan returned isError with “还没有扫描结果” because the spawned MCP child did not receive the demo SM_DATA_DIR; the wrapper still reported MCP protocol success. Thus the green aggregate suite does not establish successful MCP plan behavior.
+- The isolated UI test was skipped on macOS because its script only locates Windows Edge paths. No Windows test or live agent app/session-resume test was run. No API key, ChatGPT export, Claude Desktop store, provider endpoint, credential, or real project file was supplied to this candidate.
+- An initial probe passed the absolute batch path to purge and received the expected 400 invalid-name response; it was corrected to basename and the no-confirm purge was then observed to succeed. An initial CodeGraph lookup used wrong symbol names / wrong working directory and returned “Symbol not found”; rerun from this clone on exact symbols succeeded. A git status command at the NexusMemory parent reported “not a git repository”; the candidate clone itself was verified clean. These are retained as command/working-directory corrections, not candidate test failures.
+
+## Disposition
+
+Count as a reviewed, low-fit local inventory/cleanup manager, not a cross-Harness migration product or evidence that sessions can be moved. The useful boundary is that inventory, archiving, and actual migration are distinct operations. Do not use this server as a Nexus migration dependency or point it at real profiles until all HTTP mutations have explicit confirmation, allowed-root containment, origin/CSRF controls, safe batch/path validation and destructive-route tests; similarly add confirmation to MCP worktree removal. Nexus should default to read-only inventory and staged export, with a separate, user-approved destructive action plane.
+
+## References
+
+- Repository: https://github.com/dawnnnnnnnnnnnnnnnn/agent-hoard
+- Pinned source: https://github.com/dawnnnnnnnnnnnnnnnn/agent-hoard/tree/e3b43df1898e9c0af3db38ac226fc3ce9f15eeca
+- Release/issues: https://github.com/dawnnnnnnnnnnnnnnnn/agent-hoard/releases ; https://github.com/dawnnnnnnnnnnnnnnnn/agent-hoard/issues
+- Source map: README.md; lib/core.mjs:631-663, 682-706, 726-879, 1053-1069; server.mjs:14, 28-34, 128-193; mcp-server.mjs:63-75, 142-188; scripts/test.mjs; scripts/verify-api.mjs; scripts/verify-mcp.mjs.

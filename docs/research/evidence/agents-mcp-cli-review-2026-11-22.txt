@@ -1,0 +1,88 @@
+# Candidate #144 — agents-mcp/cli: useful MCP ResourcePlane, not Session migration
+
+Review date: 2026-11-22  
+Repository: `https://github.com/agents-mcp/cli`  
+Pinned main HEAD: `cbf03ff339f876dbb3d7792a806c1c30bf3d4c6e`  
+Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-agents-mcp-cli-20261122`  
+Code license: MIT; bundled `.agents/mcp.json` specification claims CC0 1.0.  
+Observed GitHub metadata: 0 stars / 0 forks, 43 commits, package version 0.1.1, no GitHub releases.  
+Disposition: **relevant adjacent MCP ResourcePlane reference; do not adopt as a Nexus SessionGraph/migration engine or as-is dependency.**
+
+## Product boundary
+
+`agents-mcp` stores MCP server definitions in a project/global `.agents/mcp.json` and compiles them to native config files. Runtime adapter IDs at this HEAD are `claude-code`, `cursor`, `vscode`, `opencode`, `windsurf`, `zed`, and `antigravity`. This means Claude Code CLI configuration, not Claude Desktop's Chat/Cowork/Code stores or its third-party-inference gateway settings. It has no ChatGPT/Codex project or session parser, Section Group model, conversation-event/attachment/token serializer, Project/Session graph, memory import, schedule transfer, or Claude Desktop mode writer. It manages server config values and generates a small Agent Plugins directory for each configured MCP server; it does not migrate a general installed plugin/Skill lifecycle.
+
+The `import` command scans native file-based adapters with a `getConfigPath`; the Antigravity adapter is plugin-file based and returns no single native path, so this loop skips it as an import source. The current `.agents/mcp.json` dialect is a proposal layered over Agent Plugins MCP schema 1.0.0, not proof that seven Harnesses recognize `.agents/mcp.json` natively or that the wider ecosystem adopted this path. Agent Plugins' own `mcp.json` lives at a plugin root; its docs define stdio, Streamable HTTP and optional legacy SSE, but do not define credential references and explicitly treat remote headers as literal package data, not secrets. `agents-mcp` extends these semantics with project/global `.agents/mcp.json`, `.env` lookup, and interpolation in URL/header fields; a generic Agent Plugins client cannot be assumed to interpret those additions. The repo's own `spec/MATRIX.md`/`spec/SPEC.md` remain v0.1.0 and list six agent IDs while current source/README expose seven (Antigravity added separately).
+
+## Useful design patterns and documented loss
+
+- Pure adapter functions separate parse/compile/loss warnings from file I/O; a canonical transport model distinguishes `stdio`, Streamable HTTP, and SSE.
+- The compiler uses `jsonc-parser` AST edits and one root-key replacement to preserve unrelated JSONC siblings and human-managed entries. `previousManagedNames` tracks ownership so stale managed entries can be pruned without deleting manual names.
+- The field matrix acknowledges substantial projection loss: `cwd` is dropped for every v0.1.0 target; `:-fallback` is dropped for most; native disable/target-scope metadata is not portable; and transports such as SSE are inferred/downgraded where a destination doesn't distinguish them. This explicit loss matrix is more useful than a blanket “universal” claim.
+- Atomic temp-file writes protect an individual file. The overall sync is not an all-target transaction: native files, plugin files and state are written in sequence. Plugin write/cleanup errors can leave earlier file writes applied; the CLI reports partial plugin failures rather than rolling the entire set back.
+
+## Synthetic behavior/security probes (temporary directories only)
+
+### 1. Default import leaks a recognized literal secret into canonical and plugin files
+
+Source default is `policy: 'warn'`; `planSecretExtraction` intentionally returns warnings and no write list for that mode. The subsequent placeholder rewrite iterates only values in the write list. A synthetic temp project with `.mcp.json` containing `GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_NEXUS_SYNTHETIC_CANARY_1234567890"` was run through the actual compiled CLI with default import plus `--no-sync`:
+
+```text
+command: rtk proxy node <pinned-checkout>/dist/index.js import --no-sync
+exit: 0
+stdout: 'Synced 1 target(s) across 3 file(s)\nImported 1 server(s) from 1 agent(s)\n'
+stderr: 'Secret detected for server field `GITHUB_PERSONAL_ACCESS_TOKEN`; extract to `.env` as ${NPX_GITHUB_PERSONAL_ACCESS_TOKEN}\n'
+```
+
+Observed: `.agents/mcp.json` and generated `.agents/plugins/synthetic-github/mcp.json` both contained the synthetic canary; `.env` and `.env.example` did not exist. The test-created `.agents/.mcp-sync-state.json` existed, while no project `.gitignore` was created. Thus the README's “secrets never reach versioned files” / secret hygiene claim is false for the default import path unless the user explicitly requests `--extract-secrets`.
+
+### 2. Explicit extraction is safer, but detection is heuristic
+
+On a separate temp project with the same synthetic known-prefix key and `import --extract-secrets --no-sync`, observed exit 0 and `Synced 1 target(s) across 3 file(s)` despite `--no-sync`. The canonical and target MCP entries used `${NPX_GITHUB_PERSONAL_ACCESS_TOKEN}`; `.env` contained only the synthetic value with POSIX mode `0600`; `.env.example` contained `NPX_GITHUB_PERSONAL_ACCESS_TOKEN=` only; `.gitignore` gained `.env` and `.agents/.mcp-sync-state.json`.
+
+An additional synthetic key `CUSTOM_SETTING: "NEXUS_UNKNOWN_SYNTHETIC_SECRET_VALUE_987654321"` uses neither a secret-key pattern nor one of the hard-coded value prefixes/URL credential form. Default import emitted no warning, did not create `.env`, and left that canary in `.agents/mcp.json`. The detector is a best-effort heuristic, not a complete secret scanner or secure credential store.
+
+### 3. `--no-sync` is not honored by the import command
+
+The actual `import --no-sync` calls above printed `Synced ...` and wrote native/plugin files. `import.command.ts` checks `args['no-sync'] === true`, but the CLI framework consumes negative flags as `args.sync === false`; a helper `isNoSyncFlag` exists in `commands/util.ts` but the import handler does not use it. This is a temporary-runtime observation, not only an inference from source.
+
+### 4. Unvalidated server name escapes the managed plugin directory
+
+The canonical Zod schema uses `z.record(z.string(), ...)` for `mcpServers`; it does not apply `SERVER_NAME_PATTERN` to names. That pattern is used in the interactive add path only. `getPluginDir` uses `join(base, '.agents', 'plugins', name)`, and `sync` uses the record key as `name` when creating plugin files. A synthetic temp project with a server key `"../../../escape"` passed canonical validation. Running the actual compiled `sync --agents claude-code` exited 0 and created:
+
+```text
+/tmp/nm-agents-mcp-traversal-probe/escape/plugin.json
+/tmp/nm-agents-mcp-traversal-probe/escape/mcp.json
+```
+
+Those files were outside the configured project's `.agents/plugins` subtree and outside the project root. All test artifacts stayed under `/tmp/nm-agents-mcp-traversal-probe`; no user project was used. Treat as a path-confinement defect in the writer.
+
+### 5. Same-name cross-agent conflicts silently select first adapter
+
+Two temporary native configs defined the same server `shared` with different commands: `.mcp.json` (`claude-code-command`) and `.cursor/mcp.json` (`cursor-command`). Actual `import --no-sync` exited 0, printed `Imported 1 server(s) from 2 agent(s)` with no stderr, and retained the Claude Code definition because it appears first in `AGENT_ORDER`. The implementation skips later duplicate names without comparing values or emitting a conflict/loss warning. This makes import deterministic but can silently choose a different MCP implementation than the user intended.
+
+## Quality and reproducibility
+
+- CodeGraph: 75 files / 876 nodes / 3,420 edges, up-to-date; `.codegraph/.gitignore` was retained with only the `!.gitignore` exception removed. `rtk git status --short` shows only that expected tracked ignore-file edit; no source/test files were modified.
+- Initial `rtk codegraph init --yes .` exited 1 (`error: unknown option '--yes'`); corrected command `rtk codegraph init .` exited 0, then `rtk codegraph status .` confirmed the 75-file index up-to-date.
+- `rtk git rev-parse HEAD` → `cbf03ff339f876dbb3d7792a806c1c30bf3d4c6e`; Git status has only the expected `.codegraph/.gitignore` change after removing its self-preserving exception (generated `node_modules`, `dist`, and `.codegraph` index data are ignored). No source/test files were modified.
+- Node `v26.7.0`, npm `11.19.0`. `rtk npm ci --ignore-scripts --no-audit --no-fund` exited 0 and added 122 packages; lifecycle scripts were skipped.
+- A clean `rtk npm run verify` exited 1 after typecheck and Prettier passed: 30/31 test files, 331/332 tests, with `tests/packaging/packaging.test.ts` expecting `dist/index.js`. `verify` orders `test` before `build`; the test runs `dist:package`, which writes only metadata and does not compile `index.js`.
+- Corrected test sequence `rtk npm run build && rtk npm test` exited 0: tsup built 120.38 KB `dist/index.js`, 31/31 test files and 332/332 tests passed. `rtk npm run verify` then also exited 0 because the prior build had populated `dist/`; this does not erase the fresh-checkout ordering defect.
+- GitHub's latest CI run at the pinned main HEAD (run #10, commit `cbf03ff`) is failed. Linux Node 22/24/26 jobs reproduce the package test expecting the absent `dist/index.js`; the Windows path test job also fails path assertions that expect POSIX `/` while `path.join` correctly returns Windows `\\` separators. The test fixture appears platform-inappropriate; it is not by itself proof the Windows runtime path is broken. The repository page showed eight visible runs, all failed, and no GitHub Releases.
+
+## Recommendation for Nexus
+
+Keep this candidate as a narrow interoperability reference for typed per-Harness MCP serializers, placeholder translation/loss reports, JSONC editing, managed-entry ownership, and explicit `--dry-run`. Do not use its live import/sync path as a trusted migration dependency: the runtime currently leaks recognized and unrecognized literal secrets by default, ignores `--no-sync` on import, silently resolves duplicate conflicts, and its canonical server names can escape the plugin write root. It does not cover the user's main SessionGraph/Project/Section migration problem, Codex-native MCP configs, or any Claude Desktop third-party-inference configuration.
+
+## Primary sources
+
+- Pinned repo: https://github.com/agents-mcp/cli/tree/cbf03ff339f876dbb3d7792a806c1c30bf3d4c6e
+- README: https://github.com/agents-mcp/cli/blob/cbf03ff339f876dbb3d7792a806c1c30bf3d4c6e/README.md
+- Import source: https://github.com/agents-mcp/cli/blob/cbf03ff339f876dbb3d7792a806c1c30bf3d4c6e/src/commands/import.command.ts
+- Plugin writer: https://github.com/agents-mcp/cli/blob/cbf03ff339f876dbb3d7792a806c1c30bf3d4c6e/src/core/plugins.ts
+- Canonical schema: https://github.com/agents-mcp/cli/blob/cbf03ff339f876dbb3d7792a806c1c30bf3d4c6e/src/core/schema.ts
+- Latest CI run: https://github.com/agents-mcp/cli/actions/runs/44976407162
+- GitHub releases: https://github.com/agents-mcp/cli/releases
+- Agent Plugins MCP schema: https://agent-plugins.org/schemas/1.0.0/mcp.schema.json
+- Agent Plugins MCP author documentation: https://agent-plugins.org/plugin-authors/mcp-servers

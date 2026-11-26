@@ -1,0 +1,53 @@
+# Candidate #250 — DevExpGbb/swampup-skills (2026-11-24)
+
+## Disposition
+
+A small APM-distributed **Skills catalog**, not a Harness/session migration tool. It is directly relevant only to the user's portable-Skills plane and to understanding the Agent Package Manager distribution path. It contains three static developer Skills, no session parser, memory model, Project/Section representation, message graph, attachment transfer, task schedule, API-key/gateway configuration, or native conversation/resume writer. The target remains ChatGPT **Destruction Era** Projects/Section Groups/full Sessions to Claude Desktop 3P **Chat, Cowork, and Code separately**, plus local/self-hosted Claude Code via API key/gateway; none of that is implemented or tested here.
+
+## Identity, declared license, and provenance
+
+- Public repo: https://github.com/DevExpGbb/swampup-skills. Branch `main`, HEAD `2cbb03c3de095e30357dfbd4391f7fe57ab876a1`; `git ls-remote refs/heads/main` matched. Commit is dated 2026-09-02 (`fix(plugins): author skills at top-level skills/ + declare in plugin.json`). Local tag: `v1.1.0`; GitHub has no Release object. Current page snapshot: 1 star, 0 forks, 4 commits, no open issues or PRs.
+- The README and root `apm.yml` declare MIT; the three package manifests and their Skill frontmatter also say MIT. But this repository has no `LICENSE`/`COPYING` text and GitHub's license metadata is null. APM's own current specification says `license:` records the package author's declaration and APM does not interpret/verify a LICENSE file. Treat MIT as **declared but not independently substantiated**; no redistribution or direct code/content reuse recommendation until canonical terms are available. This review used the content only for research and did not copy it into Nexus except for summary/evidence.
+- The repo describes itself as a SwampUp NYC keynote catalog and shows 4 commits / 1 star. This is a tiny demo/catalog footprint, not a maintained session migration product.
+
+## What was inspected
+
+The exact repository has root `README.md`, `apm.yml`, `.gitignore`, one `plugins/` tree, and three Skill packages. Each package contains an APM manifest, a Claude plugin manifest, and a `SKILL.md`:
+
+1. `otel-tracing`: guidance for adding OpenTelemetry spans/propagation/export to an HTTP service.
+2. `changelog-writer`: Conventional Commit range to grouped CHANGELOG text.
+3. `release-notes`: human-facing release text that depends transitively on `changelog-writer`.
+
+`apm.yml` declares these three packages, `apm: []` and `mcp: []`; the root marketplace output block names Claude and Codex. The README recommends APM for other harness targets, but we did not install/run APM to verify emitted files on each target. The independently maintained APM project has a broader target/primitive matrix; that infrastructure must not be attributed to this 3-Skill repository. In APM's current matrix, `claude` means Claude Code, while Microsoft Copilot Cowork is a distinct experimental target—not Claude Desktop Cowork. The matrix describes artifact deployment (skills/instructions/agents/hooks/MCP where supported), not importing or resuming conversations.
+
+## Direct mapping to requested Nexus dimensions
+
+| Requested dimension | Evidence in this repository | Finding |
+|---|---|---|
+| Projects / Section Groups | none in manifest or package contents | Not supported by the inspected catalog |
+| Session messages, parent/fork/subagent graph, follow-ups | none; no conversation parser/data model in the repository inventory | Not a Session importer/exporter |
+| Images/files/tool outputs/token use/schedules | none | No evidence of transfer support |
+| Skills | three narrow developer workflow Skills | Portable artifacts are the only direct fit |
+| MCPs/plugins | `mcp: []`; Claude plugin manifests wrap the three Skills | Plugin packaging only; no server/credential migration |
+| Memory/correction learning | no persistent memory or correction-capture pipeline in the repository contents | Not a memory system |
+| Local models/API keys/gateways | none in its `apm.yml` or three Skills | No provider configuration transfer |
+| Claude Desktop / Claude Code targets | README says APM can install portable Skills; target-specific runtime was not tested | Does not prove Chat/Cowork/Code session compatibility |
+
+## Verification and observable limitations
+
+- CodeGraph initialized and status-checked: 4 YAML files indexed, 0 source nodes/edges. There are no Python/application modules in this candidate; its delivered content is manifests and Markdown Skills. The CodeGraph `.gitignore` already lacked the `!.gitignore` exception, so the required cleanup was a no-op; clone remained clean.
+- The README's documented `python -m unittest discover -s tests -v` command was attempted as `rtk proxy python3 -m unittest discover -s tests -v`. It exited 1 with `ImportError: Start directory is not importable: 'tests'`; the checkout has no `tests/` directory. No other tests, APM install, pack, or native Harness load were run. Therefore package integrity/installation claims and cross-Harness delivery accuracy are unverified.
+- GitHub public pages showed 1 star, 0 forks, 4 commits, no issues, no PRs and no releases. Local main SHA matched remote; `v1.1.0` exists as a tag.
+- APM's official docs distinguish declared license metadata from a verified license text and enumerate per-Harness artifact targets. That external APM evidence is contextual only; it does not validate this package's license or prove session migration.
+
+## Nexus recommendation
+
+**Direct session migration fit: none.** **Adjacent Skills-distribution fit: low-to-moderate**, limited to APM packaging examples for three simple engineering Skills and a transitive skill dependency. The low star count is not the reason for rejection; the scope is too small and unrelated to the requested project/session state. Keep only as a small Skills packaging example; do not select it as the universal migration engine or claim its demo demonstrates session portability. No direct implementation dependency recommendation.
+
+## Sources
+
+- Repository/README: https://github.com/DevExpGbb/swampup-skills
+- Main commit tree: https://github.com/DevExpGbb/swampup-skills/tree/2cbb03c3de095e30357dfbd4391f7fe57ab876a1
+- Official APM target matrix: https://microsoft.github.io/apm/reference/targets-matrix/
+- Official APM license-declaration semantics: https://microsoft.github.io/apm/reference/lockfile-spec/
+- GitHub Issues/PRs/Releases: https://github.com/DevExpGbb/swampup-skills/issues, https://github.com/DevExpGbb/swampup-skills/pulls, https://github.com/DevExpGbb/swampup-skills/releases

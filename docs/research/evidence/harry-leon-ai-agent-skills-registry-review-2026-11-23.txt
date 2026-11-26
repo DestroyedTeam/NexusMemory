@@ -1,0 +1,48 @@
+# Candidate #175 — harry-leon/ai-agent-skills-registry (Skillary)
+
+Review date: 2026-11-23. Pinned `main` HEAD and `git ls-remote origin refs/heads/main`: `11d3972c118b44c91e3ad37e15de45c77486014c`. Isolated checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-harry-leon-ai-agent-skills-registry-20261123`; `rtk git status --short` clean. CodeGraph is up to date (139 files, 1,050 nodes, 2,599 edges).
+
+## Disposition
+
+**Pass as a direct cross-Harness/session migrator; retain as a useful adjacent Skills-registry and ingestion-security reference.** The repository is a Next.js + PostgreSQL web registry for SKILL.md assets, not a project/session export-import system. Its Prisma `Session` is auth state (`token`, `userId`, expiry, IP/user-agent); there are no agent project/section/group/conversation/message/branch/transcript/attachment/media/token-usage models. MCP is one imported community catalog type, not a persisted per-session MCP configuration graph. No plugins, memory, schedules, or Claude Desktop Chat/Cowork/Code session semantics are represented.
+
+## What is technically useful
+
+The strongest implementation ideas are the explicit PRIVATE/UNLISTED/PUBLIC access policy, owner/fork/version relationships, content-addressed SHA-256 blobs, and a defensive Skills ingestion pipeline. Code at `lib/skills/github.js` validates HTTPS `github.com` source URLs, constrains manual redirects to `api.github.com`/`codeload.github.com` with a maximum of three hops, sends `GITHUB_TOKEN` only to the API host, applies a 30-second timeout and compressed-download cap, then passes archives through ZIP/path/Markdown checks. `lib/skills/zip.js` enforces streaming compressed/uncompressed/file/entry/ratio limits and rejects Unix symlink/device entries. `lib/skills/paths.js` rejects absolute, drive, control-character, dot/traversal, overlong and overdeep paths. `lib/skills/ingest.js` requires one root `SKILL.md`, validates frontmatter/content, hashes files and builds a version content hash before storing blobs. The app's community feed fetches third-party `aitmpl.com` JSON for skills/agents/commands/settings/hooks/MCPs/mods; that is a catalog feed, not import of Harness-specific session data.
+
+## Important verification gap / CLI naming hazard
+
+README claims `npx skillary add @owner/slug`, but repository `package.json` is `name=skillary`, `private=true`, and has no `bin`; local public UI code copies `npx skillvault add`. `npm view skillary ... --json` resolved version `0.0.3`, repository `yurtsever/skillary`, binary `skillary: dist/index.js`; that separate package's GitHub README describes a read-only local instruction-file browser invoked as `npx skillary`, not this registry's `add` command. `npm view skillvault ... --json` resolved version `0.13.2`, description “SkillVault — secure skill distribution for Claude Code”, binary `skillvault: dist/cli.js`, with no repository URL reported. The advertised installation route is therefore not proven to belong to this repository; do not run it blindly.
+
+## Verification
+
+- `rtk npm ci --ignore-scripts`: exit 0; added 674 packages.
+- `rtk npm exec -- prisma generate` with placeholder test DATABASE_URL: exit 0; Prisma Client 6.19.3 generated; no DB contacted.
+- `rtk npm exec -- vitest run tests/unit` with NODE_ENV=test and dummy required env: exit 0; 3 files / 38 tests pass.
+- `rtk proxy npm test -- --reporter=dot --silent` with dummy env: exit 1; 9 files failed / 4 passed, 10 tests failed / 43 passed / 110 skipped. Prisma integration calls fail because no PostgreSQL server is listening at `127.0.0.1:5432`; this is an environment limitation, not a verified product defect. Full literal captures are the sibling `...full-suite.stdout.txt` and `...full-suite.stderr.txt` evidence files.
+- `rtk npm run lint`: exit 0. `rtk npm run format:check`: exit 0.
+- First production build with default storage mode exited 1 because production config rejects `STORAGE_DRIVER=local`; corrected run used only dummy S3 bucket/credentials and exited 0 (`Next.js 15.5.27`, compile, lint/type-check, page-data and route build succeeded). No S3 endpoint or provider was contacted. Captures are sibling build evidence files.
+- Source checkout stayed clean; no live account, user data, API key or Harness session was used.
+
+## Cross-Harness fit
+
+| Payload | Evidence in this repo | Fit for Nexus Memory |
+|---|---|---|
+| Skills | Strongly represented as versioned SKILL.md file bundles with hashes/blobs | Good adjacent reference; still needs target-specific install adapters |
+| MCPs | Only catalog listing category in `aitmpl` feed | Not a session-bound MCP migration implementation |
+| Projects / Section Groups / session parent-child graph | No corresponding domain models | Not supported |
+| Messages, interruptions, links, images/files, tool traces, usage/tokens | No transcript/event schema | Not supported |
+| Memory / scheduled tasks / plugins | No domain models or adapters found | Not supported |
+| Claude Desktop Chat / Cowork / Code via third-party gateway | No mode/session parser or target writer | Not supported |
+| Local/self-hosted Claude Code session transfer | No local session import/export | Not supported |
+
+## New follow-up lead (screened, not source-reviewed)
+
+Added `nikships/skills-registry` to the manual review queue as a high-value Skills-plane lead: the public GitHub page describes a Go CLI/TUI + npm launcher, gateway skill, several agent adapters and a native macOS app. This is README/metadata screening only; it must not be counted as a reviewed migrator. Detailed source/test review remains pending.
+
+## Sources
+
+- Candidate repository and README: https://github.com/harry-leon/ai-agent-skills-registry
+- npm package metadata queried at review time: `npm view skillary ...` and `npm view skillvault ...` (the former points to yurtsever/skillary).
+- Namesake project README: https://github.com/yurtsever/skillary
+- Follow-up lead: https://github.com/nikships/skills-registry

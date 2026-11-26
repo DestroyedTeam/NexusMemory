@@ -1,0 +1,54 @@
+# Candidate #98 review — omer-ayhan/skillspp (2026-11-21)
+
+## Identity and disposition
+
+- Repository: https://github.com/omer-ayhan/skillspp
+- Exact checked-out HEAD: `2440a90013889d59e915f838dac8710088c42955` (2026-05-24).
+- Snapshot metadata observed during review: 2 stars, 0 forks, MIT, 6 open issues, latest release v1.3.0 (2026-05-24), non-archived; active CI workflow. No source changes were made upstream.
+- Verdict: adjacent Skills ResourcePlane / installer reference only, not a ChatGPT Project/Section/Session migrator and not a Claude Desktop Chat/Cowork/Code gateway-session adapter. Do not depend on or reuse its installer implementation unchanged.
+
+## Product-scope confirmation from current first-party docs
+
+The user confirmed all three Claude Desktop modes—Chat, Cowork, and Code—are in scope, in addition to local/self-hosted Claude Code. The target is Desktop's Developer → Configure Third-Party Inference gateway, not Anthropic-hosted Claude Code Cloud. Current first-party docs now explicitly support Claude Desktop's gateway provider, identify `inferenceGatewayBaseUrl` and `inferenceGatewayApiKey`, and require an Anthropic Messages API gateway (`POST /v1/messages`, streaming and tool use; optional `GET /v1/models`). Chat, Cowork, and Code sessions send `cache_control` breakpoints. This is an inference route, not a portable session/history writer; the gateway key must be treated as a separate secret and excluded from normal content bundles.
+
+Anthropic's current Desktop import doc says 3P history lands in a local session store and the native import wizard copies `claude.ai` chats/projects plus earlier local Cowork/Code sessions; it does not document importing ChatGPT ZIPs. It is a one-time copy, not continuous synchronization. The import docs mark Desktop 5.11492.0 as the cutoff for most automatic copies and 5.1231.0 for additional project/folder/pin completeness; exact Desktop version, OS, and disposable-profile verification remain required. Source references (accessed 2026-11-21):
+
+- https://claude.com/docs/third-party/claude-desktop/gateway
+- https://claude.com/docs/third-party/claude-desktop/import
+- https://help.openai.com/en/articles/10169521-projects-in-chatgpt
+- https://help.openai.com/en/articles/7260999-exporting-your-chatgpt-history-and-data
+
+## Repository/code review
+
+- README and contracts describe a package-manager-like CLI for Markdown Agent Skills, with per-agent skill paths and project/global deployment. It does not model Projects, Section Groups, chats, Session ancestry/forks/subtasks, message/event order, attachments, token usage, memories, or schedules.
+- `apps/skillspp-mcp/src/request-handler.ts` exports only one MCP tool, `skills.validate`; it validates a Skill source and does not provide resource/config/session import or export.
+- `packages/core/src/runtime/skill-installer.ts:311-335`: `runHookPhase` executes configured pre/post-install commands via `spawnSync("sh", ["-c", command])`, without a timeout or sandbox.
+- `prepareInstallerArtifacts` blocks hooks only when the caller explicitly supplies `allowHookCommands:false`. `evaluateHookTrustPolicy` rejects only `sourceType === "well-known"` absent trust; GitHub/Git sources are allowed by default. The production `add.install` caller passes source type, policy mode and trust flag, but omits `allowHookCommands:false`.
+- Harmless isolated hook POC used only `printf` to temporary marker files: GitHub/default policy was allowed and wrote marker; well-known/default policy rejected with no marker; GitHub/explicit-deny rejected with no marker. No user data, credentials or real install target was touched.
+- Dependency destination validation uses lexical `path.resolve` containment. A temporary symlink POC placed a symlink inside the skill destination pointing to a sibling temp directory; the installer wrote `synthetic-payload` outside the destination. This is a reproduced local symlink escape in the reviewed code, not evidence of a remotely exploitable vulnerability.
+- Arbitrary HTTP(S) dependencies use `fetch` then `response.arrayBuffer()` in `prepareDependency`; that function receives no host allow/deny, download-size, or timeout options. This is a static concern, not separately network-probed.
+- `installToCanonicalDir` removes the existing canonical directory before copying the new tree; the add path has no atomic staged swap. `update.migrate` has a separate backup/rollback path.
+- CodeGraph reports no covering tests for `runHookPhase` / `prepareInstallerArtifacts` / installer security controls.
+
+## Build, tests, CI
+
+- Runtime: Node v26.7.0. Repository requires pnpm 10.18.3; Corepack is unavailable, so exact pnpm 10.18.3 was invoked temporarily with `npm exec`. `pnpm install --frozen-lockfile --ignore-scripts` exited 0 (571 packages; scripts disabled).
+- `pnpm run typecheck`: exit 0, 6/6 workspace packages.
+- `pnpm run lint`: exit 0, 6/6 workspace packages plus boundary checks.
+- `pnpm run test:unit`: exit 0, 43 passed / 11 skipped.
+- `pnpm run test:integration`: exit 0, 2 passed.
+- `pnpm run test:contract`: exit 0, 6 passed.
+- `pnpm run test:e2e`: exit 0, 3 passed.
+- `pnpm run build`: exit 0, 5/5 packages successful. Turbo reported no output files for `@skillspp/skillspp-mcp#build`; this is explained by its own tsconfig setting `noEmit:true`, so the warning is an outputs-cache mismatch rather than a build failure.
+- `pnpm run test:ci`: exit 0; all six package tasks succeeded. CI itself runs typecheck/lint/unit/build; installer hook security is not covered by those tests.
+
+## Tool/probe error ledger
+
+- An early CodeGraph query ran from the NexusMemory parent directory and returned the wrong project's symbols; it was discarded and repeated successfully from this exact candidate checkout. Candidate `.codegraph` was verified current (112 files, 1,977 nodes, 4,953 edges).
+- In this follow-up, `rtk git status --short` from the NexusMemory directory exited 128 (“not a git repository”); corrected to `rtk git -C <candidate-checkout> status --short`, which was clean. A first controller-file path omitted `artifacts/verified-workspace-routing-2026-11-20/` and errored; the correct role path was then read. A grep call used directory operands and errored; source was then inspected via exact CodeGraph nodes.
+- Initial synthetic hook POC had a CommonJS top-level-await error (exit 1); fixed with an async main. A later YAML fixture had an invalid nested quote (process exit 0 but no case passed); corrected quoting and reran with the three results above. A first single-quote `printf` probe was also replaced with a double-quoted YAML command. These were test-harness errors, not candidate outcomes.
+- A multi-page web open batch yielded no result after repeated waits and was terminated; the official source pages were then reopened individually and the source checks used the returned content.
+
+## Registry state
+
+After this review the 303-row registry is 98 reviewed / 205 unreviewed. Next registry candidate is computed from the first subsequent `unreviewed` row. Survey is still incomplete; this is not evidence of market-wide coverage.

@@ -1,0 +1,37 @@
+# Candidate #252 — Fabian-698/dsh-update-guide follow-up safety audit (2026-11-24)
+
+This is a **supplement to the existing 2026-11-20 deep review** in `docs/RESEARCH.md`, not a replacement. The latest user confirmation still includes Claude Desktop third-party-gateway Chat, Cowork, and Code separately, plus local/self-hosted Claude Code via API key/gateway.
+
+## Identity, source, and version scope
+
+- Repository: https://github.com/Fabian-698/dsh-update-guide
+- Pinned `main` HEAD: `0fcb77d2a9abf8c28da32119a243a568bd9c3824`; observed remote `HEAD` matched; branch `main`; commit date `2026-09-24T00:13:07+08:00`; local status clean after ignored CodeGraph setup.
+- Root `LICENSE` is MIT. GitHub page snapshot: 1 star, 0 forks, 6 commits; treat this as a dated adoption signal, not a code-quality score.
+- CodeGraph indexed 13 files, 533 nodes, 960 edges. `.codegraph/.gitignore` was preserved and only `!.gitignore` removed; no candidate source was modified.
+- The Skill's own explicit compatibility range stops at DSH `0.1.7-rc.1`. The official DSH releases page now lists `v0.2.3-alpha.2` dated 2026-11-22, so the guide is behind several DSH prereleases. DSH `v0.2.2-rc.3` added an experimental importer for DeepSeek App/web exports; this is still a DSH-origin importer, not a ChatGPT/Codex/Claude adapter. It cannot establish the user's cross-Harness import requirement.
+
+## What it does (and does not do)
+
+The candidate is an Agent Skill for DSH upgrade diagnostics and repair. It documents session paths shaped like `~/.dsh/sessions/<workspace>/<sessionId>/`, V2/V3/V4 filename generations, version headers, and subagent markers such as `parentSession` / `delegationDepth`. Its validator picks V4 > V3 > V2. The v0 repair script normalizes three old DSH-specific shapes (plugin `summary`, descriptor version, and flattened replay state), then calls the locally installed DSH `sessionFormatCatalog` for validation and rewrites the v0 file so DSH can lazily migrate it. It is not a portable conversation importer, target writer, neutral SessionGraph, or Project/Section mapper; it does not convert ChatGPT/Codex history or move attachments, Skills/MCP/plugins, schedules, or memories across Harnesses. A standard SKILL can be installed in several coding-agent Skill folders, but that is not session portability.
+
+The prior 2026-11-20 review's synthetic V4-successor finding remains: the diagnostic reader chooses V4 > V3 > V2, while the repair discovery/pre-write guard only skips a V2 file when a V3 successor exists. A V4-only authoritative session can therefore leave an older V2 file eligible for rewrite. See the prior detailed record and tagged sources in `docs/RESEARCH.md`.
+
+## Test results
+
+- Runtime observed: Node `v26.7.0`; Zstandard CLI `v1.5.7`.
+- Default README command, invoked as `rtk proxy node skills/dsh-update-guide/scripts/selftest.mjs`: exit 0; **24 PASS, 0 FAIL**, plus `SKIP B` because the owner `dsh-session-logs` Skill is not installed locally. The test exercises generated synthetic fixtures and temp DSH homes. `--full` was deliberately not run because its extra scan reads the real user's `~/.dsh`; neither `install.sh` nor a live DSH app was run.
+
+## Supplemental synthetic safety probes
+
+All probes used temporary fake DSH homes, synthetic `.zstd` files, and an explicitly supplied fake `DSH_SESSION_CATALOG`; none accessed a real profile or validated DSH's actual migration semantics. They isolate filesystem/gate behavior only.
+
+1. **Missing-Zstandard false green.** A synthetic `.jsonl.zstd` was passed to the pinned `verify-session.mjs` with `PATH` set to an empty directory. The process exited 0, emitted `SKIP S9 ... 全部内容检查跳过`, then `== 结果：ALL PASS`, with empty stderr. Because `SKIP` does not increment `failed`, callers that trust the exit code or final summary can treat a session whose contents were never parsed as verified. This contradicts the README's “不会假绿” claim.
+2. **Backup gate checks only the first target.** `repair-v0-sessions.mjs --list --json` found two fixable synthetic sessions. The apply run created a matching `sessions.bak-*` copy for only the first. `--apply --json` exited 0, reported `applied: 2`, `applyFailed: []`; both file hashes changed although the second target had no backup. The code checks `hasBackupFor()` only for `targets[0]`, then applies every target.
+3. **Symlink escape from the configured DSH home.** A temporary `$DSH_HOME/sessions/escape` workspace symlink pointed to a different temp directory outside `$DSH_HOME`; with a matching lexical backup entry and fake format catalog, `--apply --json` exited 0 and rewrote the external target (before/after SHA-256 differed). `discover()` follows workspace symlinks with `statSync` and does not enforce realpath containment. Both test roots were deleted afterward.
+4. **Wrapper parsing correction.** An initial synthetic two-target harness attempted `JSON.parse()` on the whole `--apply` stdout, which begins with per-file `OK` lines before the final JSON object; the Python wrapper exited 1 with `JSONDecodeError`. The candidate process had completed. Post-state inspection showed both synthetic files normalized although the second had no backup; the probe was rerun on a fresh temp home with the final JSON block parsed separately, capturing exit 0 and `applied: 2`. No candidate or user files were modified by the failed wrapper or probes.
+
+## Disposition
+
+**DSH SESSION-FORMAT / UPGRADE-RECOVERY REFERENCE ONLY — NOT A CROSS-HARNESS MIGRATOR; DO NOT REUSE THE REPAIR/GATE CODE AS-IS.** Keep the DSH-specific generation names and event/parent-session clues as version-scoped adapter inputs, but store the original event archive separately from any DSH repair projection. Before any future code reuse, require per-target backup verification, realpath containment, a fail-closed result when compression checks skip, current DSH-version coverage, and validation against the official runtime catalog. No live provider, DSH user data, or native session resume was tested.
+
+Pinned candidate source: [README](https://github.com/Fabian-698/dsh-update-guide/blob/0fcb77d2a9abf8c28da32119a243a568bd9c3824/README.md), [repair script](https://github.com/Fabian-698/dsh-update-guide/blob/0fcb77d2a9abf8c28da32119a243a568bd9c3824/skills/dsh-update-guide/scripts/repair-v0-sessions.mjs), [session gate](https://github.com/Fabian-698/dsh-update-guide/blob/0fcb77d2a9abf8c28da32119a243a568bd9c3824/skills/dsh-update-guide/scripts/gates/verify-session.mjs), [self-test](https://github.com/Fabian-698/dsh-update-guide/blob/0fcb77d2a9abf8c28da32119a243a568bd9c3824/skills/dsh-update-guide/scripts/selftest.mjs), [MIT license](https://github.com/Fabian-698/dsh-update-guide/blob/0fcb77d2a9abf8c28da32119a243a568bd9c3824/LICENSE). Official version evidence: [DSH releases](https://github.com/DeepSeek-ai/deepseek-harness/releases).

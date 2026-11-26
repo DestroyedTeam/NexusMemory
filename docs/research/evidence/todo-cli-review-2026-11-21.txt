@@ -1,0 +1,46 @@
+# todo-cli candidate review — Gemini task/tmux wrapper, not cross-harness session migration
+
+Date: 2026-11-21. Repository: JoeyWangTW/todo-cli. Disposable checkout main is pinned to 22caf3182d01d321264f1ee189e8ce457b25c190; git ls-remote origin refs/heads/main matched it. Local commit timestamp: 2025-10-14T18:23:36-07:00. GitHub currently shows 9 commits, MIT license, 7 stars and 1 fork. No published release was visible on the repository page. Counts and commit age are dated metadata, not quality scores.
+
+## Verdict
+
+A small, early personal-assistant todo CLI that starts one Gemini CLI interactive process per flat task inside a tmux session. It preserves enough metadata to reattach to a still-running tmux session, but the app does not store Gemini's native session ID, read Gemini transcript history, or expose a session export/import adapter. It is not a ChatGPT Projects/Sections migrator or any cross-Harness conversation transfer tool. Pass on adopting it as a migration engine; keep it only as an example of a task-to-live-process wrapper and an important distinction between tmux attachment and durable native conversation resume.
+
+## Source-level findings (CodeGraph + focused source inspection)
+
+### Task store versus Gemini conversation
+
+- Task model fields are id, title, details, done, yoloMode, sessionName, and createdAt. sessionName is generated as gemini-task- plus the task's nanoid. The lowdb JSON store at ~/.config/todo-cli/tasks.json serializes just those fields; there is no project/section group, parent-child task tree, messages/turns, tool-call results, media, attachment references, token/cost data, or conversation branch graph.
+- Each created task starts tmux new-session with Gemini CLI and arguments gemini -i <title/details prompt>, running from the app's cwd. The app does not pass --resume, --session-id, or any Gemini native chat identifier. The task's sessionName is the tmux session name, not the Gemini CLI session ID.
+- Reattach works only while the tmux process exists. The UI captures the last 50 tmux pane lines once a second and holds output in UI/in-memory fields; it does not append a durable transcript to tasks.json. Delete kills the tmux session and removes the task record. The app has no native Gemini transcript reader or export/import path.
+- The official Gemini CLI documents its own automatic conversation saving, full prompt/response/tool execution history, token usage, project-hash-scoped chat storage, and --resume by session id. todo-cli neither discovers nor persists the association between a todo task and that native Gemini session. Its use of the same cwd means tasks can be in Gemini's project-local history, but task-to-session mapping is not encoded by todo-cli.
+- README's user_data directory is a folder of ordinary text files presented as manual context/memory. It is not parsed into a structured graph, versioned, or transferred to another harness. MCP servers are externally configured; todo-cli does not import/export their definitions or credentials.
+
+### Harness, security and portability boundary
+
+- Runtime is hard-coded to Gemini CLI. README lists “allow using different agent (codex, claude-code)” under future steps, not implemented support. A .claude repository directory is not an application-level Claude session adapter.
+- YOLO mode adds Gemini's --yolo flag; Gemini CLI describes this as automatically approving all tool calls. README also warns that connected MCP servers run with the user's permissions. tmux separates interactive processes but is not a security sandbox or an account/permission boundary. Treat YOLO plus user-privileged MCP as a high-risk option, not a migration feature.
+- Data model is a flat array, no Projects, Sections, SectionGroups, scheduled task or conversation hierarchy. The app is Node/terminal + tmux/Gemini, with no Windows or macOS GUI packaging target. The only npm script is start; no test, build, or lint script and no test suite/CI workflow was found in the checkout.
+- MIT-licensed and small; repo page shows 9 commits, 7 stars / 1 fork, and no visible release. Low adoption and small scope are not evidence of poor quality by themselves, but breadth and maintenance evidence are limited.
+
+## Local source/build/test evidence
+
+- Exact main checkout HEAD 22caf3182d01d321264f1ee189e8ce457b25c190 matched git ls-remote origin refs/heads/main; worktree remained clean. CodeGraph initialized and status current: 7 files, 66 nodes, 149 edges. Removed only CodeGraph .gitignore's !.gitignore exception.
+- Node v26.7.0 / npm 11.19.0. All 7 JavaScript files passed node --check with exit 0. npm run from the candidate checkout listed only start; no automated test script is declared.
+- In a disposable temp fixture, npm ci --ignore-scripts installed 4 dependencies (exit 0), then a synthetic Task and Storage round-trip passed (exit 0). It confirmed title/details trimming, task ID/sessionName persistence and the exact stored task keys; no conversation payload was stored. This did not launch Gemini, tmux, any MCP server, or a provider account.
+- An initial npm run was accidentally issued with NexusMemory as cwd and exited 254 because /Users/vincentadamnemessis/NexusMemory/package.json does not exist; rerunning the same command from the candidate checkout exited 0 and exposed the single start script. The failure is a working-directory correction, not a candidate test failure.
+- Commands gemini and tmux were present on PATH, but neither was invoked. No Gemini credentials, personal session store, external MCP account, or user_data content was read.
+
+## First-party links and reviewed source paths
+
+- Repository / README / MIT license: https://github.com/JoeyWangTW/todo-cli
+- Pinned latest commit: https://github.com/JoeyWangTW/todo-cli/commit/22caf3182d01d321264f1ee189e8ce457b25c190
+- Task schema and prompt builder: https://github.com/JoeyWangTW/todo-cli/blob/22caf3182d01d321264f1ee189e8ce457b25c190/src/models/task.js
+- tmux/Gemini process invocation and pane capture: https://github.com/JoeyWangTW/todo-cli/blob/22caf3182d01d321264f1ee189e8ce457b25c190/src/services/tmux.js
+- Task JSON persistence: https://github.com/JoeyWangTW/todo-cli/blob/22caf3182d01d321264f1ee189e8ce457b25c190/src/services/storage.js
+- Gemini CLI session management (first-party): https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/session-management.md
+- Gemini CLI flag/config reference (first-party): https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md
+
+## Disposition
+
+Exclude todo-cli from the core migration engine and all session-fidelity scores. Its process wrapper can illustrate why an adapter must preserve both external native session ID and task context while distinguishing a live tmux process handle from durable conversation history. For Nexus Memory, the transferable learning is to model Task, HarnessProcess, NativeConversationSession, and ConversationThread as separate linked objects; never use a tmux session name or flat task id as the target's conversation ID. No live Gemini, Claude, or ChatGPT restoration was tested.

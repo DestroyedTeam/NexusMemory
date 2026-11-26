@@ -1,0 +1,57 @@
+NEXUS MEMORY — CANDIDATE #306 REVIEW
+ericblue/cowork-explorer — 2026-11-25
+
+Disposition
+- Narrow, macOS-only, zero-dependency Python CLI + local HTTP viewer/Markdown exporter for early Claude Desktop Cowork sessions (MIT, v0.1.0, March 2026); NOT a cross-Harness migrator and NOT safe to reuse for Claude Desktop 3P or its web file-serving/symlink-migration paths.
+- Keep only as minor historical reference for Cowork `local_<uuid>.json` sidecar fields (`processName`, `userSelectedFolders`, `isArchived`) and VM-to-host `/sessions/<processName>/...` path mapping heuristics. Reject its web file-serving code, `migrate` symlink command, in-place unarchive writer, and lossy audit parser.
+
+Identity / provenance
+- Repository: https://github.com/ericblue/cowork-explorer
+- GitHub API snapshot (2026-11-25): 3 stars, 1 fork, created 2026-03-06T04:11:51Z, pushed 2026-03-06T04:13:13Z, not archived, licenseInfo `mit`.
+- Local shallow checkout commit `293e35da4fa5bc9ba41e804e6ce513fda279dcad`, committed 2026-03-05 20:13:07 -0800 (`Initial commit`).
+- Local root `LICENSE` verified as MIT License (Copyright (c) 2026 Eric Blue).
+- Code layout: `cowork` (751-line Python CLI script without `.py` suffix), `cowork_web.py` (1,040-line stdlib `http.server` web UI), `Makefile`, `README.md`, `docs/PRD.md`. No package manifest, no automated test suite, and no CI workflows.
+- CodeGraph indexed 1 file (`cowork_web.py`, 31 nodes, 103 edges — `cowork` has no `.py` extension so it was skipped by CodeGraph); index status reports up to date. Kept `.codegraph/.gitignore` (`*`), removed only `!.gitignore`; `git status --short` is empty.
+
+Architecture & Claude Desktop 3P / Nexus scope assessment
+- Hard-coded legacy macOS standard Claude paths (`cowork:16-19,625-627`):
+  - Scans `~/Library/Application Support/Claude/claude-code-sessions` and `~/Library/Application Support/Claude/local-agent-mode-sessions` (overridable via `--data-path` on read commands, NOT on `migrate`).
+  - Zero support for Claude Desktop 3P (`~/Library/Application Support/Claude-3p/`), device `ant-did` + org scoping, 3P local Chat vs Cowork distinction, Windows, or Linux.
+- Unsafe `cmd_migrate` (`cowork:623-644`):
+  - Hard-codes `~/Library/Application Support/Claude` and creates a symlink `claude-code-sessions -> local-agent-mode-sessions`.
+  - On current Claude Desktop (standard and 3P), `claude-code-sessions` holds Desktop **Code** session metadata while `local-agent-mode-sessions` holds **Cowork** (and 3P Chat) sessions; symlinking them together conflates two distinct lanes and risks corrupting Desktop session stores.
+- Lossy `parse_audit` (`cowork:87-179`) and CLI/Web discrepancies:
+  - Silently drops all entries with `parent_tool_use_id` (subagent / nested tool turns).
+  - Silently drops all `tool_result` blocks (contradicting `docs/PRD.md:81`).
+  - Silently drops non-`text` user content blocks (images, attachments).
+  - Silently drops non-`success` `result` events (errors, max-turn stops, interrupts, compactions).
+  - Truncates thinking blocks (200 chars in CLI text, 2,000 chars in web UI) and Bash commands (80/100/120 chars); ignores `local_<uuid>/.claude/todos/*.json` despite documenting it in `docs/PRD.md:51`.
+  - `cmd_stats` (`cowork:481-558`) accepts `--format json` (`cowork:712`) but completely ignores `args.format` and prints human text.
+  - `cmd_unarchive` / `cmd_unarchive_all` (`cowork:585-616`) rewrite `local_<uuid>.json` directly in-place (`open(..., "w")`) with no backup, no dry-run, no confirmation, and no atomic write.
+  - `cmd_serve` (`cowork:663`) passes `args.data_path or DEFAULT_DATA_PATH` (`DEFAULT_DATA_PATHS[0]` = `claude-code-sessions`) to `make_handler`, bypassing dual-path discovery and crashing with `FileNotFoundError` when only `local-agent-mode-sessions` exists.
+- Cross-Harness migration gaps:
+  - Zero ChatGPT, Codex, Projects, Sections/Section Groups, branch/fork graphs, Skills, MCP, plugins, memory, permissions, schedules, or target session writers.
+
+Synthetic-only execution & reproduced defects/security vulnerabilities
+- Isolated test root `/private/var/tmp/nm-ericblue-306-probe` (fake `HOME`, synthetic UUIDs/titles/files, ephemeral `127.0.0.1` port; deleted after run; full literal outputs logged in `.verified306/logs/candidate-synthetic-tests.json`). Zero real Claude Desktop profiles, personal files, credentials, or gateways were accessed.
+- Syntax check: `py_compile.compile` passed for both `cowork` and `cowork_web.py`.
+- CLI happy paths (`list`, `list --format json`, `show --format json --thinking`, `export --thinking`, `search --format json`, `unarchive`, `unarchive-all`, `migrate`): all exited 0 against synthetic fixtures.
+- Reproduced functional defects:
+  1. `show --format json --thinking` confirmed `tool_result_preserved=False`, `subagent_parent_tool_use_preserved=False`, `image_block_preserved=False`, `error_result_preserved=False`.
+  2. `stats --format json` exited 0 but emitted plain text (`stats_format_json_is_valid_json=False`).
+  3. Default `cmd_serve` data path (`DEFAULT_DATA_PATH` = `claude-code-sessions`) raised `FileNotFoundError` when sessions lived solely in `local-agent-mode-sessions`.
+  4. `migrate` created symlink `claude-code-sessions -> local-agent-mode-sessions` in fake `HOME/Library/Application Support/Claude`; second run printed symlink-already-exists and exited 0.
+- Reproduced security vulnerabilities in `cowork_web.py` (`/api/file/<sid>`):
+  5. **Parent-directory over-broadening (`cowork_web.py:1017-1019`):** `allowed` includes `os.path.dirname(f)` for every `userSelectedFolders` entry. Requesting `/api/file/<sid>?path=/sessions/brave-otter-box/mnt/sibling-secret.txt` returned HTTP 200 with `SYNTHETIC_PARENT_DIR_SECRET` (a file outside `userSelectedFolders`, sitting in its parent fake-home directory — on a real macOS host where a user selected `~/Documents`, this exposes all of `~/`).
+  6. **Prefix-boundary path-traversal bypass (`cowork_web.py:1019`):** `real_path.startswith(os.path.realpath(d))` omits a trailing path separator (`os.sep` / `Path.is_relative_to`). Requesting `/api/file/<sid>?path=/sessions/brave-otter-box/mnt/../home-evil/prefix-escape.txt` resolved to `.../home-evil/prefix-escape.txt`, matched `.../home`, and returned HTTP 200 with `SYNTHETIC_PREFIX_COLLISION_SECRET`.
+  7. **Same-origin inline HTML execution (`cowork_web.py:1029-1030`):** Requesting `/api/file/<sid>?path=/sessions/brave-otter-box/mnt/selected-proj/poc.html` returned HTTP 200 with `Content-Type: text/html`, `Content-Disposition: inline; filename="poc.html"`, and `Content-Security-Policy: None`, allowing any HTML/SVG file in a workspace to execute JavaScript in the Cowork Explorer localhost origin.
+- Explicitly NOT tested / unverified:
+  - Live Claude Desktop standard or 3P macOS profiles, real VM mount points, and real `claude-code-sessions` vs `local-agent-mode-sessions` behavior.
+
+Nexus reuse boundary
+- Minor read-side schema reference only: Cowork sidecar metadata keys (`processName`, `userSelectedFolders`, `isArchived`) and VM `/sessions/<processName>/...` path mapping shape.
+- Strict negative lessons for Nexus architecture/security gates:
+  1. Never symlink or alias `claude-code-sessions` (Code) to `local-agent-mode-sessions` (Cowork/3P Chat).
+  2. Never check path containment with bare `str.startswith(realpath)` or allow `os.path.dirname(selected_folder)`; enforce `Path.resolve().is_relative_to(allowed_root.resolve())` strictly on explicit roots.
+  3. Never serve workspace HTML/SVG files inline on a local viewer origin without sandboxed CSP (`sandbox` / `Content-Disposition: attachment` / `X-Content-Type-Options: nosniff`).
+  4. Never drop `parent_tool_use_id`, `tool_result`, non-text blocks, or non-`success` results in canonical parsers; never mutate target JSON files non-atomically without backup and dry-run.

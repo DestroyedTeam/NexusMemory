@@ -1,0 +1,133 @@
+name: Release (macOS .app + Windows .exe + Agent Skill)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip pytest
+      - run: python -W error -m compileall -q src tests
+      - env:
+          PYTHONPATH: src
+        run: python -m pytest -q -p no:cacheprovider tests
+
+  build-macos:
+    needs: verify
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build native Swift macOS Nexus Memory.app
+        run: |
+          python packaging/macos/build_macos_app.py
+          codesign --verify --deep --strict "dist/Nexus Memory.app"
+          "dist/Nexus Memory.app/Contents/MacOS/nexus-memory-app" --self-test
+          mkdir -p release-assets
+          ditto -c -k --sequesterRsrc --keepParent "dist/Nexus Memory.app" "release-assets/Nexus-Memory-macOS-arm64.zip"
+          shasum -a 256 release-assets/Nexus-Memory-macOS-arm64.zip > release-assets/SHA256SUMS-macos.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-bundle
+          path: release-assets/*
+
+  build-windows:
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build & smoke-test standalone Windows NexusMemory.exe
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip pyinstaller
+          python -m PyInstaller --clean --noconfirm packaging/windows/nexus_memory.spec
+          & "dist/NexusMemory.exe" --self-test
+          & "dist/NexusMemory.exe" --cli matrix --from codex-cli --to antigravity | Out-Null
+          python -c @"
+          import json, subprocess, urllib.request
+          p = subprocess.Popen(['dist/NexusMemory.exe', '--server-only'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+          try:
+              info = json.loads(p.stdout.readline())
+              assert info['ready'] is True
+              with urllib.request.urlopen(info['url'] + 'api/health', timeout=10) as r:
+                  assert r.status == 200
+              print('WINDOWS_RELEASE_SMOKE_OK')
+          finally:
+              p.terminate()
+              p.wait(timeout=5)
+          "@
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          Copy-Item "dist/NexusMemory.exe" "release-assets/NexusMemory-Windows-x64.exe"
+          Compress-Archive -Path "dist/NexusMemory.exe" -DestinationPath "release-assets/NexusMemory-Windows-x64.zip" -Force
+          $h1 = (Get-FileHash "release-assets/NexusMemory-Windows-x64.exe" -Algorithm SHA256).Hash.ToLower()
+          $h2 = (Get-FileHash "release-assets/NexusMemory-Windows-x64.zip" -Algorithm SHA256).Hash.ToLower()
+          "$h1  NexusMemory-Windows-x64.exe`n$h2  NexusMemory-Windows-x64.zip" | Out-File -Encoding ascii "release-assets/SHA256SUMS-windows.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundle
+          path: release-assets/*
+
+  build-skill:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package self-contained Cross-Harness Agent Skill
+        run: |
+          mkdir -p /tmp/skill-stage/nexus-memory release-assets
+          cp -R skills/nexus-memory/* /tmp/skill-stage/nexus-memory/
+          mkdir -p /tmp/skill-stage/nexus-memory/lib
+          cp -R src/nexus_memory /tmp/skill-stage/nexus-memory/lib/nexus_memory
+          chmod +x /tmp/skill-stage/nexus-memory/scripts/run_nexus.sh
+          (cd /tmp/skill-stage && zip -rq "$GITHUB_WORKSPACE/release-assets/nexus-memory-skill.zip" nexus-memory)
+          sha256sum release-assets/nexus-memory-skill.zip | sed 's|release-assets/||' > release-assets/SHA256SUMS-skill.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skill-bundle
+          path: release-assets/*
+
+  publish:
+    needs: [build-macos, build-windows, build-skill]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Merge SHA256SUMS
+        run: |
+          cat artifacts/SHA256SUMS-*.txt > artifacts/SHA256SUMS.txt
+          rm -f artifacts/SHA256SUMS-*.txt
+          ls -la artifacts
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/Nexus-Memory-macOS-arm64.zip
+            artifacts/NexusMemory-Windows-x64.exe
+            artifacts/NexusMemory-Windows-x64.zip
+            artifacts/nexus-memory-skill.zip
+            artifacts/SHA256SUMS.txt

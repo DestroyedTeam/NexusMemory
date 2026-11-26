@@ -1,0 +1,33 @@
+# Candidate review: msking18/cognitive-personas (2026-11-22)
+
+## Snapshot and disposition
+
+- Pinned source: `msking18/cognitive-personas` at `1b4afc67b17020571f4c1db569f5ff666ad2d237` (`fix(friction-guard): omit unknown prompt/message fields in native Antigravity PreToolUse response`; local Git commit date 2026-11-20). GitHub showed 1 star / 0 forks, MIT, 28 commits, no releases, and no Git tags or `.github` workflow files in the pinned tree. `rtk gh run list --repo msking18/cognitive-personas --limit 10` returned `[]`. The candidate-index API snapshot's pushed_at was 2026-11-07; pinned Git history is newer, so the index metadata is stale for freshness.
+- This is a zero-dependency Node.js cognitive-persona framework (Node 22+), with three persona protocols and an Antigravity reference plugin. The documented Claude Code adapter copies `.claude/` output styles; other adapters are Cursor, Roo Code, and GitHub Copilot. It is not a Claude Desktop adapter.
+- It has no ChatGPT/Codex Project, Section/Session/transcript/branch/subtask/attachment/token graph, no Claude Desktop 3P Chat/Cowork/Code store adapter, and no MCP/plugin/memory/schedule migration. Keep persona instructions and read-only SessionStart hydration as adjacent ResourcePlane/behavior ideas only; do not treat this as migration code.
+
+## Implementation findings
+
+- `plugin/hooks.json` registers Antigravity `SessionStart` hydration and `PreToolUse` gating for `write_file|edit_file|run_command`.
+- `hydrate-pedagogy.js` reads `~/.ag-memory-mcp/global.db` read-only with `node:sqlite`, selecting at most five `category='pedagogy'` rows from `global_knowledge` or `global_memories`, and formats `systemMessage`/`injectSteps`. It can fall back to `.agents/pedagogy-profile.md`; it does not ingest a transcript, create/update memory rows, or migrate session state. `spec/agent-memory-v3.2-spec.md` is explicitly an RFC proposal for new tables/tools/lazy migration, not implemented code.
+- `friction-guard.js` has five regex risk categories, caches by `conversationId:category` for 24 hours, and writes the marker before emitting `ask`. Tests intentionally assert that a second different action in the same conversation/category returns `allow`. The hook receives no approval/denial result, so a prior denial cannot be distinguished from approval; the next matching call is still allowed. Malformed input and unexpected errors also fail open to `allow`.
+- Antigravity's current official Hooks docs distinguish `ask` (respects “Always Allow”) from `force_ask` (ignores cached permissions). This source emits `ask`, not `force_ask`.
+- Isolated dynamic repro (same synthetic `conversationId`, same temp marker directory; no destructive command was executed): first native payload stdout was `{"decision":"ask","reason":"CRITICAL RISK: Modifying high-blast-radius surface [DESTRUCTIVE_COMMANDS]. Before proceeding, have you engaged the Blast-Radius Critic or Sparring Teammate?"}`; second stdout was `{"decision":"allow"}`. Both Node processes exited 0 with empty stderr. This confirms the bypass state transition at the hook boundary; it does not claim to have exercised the Antigravity UI approval flow.
+- `scripts/sync-plugin.js` recursively force-copies the plugin over `~/.gemini/config/plugins/cognitive-personas` without backup/diff/rollback. It was inspected but not run against any user config.
+
+## Validation at pinned checkout
+
+- `rtk npm test` → exit 0; 30 passed, 0 failed, 0 skipped.
+- `rtk npm run lint-structure` → exit 0; 4 passed, 0 failed.
+- Runtime: Node.js v26.7.0. No install step was needed; package.json declares no runtime dependencies.
+- CodeGraph initialized and up to date: 9 files / 82 nodes / 146 edges. `.codegraph/.gitignore` retained with only the `!.gitignore` exception removed. Checkout status was clean after tests.
+- Antigravity GitHub Actions query returned no runs; this is not a CI pass. GitHub releases page reports no releases. No live app, account, session store, export, API key, plugin install or user data was accessed.
+
+## Primary sources checked (2026-11-22)
+
+- Repository: https://github.com/msking18/cognitive-personas
+- Pinned commit/diff: https://github.com/msking18/cognitive-personas/commit/1b4afc67b17020571f4c1db569f5ff666ad2d237
+- Releases: https://github.com/msking18/cognitive-personas/releases
+- Antigravity Hooks contract (`ask` vs `force_ask`): https://antigravity.google/docs/hooks
+
+Evidence boundary: pinned repository source/tests, isolated hook process repro, GitHub metadata, and current official Antigravity Hooks docs. No changes were made to the candidate checkout or any user-installed plugin/client.

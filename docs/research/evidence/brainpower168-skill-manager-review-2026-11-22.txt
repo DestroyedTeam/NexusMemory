@@ -1,0 +1,35 @@
+# Candidate #152 — brainpower168/skill-manager (2026-11-22)
+
+## Identity and provenance
+
+- Repository: https://github.com/brainpower168/skill-manager
+- Default branch `main`; isolated shallow checkout HEAD `830ca5d91818969088bde3b38c21ba9f60c2eaad`.
+- GitHub snapshot: MIT, 0 stars / 0 forks, 5 commits, no release page entries and no Actions runs/workflow.
+- CodeGraph initialized and verified: 2 Python files, 41 nodes, 77 edges. `.codegraph/.gitignore` retained; only its `!.gitignore` self-preserving exception was removed. Candidate `git status --short` remained empty.
+
+## Actual function and scope
+
+A 336-line single-file Windows CLI for centralizing one physical copy of each skill and creating junctions in per-agent global Skill folders. The README verifies Windows 10/11 + ZCode only; other agents are described as expected, and macOS/Linux symlinks are roadmap. Config contains one machine-specific Windows library and agent path set, and `CONFIG_PATH` is next to the script, so `agent add/detect` writes configuration into the cloned source directory rather than a user config location.
+
+The source has paths for ZCode, Qoder, CodeBuddy, WorkBuddy, OpenCode, DSH, Claude Code, Cursor, Codex, Windsurf, Trae, Kiro, Copilot, Gemini, etc. This is only a Skills-directory linker; the Claude path is `~/.claude/skills`, not Claude Desktop 3P Chat/Cowork/Code plugin/marketplace packaging. There is no project scope, ChatGPT Project/Section import, Session/message/branch tree, attachments, MCP/plugins, memory, schedule, or export/rollback schema. It is not a Nexus Memory migrator.
+
+## Runtime and safety probes (all temporary fixtures)
+
+- Source compile via Python 3.12.4 `compile()` — PASS. `python skill-manager.py --help` — exit 0, exposes only install/status/remove/agent/verify/library. No `tests/` directory, package metadata, CI workflow, release, or executable test suite was found. GitHub Actions page has no workflow runs. No real user configuration, agent directory or skill was touched.
+- **Arbitrary directory removal:** copied the script to a TemporaryDirectory, configured its central library as `<tmp>/library`, created `<tmp>/victim/important.txt`, then invoked `python skill-manager.py remove ../victim`. Exit 0, stderr empty, stdout `removed from library: <tmp>/library/../victim`; victim and sentinel were deleted. `cmd_remove()` joins an unvalidated CLI name to the library path then calls `shutil.rmtree()`. This confirms path traversal outside the skill library.
+- **Failed junction creation loses existing skill and lies about success:** copied the script/config to a TemporaryDirectory, made a real existing agent directory `agent-skills/demo`, set an existing library `library/demo` containing `old library skill`, and provided an incoming `demo` source. Put a temporary fake `cmd` executable first on PATH which returns exit 1 for the `mklink` invocation. Ran `install <incoming/demo> --force`. Command exit 0, stderr empty; stdout exactly `already in library: <tmp>/library/demo (skip copy)` then `[fixture] replaced real dir with link`. The old target directory and `SKILL.md` were deleted; no link was created; library still contained the old version, not the incoming one. The code deletes the existing real directory before link creation and ignores `make_junction()`'s false result. The POC is a simulated Windows `mklink` failure; no actual Windows runner was available.
+- **macOS ancestor-symlink false positive:** first force probe used `/var/folders/...`; the existing ordinary directory was reported `already linked` because `is_link()` falls back to `realpath(path) != abspath(path)`, and `/var` resolves to `/private/var` on this host. Corrected the fixture to use `Path(tempdir).resolve()`; then the simulated junction-failure data-loss behavior above reproduced. This is a separate portability defect: an ordinary path under a symlinked ancestor can be classified as a link.
+- **Existing library blocks updates:** in the force probe, incoming `demo` content was not copied when `library/demo` already existed; it printed “already in library … (skip copy)” and then linked (or attempted to link) the stale library content. There is no update/replace-library command.
+
+## Disposition
+
+Keep only as a low-priority Windows Skill ResourcePlane/junction concept reference. Do not reuse the current CLI as a safe installer: `remove` can delete arbitrary directories; `install --force` can irreversibly delete a real skill when junction creation fails while still returning success; path detection is vulnerable to symlinked-parent false positives; and checked-in configuration is machine-specific. It does not move any of the requested Projects/Section Groups/Sessions or associated resource graph.
+
+## Primary sources
+
+- Repository: https://github.com/brainpower168/skill-manager
+- Releases (none at review time): https://github.com/brainpower168/skill-manager/releases
+- Actions (no workflow runs at review time): https://github.com/brainpower168/skill-manager/actions
+- Pinned source: https://github.com/brainpower168/skill-manager/blob/830ca5d91818969088bde3b38c21ba9f60c2eaad/skill-manager.py
+- Pinned machine-specific config: https://github.com/brainpower168/skill-manager/blob/830ca5d91818969088bde3b38c21ba9f60c2eaad/config.json
+- Pinned README / stated Windows-only verification and macOS/Linux roadmap: https://github.com/brainpower168/skill-manager/blob/830ca5d91818969088bde3b38c21ba9f60c2eaad/README.md

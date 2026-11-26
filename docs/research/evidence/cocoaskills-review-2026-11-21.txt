@@ -1,0 +1,54 @@
+# CocoaSkills review — skill/MCP delivery, not conversation migration
+
+Date: 2026-11-21. Candidate: ivanopcode/cocoaskills (plural repository; do not conflate it with an unrelated older singular cocoaskill repo). Exact source checkout HEAD: 4dc5b0864f806872ad4791a5de65bdb2b5613a81; remote refs/heads/main matched. HEAD timestamp: 2026-11-17T22:45:26+04:00. License: Apache-2.0. GitHub's latest release page shows v0.23.0 (2026-11-13); the reviewed main HEAD is newer. Popularity counts are omitted because cached inventory and HTML snapshots disagreed.
+
+## Verdict
+
+Keep as a high-value adjacent reference for portable skills, reproducible dependency locks, MCP config declarations, ownership/drift protection, and transactional installation. Do not adopt it as Nexus Memory's session/project migration engine or claim native-session fidelity.
+
+Its core is a declarative Skillfile.json/lock and package installation graph. It places skills into six coding environments (Claude Code, Codex CLI, Cursor, Gemini, OpenCode, Windsurf); project MCP configuration covers only Claude Code, Codex CLI, and Cursor. It does not model ChatGPT Projects, Sections/groups, Claude Desktop Chat/Cowork/Code native conversation history, parent/child sessions, prompt edits/interruption chains, multimodal payloads, token accounting, scheduled tasks, or source-to-target conversation mapping.
+
+The clarified target includes Claude Desktop Chat, Cowork, and Code. This repository lists Claude Code, not Desktop Chat/Cowork modes. The Claude Code skill path may be reusable in a compatible Desktop Code workflow, but discovery is not inferred from CLI support and was not tested.
+
+## Source-level findings
+
+### Skill/package model
+- src/csk/adapters.py defines project outputs for Codex CLI (.codex/skills), Claude Code (.claude/skills), Gemini (.gemini/skills), and Cursor (.cursor/rules); OpenCode and Windsurf use native .agents/skills discovery. The canonical skill store is .agents/skills; project/global outputs are mirrors/links with a .csk-managed.json ownership record.
+- Skill manifests, dependency resolution, content digests, lock records, source trust, and checkout/project resolution are useful design material for Nexus's ResourceBundle/ResourceInstall layer. Project alias/branch/task/worktree/path identity describes installation scope, not a provider conversation/session ID.
+- Current OpenAI skill installation docs name .agents/skills as the Codex project location; CocoaSkills also mirrors to .codex/skills. Because it writes a canonical .agents/skills store too, this is not assumed to be a hard failure; validate discovery against the exact Codex build before depending on the mirror.
+
+### MCP behavior and boundary
+- src/csk/mcp_native.py defines exactly these project files: Claude Code .mcp.json, Cursor .cursor/mcp.json, and Codex CLI .codex/config.toml. src/csk/mcp_project.py limits targets to those three.
+- The project path plans declarations, asks for consent, compares native settings with an ownership ledger, preserves unknown/drifted settings, stages updates, and publishes through a transaction. This is a strong reference for idempotent config migration with ownership and rollback.
+- It writes/updates MCP definitions; it does not launch services, prove connectivity, authenticate an account, or transfer OAuth/API secrets. README distinguishes config delivery from server runtime/auth. There is no Claude Desktop Chat/Cowork Connector target in the adapter list.
+- src/csk/config.py defaults audit to disabled, backend null, and allow_cloud=false. Cloud audit is explicit opt-in; the pipeline rejects non-public sources and scrubs content before cloud requests. A configured command/Codex backend can be used; therefore do not claim every audit is local-only. None of this is a session export feature.
+
+### Safety / compatibility implications
+- Skills are executable instructions and may include launchers; content hashes, version pins, source trust, and review-before-install are useful. A manager does not make arbitrary skills safe.
+- MCP definitions may refer to env vars/credentials; migrating a declaration is distinct from re-authenticating in the destination. Nexus should export credential references/requirements, never secret values by default.
+- Keep skill bundles, adapter installs, MCP declarations, authenticated connector accounts, and conversation sessions as separate records. A skill/MCP profile may be a session dependency, not a substitute for its transcript/graph.
+
+## Local verification and limits
+- HEAD and git ls-remote origin refs/heads/main both returned 4dc5b0864f806872ad4791a5de65bdb2b5613a81; worktree status was clean. CodeGraph is current: 400 files, 18,713 nodes, 72,495 edges.
+- Relevant local suite (adapters, MCP native/config/ownership install, Skillfile lock, Skillspec, project resolver, config, audit backends, and source audit) exited 0: 1,311 passed, 4 skipped in 186.33 seconds.
+- tests/test_git_admission.py exited 0: 28 passed after supplying CI's exact released dependency relux-works/curator-spec@0ed5c691e9208eea52f21db2fc05e226ce3516fd.
+- tests/test_cli_golden_v1.py exited 0: 73 passed, 2 skipped after fetching full candidate history/tags; the original shallow clone lacked its historical fixture commit.
+- Full-suite attempts were not a pass. One interrupted after 38m44s with 9,434 passed, 216 skipped, 3 failed, 60 errors. The three git-admission failures were FileNotFoundError for pinned external vectors at a developer-only hard-coded path; many golden tests lacked history in the shallow clone. After supplying the pinned suite and full history, the affected files passed above, but we did not restart the multi-hour full suite. Another full run was intentionally stopped at 17% after visible external-fixture error markers.
+- Same-HEAD upstream Actions run #870 is marked failed after 4h40m53s. Its summary shows 8 errors: protocol shards p02–p05 and Ubuntu/macOS full conformance failed, Windows p01 timed out at 30m, and aggregate merge failed. Fast/build/type-check stages completed; detailed logs require sign-in, so root causes are not inferred. This is an adoption-readiness caveat, not proof the skill/MCP subset is defective.
+- No Claude/Codex/Cursor/Gemini client, MCP service, user credential, account, or personal session store was invoked. No provider-native import/export or Desktop Chat/Cowork/Code live session was tested.
+
+## First-party sources reviewed
+- Repository/README: https://github.com/ivanopcode/cocoaskills
+- Pinned commit: https://github.com/ivanopcode/cocoaskills/commit/4dc5b0864f806872ad4791a5de65bdb2b5613a81
+- Adapters: https://github.com/ivanopcode/cocoaskills/blob/4dc5b0864f806872ad4791a5de65bdb2b5613a81/src/csk/adapters.py
+- MCP project planning: https://github.com/ivanopcode/cocoaskills/blob/4dc5b0864f806872ad4791a5de65bdb2b5613a81/src/csk/mcp_project.py
+- MCP native surfaces: https://github.com/ivanopcode/cocoaskills/blob/4dc5b0864f806872ad4791a5de65bdb2b5613a81/src/csk/mcp_native.py
+- Audit defaults: https://github.com/ivanopcode/cocoaskills/blob/4dc5b0864f806872ad4791a5de65bdb2b5613a81/src/csk/config.py
+- Current release: https://github.com/ivanopcode/cocoaskills/releases
+- Same-commit CI: https://github.com/ivanopcode/cocoaskills/actions/runs/44170219763
+- OpenAI Codex skill install reference: https://developers.openai.com/api/reference/cli
+- Anthropic Desktop extensions and MCP setup: https://support.anthropic.com/en/articles/10065433-installing-claude-for-desktop
+- Anthropic remote MCP constraints: https://support.anthropic.com/en/articles/11503834-building-custom-integrations-via-remote-mcp-servers
+
+## Nexus Memory disposition
+Use CocoaSkills as one adjacent skills/MCP config adapter reference: normalize skill package + manifest + lock; pin source/content; separate adapter install state; diff native MCP config with ownership/drift protection; require consent and transactional rollback; preserve credential references, not values. Do not count it as a Projects/Sections/session migration implementation or a measured accuracy result. Continue the cross-Harness session corpus and independently test Claude Desktop Chat, Cowork, and Code.

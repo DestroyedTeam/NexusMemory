@@ -1,0 +1,31 @@
+# akhenda/inline-commenting-convention — source and capability review
+
+Date: 2026-11-22. Candidate #113 of the 303-name primary GitHub corpus. Scope is unchanged: ChatGPT Projects / Section Groups / Session tree for Destruction Era into local/self-hosted Claude Code and Claude Desktop third-party-gateway Chat, Cowork and Code modes. No real export, session, key, or target account was accessed.
+
+## Bound source and provenance
+- Repository: https://github.com/akhenda/inline-commenting-convention
+- Clone command: `rtk git clone https://github.com/akhenda/inline-commenting-convention.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-akhenda-inline-commenting-convention-20261122`; dispatcher-observed exit 0. Branch `main`, clean checkout, HEAD `f297c7d93a4b3d8d6f8c16997b9ed1c802d859b0`; commit date 2026-06-21 22:43:58 +03:00; 7 commits. MIT, GitHub page showed 1 star, 0 forks; no tags/releases and no pull requests.
+- Eight tracked files: README, SKILL.md, CHANGELOG, LICENSE, one before/after example, and AGENTS.md / CLAUDE.md snippets. No application code, tests, dependencies, harness manifests, data schema, or workflow configuration.
+
+## What it is / is not
+- The README describes a reusable, Codex-style skill for adding concise intent-focused code comments and JSDoc. It offers manuals for copying the skill to a Codex skills directory and copying snippets into repo instruction files for other harnesses. The canonical Skill covers code APIs, business rules, fallback/auth/session boundaries, race/timing guards and anti-overcommenting. The examples and snippets are human-readable instruction content.
+- “Cross-harness” describes portable prose/manual copy, not an automatic adapter: there is no automatic discovery/install, plugin/MCP interface, profile/config converter, version negotiation, or no-AI transformation. Any effect depends on the target agent loading and following the instructions. A `CLAUDE.md` snippet may support a coding repository workflow but is not a Claude Desktop Chat/Cowork/Code session adapter.
+- No ChatGPT export parser, Project/Section/Session hierarchy, conversation/branch/subtask graph, attachment/media transfer, token accounting, memory/schedule migration, target restore writer, or local Claude Code session importer exists. References to “session boundaries” and “migration compatibility” are comment topics, not migration behavior.
+- Positive fit: narrow optional Instruction/Skill ResourcePlane reference for coding conventions (public API JSDoc and intent comments). Poor fit for the requested data portability product; do not treat as a migration dependency or accuracy evidence.
+
+## Local checks and upstream maintenance
+- `rtk proxy python3 - <<'PY' ... yaml.safe_load(SKILL.md frontmatter) ... PY` exited 0; parsed name `inline-commenting-convention`, name matched repository, description 567 characters. This is a metadata parse only, not a behavior test.
+- Product tests: not applicable because repository contains no executable product code or test files. No CI workflow or Actions run was observed. GitHub’s PR listing showed 0 open / 0 closed PRs, and Releases page showed no releases. No benchmark or runtime behavior was run.
+- GitHub’s current pinned README says to copy the snippets manually into instruction files on harnesses without Codex Skills. The repository page reports 1 star / 0 forks and 7 commits; latest pinned commit is dated 2026-06-21. Treat these as repository activity signals only, not quality proof.
+
+## CodeGraph and correction ledger
+- First `rtk codegraph init --yes <repo>` exited 1: `error: unknown option '--yes'`. Corrected command `rtk codegraph init <repo>` exited 0 but reported `No files found to index` because the candidate is documentation-only. After retaining `.codegraph/.gitignore` and removing its `!.gitignore` exception, `rtk codegraph status <repo>` exited 0 and reported 0 files/nodes and an up-to-date empty index. Targeted reads/searches of the eight tracked files were used; no indexed code is claimed.
+- Targeted phrase search over README/SKILL/examples/snippets found “session” and “migration” only as code-comment subjects (e.g. session boundaries and migration compatibility); no session data migration feature.
+
+## Primary sources
+- Pinned README: https://github.com/akhenda/inline-commenting-convention/blob/f297c7d93a4b3d8d6f8c16997b9ed1c802d859b0/README.md
+- Pinned skill: https://github.com/akhenda/inline-commenting-convention/blob/f297c7d93a4b3d8d6f8c16997b9ed1c802d859b0/SKILL.md
+- Official repository metadata: https://github.com/akhenda/inline-commenting-convention
+- Actions: https://github.com/akhenda/inline-commenting-convention/actions
+- Pull requests: https://github.com/akhenda/inline-commenting-convention/pulls
+- Releases: https://github.com/akhenda/inline-commenting-convention/releases

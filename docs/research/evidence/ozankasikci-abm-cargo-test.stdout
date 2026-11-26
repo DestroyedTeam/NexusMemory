@@ -1,0 +1,51 @@
+
+running 30 tests
+test browser::tests::visible_profiles_allow_extensions_but_headless_and_transfer_launches_disable_them ... ignored, real Chrome extension launch policy; requires macOS and a free managed port
+test browser::tests::listener_audit_rejects_wildcard_wrong_pid_and_unexpected_address ... ok
+test browser::tests::parses_machine_readable_lsof ... ok
+test cdp::tests::discovery_respects_content_length_without_waiting_for_eof ... ok
+test cdp::tests::navigation_is_restricted ... ok
+test ownership::tests::labels_do_not_grant_access_and_tabs_cannot_be_stolen ... ok
+test cdp::tests::rejects_remote_and_wrong_port_endpoints ... ok
+test profile::tests::rejects_unsafe_names ... ok
+test mcp::tests::frame_limits_and_argument_validation ... ok
+test config::tests::checked_in_templates_are_valid_and_cover_the_fixed_profiles ... ok
+test config::tests::generated_configs_parse_and_do_not_invoke_a_runtime ... ok
+test store::tests::rejects_populated_symlink_and_loose_permissions ... ok
+test transfer::tests::cookie_conversion_preserves_session_flags_and_omits_opaque_partitions ... ok
+test mcp::tests::protocol_handshake_and_notifications ... ok
+test store::tests::refuses_symlink_or_hardlinked_state ... ok
+test store::tests::private_and_idempotent ... ok
+test profile::tests::corrupt_registry_cannot_alias_an_existing_profile ... ok
+test transfer::tests::extraction_rejects_traversal_links_special_files_and_size_bombs ... ok
+test profile::tests::refuses_unknown_existing_directories_and_reserved_ports ... ok
+test transfer::tests::multiple_internal_profiles_keep_separate_cookie_jars ... ignored, real Chrome transfer across internal profiles; requires macOS and free ports
+test transfer::tests::rejects_bad_manifest_and_unsafe_passphrase_files ... ok
+test profile::tests::named_profiles_keep_private_directories_and_stable_ports ... ok
+test browser::tests::forged_record_cannot_stop_an_unrelated_process ... ok
+test transfer::tests::git_exports_require_an_ignored_directory_and_untracked_archive ... ok
+test transfer::tests::compact_exports_omit_rebuildable_data_and_preserve_site_and_extension_storage ... ok
+test transfer::tests::export_excludes_runtime_links_and_rejects_other_symlinks ... ok
+test transfer::tests::legacy_native_host_registrations_are_not_installed_on_a_new_machine ... ok
+test transfer::tests::imports_legacy_and_compressed_archives_with_the_same_profile_data ... ok
+test transfer::tests::encryption_round_trip_rejects_wrong_password_tampering_and_truncation ... ok
+test transfer::tests::compressed_archives_reject_bad_checksums_trailing_members_and_expansion_bombs ... ok
+
+test result: ok. 28 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2.15s
+
+
+running 2 tests
+test encrypted_whole_profile_transfer_preserves_cookie_and_site_storage ... ignored, real Chrome encrypted transfer; requires macOS and free managed ports
+test three_profiles_mcp_ownership_and_persistence ... ignored, launches real Chrome; requires macOS and free ports 9222, 9223, 9224
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test racing_profile_registration_keeps_one_name_and_one_port ... ok
+test removing_a_default_archives_data_and_survives_setup ... ok
+test named_config_routes_all_clients_to_the_registered_profile ... ok
+test removal_refuses_locks_and_keeps_other_named_profiles ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+

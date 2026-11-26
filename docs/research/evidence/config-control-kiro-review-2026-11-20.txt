@@ -1,0 +1,70 @@
+NEXUS MEMORY — candidate review evidence
+Candidate: kirodotdev-labs/config-control-kiro
+Review date: 2026-11-20 (Asia/Shanghai)
+Disposition: KIRO_LOCAL_CONFIG_SESSION_METADATA_AND_MEMORY_REFERENCE_NOT_CROSS_HARNESS_MIGRATOR
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/kirodotdev-labs/config-control-kiro
+- Local source checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-kirodotdev-labs-config-control-kiro-20261120
+- Reviewed commit and remote HEAD: 580d2df3f2edafe4d7b979fbd249901cc5ddf346 (2026-11-12, Config Control for Kiro 3.0.0).
+- Release: v3.0.0, released 2026-11-12. License: Apache-2.0.
+- `rtk git -C <checkout> status --short` exited 0 with empty stdout after CodeGraph's `.codegraph/.gitignore` self-preserving exception was removed.
+- `rtk git -C <checkout> ls-remote origin HEAD` returned 580d2df3f2edafe4d7b979fbd249901cc5ddf346.
+- GitHub Actions Build and Test #41 passed on the reviewed commit; CodeQL scheduled workflow #67 succeeded 2026-11-13. These are upstream CI results, separate from local tests.
+- README toolchain: Go 1.25+ and Node.js 22+.
+
+PRODUCT / SCOPE
+- A local browser UI backed by a single Go binary, listening on localhost, for Kiro CLI V3 configuration.
+- Global scope: `~/.kiro/`; workspace scope: `<project>/.kiro/`.
+- Manages Kiro agents, MCP configuration/tool discovery, permissions/sandbox, hooks, steering, skills, prompts, specs/workflows, powers, ACP, code intelligence and settings. Skill import paths are local-folder or GitHub-to-Kiro, not general cross-harness sync.
+- This app is a Kiro-native configuration manager and chat dashboard, not a cross-platform migration engine; its `Workspace` path is not a ChatGPT Project, Section Group or session container.
+
+SESSION / GRAPH SOURCE REVIEW (CodeGraph current: 339 files, 4,270 nodes, 11,299 edges)
+- `internal/sessions/store_v3.go` states that Kiro V3 chats are under `<home>/sessions/<folder key>/sess_<id>/`, with `session.json` and `messages.jsonl`; local index journals mark added/removed chat paths.
+- V3 parser only reads metadata and metering. `Session` includes ID/title/folder/engine/time, agent/model, message count, running state, context-use/credits, parent ID and resume command. It counts user events, reads credit usage summaries/context percentages and never reads prompt text, assistant response text or tool results into the app's chat list.
+- V3 `parentSessionId` with `createdReason=subagent` is a parent/subagent link. `createdReason=tangent` or `rewind` becomes `Kind + BranchOf` rather than subagent containment. Parent chat credit totals include subagent chat credits.
+- V2/classic listing delegates to `kiro-cli chat --list-sessions --all-cwds --format json`; local legacy usage is read under `<home>/sessions/cli/<id>.json`.
+- `dashboard-meta.json` supplies local V3 bookmark/title/Kiro-native tags, read-only. `dashboard.apply` looks up the `v3\0local\0` key only. Tests verify a remote dashboard entry is not applied. App-local tags live separately in `<global>/kiroui/chat-tags.json` and do not change Kiro's chat tags.
+- `resumeCommand` constructs `kiro-cli chat [engine flag] --resume-id <id>`; no Session archive writer/loader or transcript-conversion API is implemented in the app's routes.
+- Kiro memory is a separate resource model: local shared/account SQLite stores; `USER_PREFERENCE` / `SEMANTIC` types and `Global` / repository scopes. List is read-only; create/update/delete are called through Kiro's `_kiro/memory/*` ACP methods so Kiro validates and writes the memory. It is not a generic memory import/export mechanism.
+
+CLOUD / EXPORT BOUNDARY
+- Official Kiro CLI docs state local sessions can be saved/loaded with `/chat save` and `/chat load`, while those archive commands are unavailable for cloud sessions.
+- Official docs distinguish Cloud sessions in the account's remote store from the local per-directory session database; Cloud sessions can resume from another machine.
+- The reviewed app's local V3 reader scans local Kiro-home session folders and applies local-only dashboard metadata. It has no explicit cloud/remote field or Cloud archive adapter. The app delegates V2/classic listing to `kiro-cli`; whether that command returns remote Cloud rows in all supported versions was not tested. Therefore do not state that Config Control can export, import, or migrate Cloud transcripts.
+- No ChatGPT/Codex Project/Section reader, parent/fork/turn transcript converter, attachment export, image/link/tool-output preservation, token-history conversion, scheduled-task migration, or Claude/Claude Code Cloud writer was found.
+
+LOCAL TOOLCHAIN / TESTS
+- Local host is macOS ARM64 (`rtk proxy uname -m`: `arm64`).
+- Initial `rtk proxy go version` exited 1: `rtk: Failed to execute command: go: No such file or directory (os error 2)`. Node was v26.7.0; npm was 11.19.0.
+- Downloaded the official Go 1.27.4 Darwin ARM64 tarball to `/tmp` only. SHA-256 observed: `91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4`, matching the official Go download listing. Extracted to `/tmp/nm-go1.27.4/go`; `go version` returned `go version go1.27.4 darwin/arm64`. GOPATH, GOMODCACHE and GOCACHE are all under `/tmp`; no global Go installation or source modification.
+- Go command: `rtk proxy env GOROOT=/tmp/nm-go1.27.4/go GOPATH=/tmp/nm-go1.27.4/gopath GOMODCACHE=/tmp/nm-go1.27.4/pkg/mod GOCACHE=/tmp/nm-go1.27.4/cache GOTOOLCHAIN=local PATH=/tmp/nm-go1.27.4/go/bin:$PATH go test -race ./internal/... ./tools/... -count=1 -timeout 120s`. Exit 0; all listed packages passed, including `internal/sessions`, `internal/memory`, `internal/mcp`, `internal/server`, and `tools/updatesign`.
+- `rtk npm ci --ignore-scripts --no-audit --no-fund` exited 0: 365 packages installed. npm warned eslint@9.39.5 is no longer supported.
+- `rtk npm test` exited 0: 51 tests passed, 0 failed.
+- `rtk npm run build` exited 0; Vite transformed 12,447 modules. Vite emitted a chunk-size warning: main JS chunk 702.00 kB exceeds the 600 kB default warning threshold.
+- First `rtk npm audit --audit-level=high` exited 1 because configured `https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk` answered `[NOT_IMPLEMENTED]` / 404. Corrected by selecting the official npm registry without changing user npm configuration: `rtk npm audit --registry=https://registry.npmjs.org --audit-level=high` exited 0, literal summary `found 0 vulnerabilities`.
+- Frontend tests and Go tests use synthetic/unit fixtures and fake Kiro CLI runners. No Kiro CLI process, account, personal Kiro home, chat store, or cloud session was opened.
+
+OBSERVED REVIEWER TOOL ERRORS / CORRECTIONS
+- A CodeGraph node call initially failed process creation with `No such file or directory (os error 2)` for the checkout workdir; `rtk ls <checkout>` showed it existed, and the same node call retried from that workdir succeeded (the process-creation error was transient).
+- `rtk git status --short` from `/Users/vincentadamnemessis/NexusMemory` exited with `fatal: not a git repository`; corrected to `rtk git -C <source checkout> status --short`, exit 0, clean.
+- `rtk read .github/workflows/ci.yml` failed because the workflow file was not at that assumed path; official Actions page and repository CI run #41 were used as the workflow result source.
+- `rtk codegraph node internal/memory/editor.go` found no indexed file; corrected actual file name is `internal/memory/edit.go`, whose source was inspected.
+- First npm audit hit an unsupported configured registry; corrected command against registry.npmjs.org passed as detailed above.
+
+NEXUS RECOMMENDATION
+- Keep this project as a Kiro-specific configuration/session-metadata/memory adapter reference.
+- If Nexus later supports Kiro as a source, preserve local V3 session archive and source events; model `subagent` and `tangent`/`rewind` separately; keep Kiro Memory scopes and app-local tags distinct; don't claim the app's chat dashboard migrates conversations or Cloud history.
+- The corrected user's specific project/session target remains **Destruction Era**; this review did not access or migrate it.
+
+PRIMARY SOURCES
+- Repository / Apache-2.0: https://github.com/kirodotdev-labs/config-control-kiro
+- Release v3.0.0: https://github.com/kirodotdev-labs/config-control-kiro/releases/tag/v3.0.0
+- V3 session parser: https://github.com/kirodotdev-labs/config-control-kiro/blob/580d2df3f2edafe4d7b979fbd249901cc5ddf346/internal/sessions/store_v3.go
+- Session model/listing: https://github.com/kirodotdev-labs/config-control-kiro/blob/580d2df3f2edafe4d7b979fbd249901cc5ddf346/internal/sessions/service.go
+- Dashboard data: https://github.com/kirodotdev-labs/config-control-kiro/blob/580d2df3f2edafe4d7b979fbd249901cc5ddf346/internal/sessions/dashboard.go
+- Kiro session save/load and cloud boundary: https://kiro.dev/docs/cli/chat/session-management/
+- Kiro nested tangents: https://kiro.dev/docs/cli/chat/tangent/
+- Kiro Cloud session model: https://kiro.dev/docs/cloud-sessions/
+- Upstream CI: https://github.com/kirodotdev-labs/config-control-kiro/actions
+- Official Go downloads/checksums: https://go.dev/dl/

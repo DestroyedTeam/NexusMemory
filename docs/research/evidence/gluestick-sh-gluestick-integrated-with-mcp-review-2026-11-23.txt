@@ -1,0 +1,31 @@
+# Candidate #172 — gluestick-sh/gluestick-integrated-with-mcp
+
+Review date: 2026-11-23. Pinned public checkout: `main` HEAD `9d02da15c26c6efd27023aacac0d4cb7acbad8f0` (2026-10-26, `fix(install): add ValueFromPipeline to Expand-* helper -Path params`). MIT; Go; public page at review time reported 0 stars/forks and no releases. CodeGraph initialized and up to date (460 files, 5,941 nodes, 15,447 edges); checkout remained clean.
+
+## What it is / destination fit
+
+This is explicitly a **Windows-only, Scoop-compatible package manager**, with a shared Go core/CLI/shim and JSON-first CLI plus stdio MCP server. The official MCP guide lists Claude Desktop alongside Claude Code, Cline, Cursor and VS Code Copilot Chat as clients; configuration runs a local binary via `command` + `args: ["mcp"]`, not a hosted Claude API-key gateway. It provides no ChatGPT/Codex Project, Section Group, conversational Session/parent-child/fork, transcript, image/attachment/link/token, Skills bundle, MCP/plugin export, memory, schedule, Claude Desktop third-party-gateway Chat/Cowork/Code history, or local/self-hosted Claude Code history importer. Its runtime manages Windows apps and Scoop buckets, not Harness state.
+
+## Useful adjacent implementation ideas
+
+The source advertises 14 `glue_*` MCP tools, shared with the CLI engine, typed JSON inputs/results, stable exit codes, and per-client registration examples. Write operations normally produce a persisted random confirmation token with a five-minute TTL; `glue_confirm` consumes it once, re-evaluates policy at execution, and logs source/client actor. Deny/protected rules are evaluated before auto-confirm; `agent.auto_yes` or policy mode `auto` skips confirmation. This is a useful local MCP registry/configuration and policy/audit reference, not a session migration protocol. Auto-confirm is a deliberate configuration bypass that a Nexus-style tool should expose as an explicit risk choice.
+
+## Verification ledger
+
+- Exact source identity: `rtk git rev-parse HEAD` → `9d02da15c26c6efd27023aacac0d4cb7acbad8f0`; `rtk git status --short` → empty. `rtk codegraph status .` → 460 files, 5,941 nodes, 15,447 edges; up to date. `.codegraph/.gitignore` contains only `*` (the required self-exception was removed).
+- GitHub Actions run #11 for this exact commit: **Success**, 3m24s; workflow executes `go vet ./cli/... ./core/... ./shim/...`, builds all modules and runs `go test ./cli/... ./core/... ./shim/...` on `windows-latest`. Two warnings were shown: actions/checkout@v4 and setup-go@v5 moved from Node 20 to Node 24; setup-go cache restore could not find a root `go.sum` because this repository uses a Go workspace. Logs require sign-in, so no per-test Windows output was independently available.
+- Local supported-target build check: `GOOS=windows GOARCH=amd64 go build ./cli/... ./core/... ./shim/...` using Go 1.27.4 exited 0. This is a cross-build, not a Windows runtime test.
+- Local documented full test command `go test ./cli/... ./core/... ./shim/...` on `darwin/arm64` exited 1: Windows-only junction/current-link and backslash-path tests fail as expected on this host; `cli/glue` also fails native compilation because `ensureUserPathFront` and `prependDirToProcessPath` are only implemented in Windows files. The README explicitly says production use is Windows-only.
+- Targeted `go test ./core/engine -run ^TestAuditConcurrentAppends_chainIntact$ -count=1` on macOS exited 1: concurrent JSONL audit verification broke at entry 2 with `previous hash mismatch`. Source pins the cause boundary: `audit_lock_other.go` implements the non-Windows file lock as a no-op; Windows uses `LockFileEx`. Record this as an unsupported-platform/portability caveat, not evidence of a Windows-runtime defect. The comment saying no-op supports portable tests is not borne out by this concurrent test on macOS.
+- MCP source test file has tests for default confirmation, one-time/restart-persistent tokens, expiry, deny/protected rules, held packages, auto-yes, actor/audit fields and destructive bucket removal. These were not run natively because the CLI package is Windows-specific; the successful Windows CI run executes the module test command. No actual install, API-key request, third-party account, local `.glue` root or user session was touched.
+
+## Disposition
+
+**Reject as a cross-Harness session/project migration candidate.** Retain only as an adjacent reference for local stdio MCP registration, client config differences, typed command contracts, approval tokens and auditable policy. The README's Claude Desktop snippet proves server setup only; it does not transform ChatGPT/Codex Projects or Sessions and does not implement the user-confirmed Claude Desktop Chat/Cowork/Code third-party-gateway tracks or local Claude Code history.
+
+## Primary source references
+
+- Repository README and platform/build contract: https://github.com/gluestick-sh/gluestick-integrated-with-mcp
+- Pinned MCP guide and client configuration: https://github.com/gluestick-sh/gluestick-integrated-with-mcp/blob/9d02da15c26c6efd27023aacac0d4cb7acbad8f0/docs/mcp.md
+- Exact successful Actions run #11: https://github.com/gluestick-sh/gluestick-integrated-with-mcp/actions/runs/40323461341
+- Pinned workflow: https://github.com/gluestick-sh/gluestick-integrated-with-mcp/blob/9d02da15c26c6efd27023aacac0d4cb7acbad8f0/.github/workflows/build-test.yml

@@ -1,0 +1,48 @@
+# davidjamesshelley-netizen/skillpack — README-only candidate screen (2026-11-23)
+
+## Identity and provenance
+
+- Repository: https://github.com/davidjamesshelley-netizen/skillpack
+- Isolated shallow checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-davidjamesshelley-netizen-skillpack-20261122`
+- Captured `main` HEAD: `bfe9f5407a100f75e6c4dcb66b5fe9f8a8e4c151`; commit date 2026-03-28; subject `feat: initial SkillPack specification`.
+- `git rev-list --count HEAD` returned `1`; `git ls-tree -r --name-only HEAD` returned only `README.md`; no tag, source, package manifest, tests, CI workflow, or LICENSE file is present in the checkout. GitHub showed 0 stars / 0 forks and one commit. Candidate's local tree was not modified; after CodeGraph cleanup, `git status --short` was empty.
+- Repository API inventory has `license_spdx: null`; README's closing section claims “Apache 2.0 License,” but a license text is absent, so the license is unverified.
+- CodeGraph initialization (`rtk codegraph init .`) exited 0 and found no source files; status: 0 files, 0 nodes, 0 edges. An initial `rtk codegraph init --yes .` attempt exited 1 because this CodeGraph CLI does not accept `--yes`; corrected to the supported `rtk codegraph init .`.
+
+## What the README proposes—and what it does not prove
+
+The README is a product proposal/specification for a versioned package manager and registry for agent Skills. It sketches a hypothetical `skillpack.json` with name/version/dependencies/compatibility/inputs/outputs, describes private/public registries and caches, and lists future CLI commands and a week-by-week roadmap. It does not contain an implementation of those features, a defined machine-validated schema, compatibility tests, package-resolution code, signature verification, or adapter behavior.
+
+There is no ChatGPT/Codex Project or Section representation, native Session/conversation/event/fork graph, transcript parser/writer, attachment/artifact store, token/cost tracking, schedule migration, memory transfer, API integration, target Harness installer, loss report, transactional apply, or rollback implementation. The only Claude Code and OpenClaw snippets are illustrative text in README. No Claude Desktop third-party-gateway Chat/Cowork/Code handling or local Claude Code CLI session migration is evidenced.
+
+## Package identity collision check
+
+Because the README tells users to run `npm install -g skillpack`, package identity was checked without installing or executing anything:
+
+```text
+Command: rtk npm view skillpack name version description repository.url license dist-tags --json
+Exit: 0
+Stdout:
+{
+  "name": "skillpack",
+  "version": "0.1.3",
+  "description": "Package manager for skills.sh - batch install skills to AI agents",
+  "repository.url": "git+https://github.com/joventuraz/skillpack.git",
+  "license": "MIT",
+  "dist-tags": { "latest": "0.1.3" }
+}
+```
+
+The current npm `skillpack` package points to a different repository (`joventuraz/skillpack`) than this README-only repository. Do not infer it implements this repo's proposal or install it as its counterpart without a direct, verified maintainer/provenance relationship. No package was downloaded or run.
+
+## Nexus Memory disposition
+
+Classify as `screened_readme_only_spec_no_implementation`. It is not an implementation candidate and cannot be credited as a compatible Harness, session, project, Skill, MCP, or API-key adapter. The proposed dependency/version/compatibility metadata fields may be retained only as unvalidated product-design ideas. Reject its purported CLI and registry behavior as evidence until a repository with code, license text, package provenance, tests, and actual adapter conformance exists.
+
+The four Claude destination tracks remain separate: `desktop-3p/chat`, `desktop-3p/cowork`, `desktop-3p/code`, and `claude-code-local`. A README-only package manager provides no session fidelity or mode-level evidence.
+
+## Sources
+
+- Pinned [README at the captured commit](https://github.com/davidjamesshelley-netizen/skillpack/blob/bfe9f5407a100f75e6c4dcb66b5fe9f8a8e4c151/README.md)
+- [GitHub repository page](https://github.com/davidjamesshelley-netizen/skillpack)
+- [npm `skillpack` metadata page](https://www.npmjs.com/package/skillpack); exact metadata was queried through the npm CLI, not by installing the package.

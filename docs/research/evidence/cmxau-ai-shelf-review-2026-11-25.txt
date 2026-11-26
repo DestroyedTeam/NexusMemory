@@ -1,0 +1,45 @@
+# Candidate #273 — cmxau/ai-shelf (2026-11-25)
+
+## Decision
+**Useful local session-shelf / manager prior art; not a cross-Harness migration system.** The app reads selected local coding-agent stores, groups sessions by working directory, previews/searches them, and resumes them through local CLIs. It has no session import or native session writer. Its export/import path is for a token-usage ledger; its Markdown transcript export is lossy and does not restore a session. It is not applicable to ChatGPT/Codex App Projects/Section Groups or Claude Desktop Chat/Cowork/Code through a third-party gateway.
+
+## Identity, provenance, and verification
+- Repository: https://github.com/cmxau/ai-shelf
+- Pinned shallow-clone HEAD: `cd752daef4220e22edf48f70d0deb5aad61b9b03` (`2026-11-09T20:18:43+05:30`, merge of PR #6); version `1.0.0`; MIT.
+- Clone path: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-cmxau-ai-shelf-20261125-followup273`; actual clone exited 0. CodeGraph initialized and current: 17 files, 454 nodes, 1,128 edges. `.codegraph/.gitignore` was retained and its `!.gitignore` exception removed as required; candidate checkout `git status --short` was clean afterward.
+- On macOS 27.3 / Swift 6.4 / swift-format `main`, `xcrun swift-format lint --strict Sources/*.swift` exited 0 with empty output; `./build.sh` exited 0 and emitted `Built: .../AI Shelf.app`. No application was launched and no real session store, account, provider, or API key was used.
+- Repository docs state there is no automated test suite; its CI runs lint and build. Documentation also explicitly says Codex and Gemini readers have not been tried on real sessions. Build/lint are not evidence of session fidelity.
+
+## What it actually reads and does
+AI Shelf is a native SwiftUI macOS 26 application and describes itself as a local session browser. The API/architecture docs enumerate these direct local-file readers:
+
+| Host/store | Observed scope | Session operations / limitations |
+|---|---|---|
+| Claude Code | `~/.claude/projects/<encoded-project>/<session>.jsonl` plus optional per-session directory/subagent files | Lists one row per session under a decoded `cwd`; resumes with `claude --resume`; preview/search and simplified Markdown export. Fix Path rewrites `cwd` and renames the Claude history directory. Subagent files contribute to usage totals, not an exposed parent/child task tree or complete transcript export. |
+| Antigravity | Local SQLite `conversation_summaries.db`, `conversations/<id>.db`, and `brain/<id>/` | Reads summary title/preview and workspace URI; resumes via `agy --conversation`. Conversation payload DB/brain are binary and are not parsed or transcript-exported. |
+| Codex CLI | `~/.codex/sessions/**/rollout-*.jsonl` | Uses `session_meta.cwd/id` and first `user_message`; resume via `codex resume`. This is the CLI rollout store, not ChatGPT/Codex App Projects/Sections. Docs say this reader was based on vendor-published source and is not real-session tested. |
+| Gemini CLI | `~/.gemini/tmp/<project>/chats/session-*` plus `.project_root` | Extracts visible text and resumes via `gemini --resume`; docs likewise say the reader is not real-session tested. |
+| OpenCode, Aider, Goose, Amp, Cursor Agent, Copilot, custom commands | Known working folders / configured launch command only | No history reader, session preview, transcript export, or native session migration. |
+
+The UI model is a two-level project-folder → session-row tree. `loadAll` groups records by filesystem working directory, not by vendor Project, Section Group, parent task, fork, branch, active node, or schedule. There is no source-to-target mapping layer, public network API, plugin interface, cross-host restore, or ChatGPT export reader.
+
+## Fidelity and data-transfer matrix
+- **Session contents:** preview uses first/last visible user/assistant messages. The Markdown exporter emits a title/path/agent/date header and plain `You`/`Assistant` text. The source `transcript()` filters to selected text/message record types; it does not serialize original JSONL/event bytes or tool-call state. Attachments, images, binary content, hidden/internal events, token event sequencing, identifiers, and native execution state are not reconstructed. Antigravity cannot export a transcript at all.
+- **Session identity and topology:** no portable archive format, stable cross-host identity mapping, section/project group representation, parent/subtask graph, branch DAG, fork cursor, or schedule migration. Grouping by `cwd` is display organization, not semantic project fidelity.
+- **Stats:** `StatsExport` (`app=ai-shelf`, version 1) transfers a ledger of file-keyed usage totals and aggregate metadata (`size`, `mtime`, dates, model counts, project path, agent). Import validates/merges that ledger; it does not contain conversation content. Optional shared-folder sync writes the same stats format, not session histories.
+- **Local metadata:** pins, notes, UI preferences, active agent/terminal and other settings are local preferences; no cross-Harness import/export is documented. Skills, MCP servers, plugins, memory, context, provider configuration, and scheduled tasks are not transferred.
+- **Claude Desktop / custom gateways:** the repo is a local CLI-history app. It has no Claude Desktop Chat/Cowork/Code store adapter, no desktop client session importer, and no documented test for third-party gateways. The fact that local Claude Code logs can be read is not evidence that API-key/gateway-specific history is compatible.
+
+## Security and operational limits
+- The app runs with the user's full macOS permissions, is not App-Sandboxed, unsigned, and not notarized. It reads hidden agent histories and can trash/permanently delete files, modify the Antigravity summary database, rewrite Claude `cwd`, and launch CLI tools. Default delete behavior is Trash with confirmation and the source contains root-containment checks, safe ID checks, and shell quoting; these protections reduce risk but do not make a history migrator.
+- README says no telemetry and describes network traffic for public vendor-price retrieval and GitHub update checks only. This product does not make model/provider/API-key requests.
+- The updater restricts HTTPS hosts, checks bundle identity and optional release digest; the docs acknowledge it has no code-signature verification.
+
+## Fit and recommendation
+- Migration fidelity: **0/5** for the stated Destruction Era / Project-Section / cross-Harness restore objective.
+- Local session inventory/resume UX: **4/5** as a narrow Mac-only utility/reference; it supplies practical per-host local paths, session browsing/search, previews, resume commands, and usage summaries.
+- Adapter-architecture reuse: **limited**. The host-specific readers and `Project`/children UI may inform a future local inventory connector, but this single SwiftUI app has no generic Harness capability schema, migration manifest, writer, or round-trip/fidelity validator.
+- Disposition: **do not count as migration coverage or reuse its transcript exporter as a backup format.** Keep only as adjacent UX/path-inventory reference; any future adapter reuse needs separate schema versioning, explicit platform/host capabilities, source-byte preservation, branch/asset tests, destructive-operation consent, and real-host fixture validation.
+
+## Sources
+Pinned primary sources: [README](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/README.md), [API and file formats](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/docs/api.md), [architecture](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/docs/architecture.md), [security](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/docs/security.md), [contributing/test gates](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/docs/contributing.md), [CI workflow](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/.github/workflows/ci.yml), [Loaders.swift](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/Sources/Loaders.swift), [Launching.swift](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/Sources/Launching.swift), [Stats.swift](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/Sources/Stats.swift), [license](https://github.com/cmxau/ai-shelf/blob/cd752daef4220e22edf48f70d0deb5aad61b9b03/LICENSE).

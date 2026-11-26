@@ -1,0 +1,33 @@
+# Candidate #225 — timianmalloo/x-harness-x-model-bench
+
+Review date: 2026-11-24. Pinned `main` / `origin/main` at `560d2fae9eaebb6450ab33b752df6ca288b5de6e` (2026-10-19), clean checkout. GitHub identifies Apache-2.0; at review it showed 0 stars, 0 forks and no releases. The repository describes a cross-harness, cross-model benchmark of coding agents, with `harness × model × pack` as its experimental grid. It is not a conversation/project migration product.
+
+## Architecture and useful prior art
+
+Each benchmark cell launches a native harness process in its own local code checkout and harness home. A hash-chained run ledger records benchmark lifecycle facts; cell archives are content-hashed and verified before teardown. The archive walker records symlinks without following them and excludes caller-specified credential basenames. `snapshot_cell` snapshots only the cell's `ws`; full `archive_cell` copies the cell folder. These patterns are useful for Nexus's consented source snapshot, provenance and integrity-verification layer, but they preserve a benchmark cell, not a portable multi-harness session graph.
+
+`src/harness_bench/telemetry` is particularly relevant observability prior art. Its anti-corruption layer reads native records from Claude Code JSONL, Codex rollout JSONL, Copilot session storage, Antigravity and Grok-related stores, then projects measured facts such as `ModelCall`, `ToolCall`, `ProviderError`, `MissingField`, `ServedSettings`, `ReasoningItem`, `PromptPart` and `HarnessEvent`, with native ordinals and source session IDs. It treats absent data as “not recorded” rather than a fabricated zero, bounds line/file sizes, and records malformed/truncated data. This can inform Nexus source-readers and capability/fidelity reporting.
+
+The projection is deliberately not a lossless conversation interchange. `Extraction` keeps one `first_user_text` plus selected usage, tool, reasoning/prompt/harness facts; it does not model every user/assistant message, image/file attachment bytes, source Project/Section IDs, actual parent/fork/subtask edges, or target resume handles. The broader `ProcessTrace` is used for benchmark process metrics, not as a universal conversation envelope. The five adapter files do not comprise five verified end-to-end migration integrations: the README identifies the current walking skeleton as Claude Code and Codex; it explicitly leaves several benchmark features (including Copilot and resume) as later phases.
+
+CLI `--help` lists validation, plan/run/status/stop/answer/grade/report/verify/teardown, campaign, discriminate, interactive and tools commands; it exposes no cross-harness conversation import/export or target-session restore command. `resume.py` resumes/reconciles a benchmark run from its own plan, event, archive and cell ledgers—it is not native harness conversation resume. “Project”/“cell” means benchmark task checkout, and “session” often means one benchmark repetition or one harness run, not ChatGPT/Codex project/Section membership.
+
+## Local checks
+
+The tracked checkout remained clean. CodeGraph was initialized locally and verified current: 49,196 nodes / 160,830 edges (the `.codegraph/.gitignore` self-preserving `!.gitignore` line alone was removed, as required; no tracked source changed).
+
+A disposable venv at `/tmp/nm-xhmb-venv-followup225-2026-11-24` installed the versions listed in `uv.lock` for the Python test dependencies used here: pytest 9.1.1, Hypothesis 6.168.1, PyYAML 6.0.3 and Rich 15.0.0. No dependency was installed into the user or candidate project environment.
+
+- Reader/telemetry group: `tests/test_telemetry.py`, `test_reader_claude_code.py`, `test_reader_codex.py`, `test_reader_copilot.py`, `test_reader_agy.py`, `test_grok_served_model.py`, `test_archive_readers.py` — **187 passed, 1 failed**.
+- Archive/resume/view group: `tests/test_archive.py`, `test_archive_readers.py`, `test_archived_runs_helper.py`, `test_resume.py`, `test_lifecycle_conformance.py`, `test_views.py` — **331 passed, 1 skipped**.
+- Combined focused outcome: **518 passed, 1 failed, 1 skipped**. The full CI ring was not run.
+
+The failure is reproducible on this macOS host in `test_grok_served_model.py::test_observed_layout_is_found_by_tree`. Fixture inputs encode a Windows Grok store key `C%3A%5CProjects%5Cgsm-demo` but pass a forward-slash `C:/Projects/gsm-demo` tree. `tools/grok_served_model.py::_same_path` applies host `os.path.normcase/normpath`; on macOS this yields `C:\Projects\gsm-demo` vs `C:/Projects/gsm-demo`, so `--tree` returns exit 2 / `not recorded: no session store for this tree`. Inference: the helper is host-path-separator dependent for Windows-keyed paths, despite the cross-host fixture and macOS CI job. It is a concrete portability issue in the benchmark's Grok served-model helper, not evidence of session migration fidelity.
+
+The pinned `.github/workflows/ci.yml` defines Windows tests, a macOS process-group job, and Ubuntu model checks. The live GitHub Actions page currently lists its latest visible run as #163 on 2026-10-04, before the pinned 2026-10-19 commit; therefore a green run of this pinned commit was not established. Local test failure is independently observed; no claim about unobserved hosted runner outcome.
+
+## Nexus Memory disposition
+
+Classify this candidate **high-value adjacent SessionObservability + archive/integrity prior art; not a migrator**. Reuse concepts, not its benchmark `Extraction` as the canonical archive: preserve raw source events and native relationships first, then generate normalized usage/tool/reasoning projections; keep source and target Project/Section/session DAGs explicit; store files/media as content-addressed attachments; and do not equate run-level recovery with destination-native conversation resume. Full review is pinned-source evidence only; no real user session, account, API key or application data was opened and no migration-accuracy claim was made.
+
+Sources: pinned checkout `https://github.com/timianmalloo/x-harness-x-model-bench/tree/560d2fae9eaebb6450ab33b752df6ca288b5de6e`; current repository page `https://github.com/timianmalloo/x-harness-x-model-bench`; Actions page `https://github.com/timianmalloo/x-harness-x-model-bench/actions`.

@@ -1,0 +1,29 @@
+# Candidate #194 — `lidorshimoni/agentic-coding-design-patterns`: prompt/skill compiler, not data migration
+
+Review date: 2026-11-23. Pinned `main` and `refs/remotes/origin/main` at `fb84be7a64ec600252b8653babe2b7111ff79901`, commit time `2026-11-10T21:15:42+02:00`. MIT `LICENSE` file present. Repository: <https://github.com/lidorshimoni/agentic-coding-design-patterns/tree/fb84be7a64ec600252b8653babe2b7111ff79901>. GitHub Releases page states there are no releases; root `.github` has only Copilot instructions and no CI workflow. Repository snapshot shows 0 stars/forks. CodeGraph index: 3 Python files, 23 nodes, 36 edges; current. Git status stayed clean.
+
+## Disposition
+
+**Keep only as a limited portable prompt/skill-content library and format-emission reference; reject as a cross-Harness session/project importer.** It reads 15 repository-owned `SKILL.md` patterns and emits text/config files for Claude Code, Antigravity, Cursor, Windsurf, Roo/Cline, Copilot and `AGENTS.md`. It has no ChatGPT or Codex adapter, no Claude Desktop 3P Chat/Cowork/Code target, no MCP, no plugin/account/gateway configuration, no project/session/message/transcript/attachment/token graph, and no supported export/import format. `/teach` describes user-authored on-disk learning files for continuity, not reading or migrating ChatGPT/Claude session state. `/schedule-loop` is a workflow prompt, not a native scheduled task.
+
+## Format mapping and semantic loss
+
+- Claude Code exporter writes `.claude/commands/<name>.md` plus `CLAUDE.md`, with `$ARGUMENTS`; it does **not** emit the current recommended `.claude/skills/<name>/SKILL.md` bundle. Anthropic says `.claude/commands` remains a legacy supported path, while `.claude/skills` is the recommended native Skill format. Source: https://support.claude.com/en/articles/14554000-claude-code-power-user-tips ; https://platform.claude.com/docs/en/managed-agents/skills .
+- Antigravity gets `.agents/skills/<name>/SKILL.md` plus copied sibling files; Cursor gets `.mdc` rules plus `.cursorrules`; Windsurf and Roo/Cline receive flattened text rules; Copilot and generic `AGENTS.md` receive one flattened document. These are prompt/resource projections, not conversation-history transfers.
+- Matrix claims “any harness,” but implementation supports only the explicit `EXPORTERS` map. It omits Codex, ChatGPT, Claude Desktop 3P, MCP, connectors/plugins, session trees and project hierarchy. Target mode and provenance are not represented.
+
+## Safety/reliability review
+
+`cli/sync.py` offers no `--dry-run`, ownership manifest, diff, backup, rollback or safe merge. Exporters directly `write_text()` target files. A synthetic test preseeded an existing target `AGENTS.md` and `.github/copilot-instructions.md` with unrelated sentinels, then ran the documented exporter against a disposable directory; both sentinels disappeared and both files were replaced with generated 70,422-byte output. Other exporters also overwrite rule files; repeated `CLAUDE.md`/`GEMINI.md` behavior is marker-dependent (overwrite when marker exists; append otherwise). The `name` from skill frontmatter is joined into output paths without path containment validation (static observation; no traversal POC performed). This is unsafe as a general-purpose no-review “sync” into an existing project without an external backup/diff/ownership layer.
+
+## Isolated verification
+
+- Repository contains a `LICENSE`, but no automated test directory/runner, no packaging metadata and no CI workflow in `.github`.
+- `python3 -m py_compile cli/sync.py`: exit 0, stdout/stderr empty. `bash -n install.sh`: exit 0, stdout/stderr empty.
+- `python3 cli/sync.py --list`: exit 0; lists 15 canonical patterns. These smoke checks do not validate target harness acceptance.
+- `--target copilot --output-dir /private/tmp/nm-agentic-coding-patterns-194/out` against synthetic target: exit 0; stdout:
+  `\n🚀 Syncing 15 Agentic Patterns into: /private/tmp/nm-agentic-coding-patterns-194/out\n  ✓ Exported Copilot & Universal: /private/tmp/nm-agentic-coding-patterns-194/out/.github/copilot-instructions.md and /private/tmp/nm-agentic-coding-patterns-194/out/AGENTS.md\n\n✨ Pattern synchronization complete!\n`
+  stderr empty. Post-check confirmed both original sentinel strings were absent and both outputs were 70,422 bytes. All writes were confined to fake `/private/tmp`.
+- No network, real project, account, user session, credentials or model call was used. No migration-fidelity score is available.
+
+**Recommendation:** use selected pattern content as optional workflow Skills after review; do not use its compiler as the Nexus migration engine or as a safe general config writer. Nexus should preserve original skill assets/frontmatter and report per-harness conversion losses, and add a diff/ownership/backup/rollback protocol before any target writes. This candidate contributes no Project/Section/SessionGraph evidence.

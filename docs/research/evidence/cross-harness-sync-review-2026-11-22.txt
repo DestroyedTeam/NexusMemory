@@ -1,0 +1,64 @@
+# Beicxxxx/cross-harness-sync — implementation and compatibility review
+
+Date: 2026-11-22. Candidate #116 in the 303-name primary corpus. User-confirmed goal remains ChatGPT Projects / Section Groups / Session hierarchy for Destruction Era into local/self-hosted Claude Code and Claude Desktop third-party-gateway/API-key Chat, Cowork and Code modes as separate destinations. No user export, target account, API key, or real session was accessed.
+
+## Provenance and maturity
+- Repository https://github.com/Beicxxxx/cross-harness-sync, branch main, pinned HEAD 306683e9ea9a56ab3994a2f0c614a8a021dbe23e, commit 2026-09-23T03:28:13+10:00 (docs(runtime): record v2.1.1 release close-out). MIT; GitHub page showed 1 star, 0 forks, 141 commits. Latest published release is v2.1.1, signed/verified on GitHub, tag commit 85aeab0. Current main is a documentation close-out after that tag.
+- GitHub shows one open PR (#7, Draft) and six closed PRs. PR #7 has two commits (implementation 2a8b5e3 and documentation close-out c03ef43); it is not merged or released. The author reports 564 passed / 5 skipped and sync_verify 28/28 on the PR implementation commit, plus same-family review; those are PR claims, not independently reproduced results. The PR page reports zero checks. The local checkout has no .github workflow directory.
+- This is a zero-infrastructure, Agent Skill-format protocol: a project repository gets an .ai directory and git is the cross-machine transport. It is not a ChatGPT importer or an LLM/API-key gateway. Setup is manual per git repository; the agent reads/writes plain Markdown state and operators commit/push.
+- Useful project-level state surfaces: L0 CURRENT.md / TASK.md / BLOCKERS.md; L1 authorization and task-specific records; indexed DECISIONS and handoff archive for selective L2 retrieval; LATEST.md / NEXT_PROMPT.md for close-out; checkpoint/prime commands and a verifier for required files, line budgets, secret-ignore configuration, protocol/version and optional checks. This is a narrative checkpoint/handoff protocol, not a serialized message history.
+- The SKILL.md explicitly distinguishes “omission, not fabrication,” says governance tiers/review identities/writer discipline are recorded rather than enforced, the writer lock is advisory, and concurrent checkpoint state is last-writer-wins. It is designed for sequential handoff, not concurrent writers or a semantic/vector knowledge base.
+- README lists Claude Code, Codex, Kimi, GLM and Cursor as tools that can read files and run git. There are no Harness-specific transcript adapters, discovery connectors, Projects/Section Group mappings, ChatGPT conversations.json reader, Claude Desktop Chat/Cowork/Code session writers, attachments, token-usage migration or scheduled-task migration. Targeted search of scripts, .ai templates, tests, README and SKILL.md for ChatGPT, conversations.json, transcript, attachments, scheduled tasks, Section Groups and token usage returned no matches (grep exit 1). The protocol cannot preserve the requested source Session graph or prove exact history fidelity.
+
+## Value for Nexus Memory
+This is the strongest candidate so far for a narrow NarrativeStatePlane / cross-machine handoff pattern: explicit current/task/blocker records, a six-section handoff, decision index plus retrieval-only archive, git-diffable provenance, and named mechanical checks. It can inspire a derived checkpoint that points back to lossless source records. It must not replace SessionGraph: it stores human/agent-authored summaries and can omit or falsify what happened. It has no media/attachment payload, message/branch/subtask event graph, source identifiers, actual token measurement, memory-store import, or automatic platform adapters. It is therefore useful for continuity between tasks, not exact ChatGPT-to-Claude session migration.
+
+## Local implementation issues reproduced on isolated synthetic data
+1. Force-refresh can overwrite partially edited user state despite the README promise to preserve edited state. The current main branch treats any line containing an unfilled placeholder as template-owned. A synthetic CURRENT.md row “| Current stage | production complete <one line> |” still passed is_template_shaped(); copy_file(..., force=True, protected=True) returned “wrote:” and replaced it with the untouched template. The synthetic value was created and destroyed only in a TemporaryDirectory.
+2. Secret-ignore verification can report a false PASS when a negating gitignore rule re-includes a secret path. In a temporary repo with .gitignore lines “.env” then “!.env” and a synthetic .env, the current main check_secrets_ignored invokes git check-ignore -v and treats its exit 0 as ignored. Independently, git check-ignore -q -- .env returned 1 (not ignored). The verifier recorded [PASS] for that .env. No secret values were read; the .env content was a dummy fixture.
+3. The cross-platform harness fails on macOS at the common install-layout gate. On this host os.name is posix, stat.FILE_ATTRIBUTE_REPARSE_POINT is 1024, but os.stat_result has no st_file_attributes. scripts/ai_common.py::_relocated accesses path.stat(...).st_file_attributes unconditionally when that constant is present. The repository verifier command exits 1 with an uncaught AttributeError before printing checks. A representative full-suite failure hits the same traceback. This is a portability/runtime failure, not a test-only assertion.
+4. Current main test suite, run from the required dev venv: 555 collected; progress stream counted 298 passed, 252 failed and 5 skipped; command exit 1. The first integration failure and sync_verify failure share the AttributeError above. GitHub release notes report 550/5 on the release tree, and open PR #7 reports 564/5 on its implementation commit; neither is the same current main tree nor a reproduced macOS pass.
+5. Current main has additional known state-safety gaps that PR #7 explicitly targets: its installer considers partially filled placeholder lines untouched; its secret-ignore logic accepts a matching negation rule; the migration validates --authorizations-dir only when supplied as a flag, not the effective path read from config. The PR changes template-slot matching, uses git check-ignore -q, centralizes repo-relative path validation, and records/retries failed migration commits; those repairs are still draft/unreleased. This review did not execute a path-escape migration against any non-temporary tree.
+
+Literal synthetic force-refresh stdout (outer exit 0; stderr empty):
+{
+  "copy_result": "wrote: /var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-cross-harness-force-probe-gxz0mbwo/.ai/state/CURRENT.md",
+  "edited_value_present_before": true,
+  "edited_value_present_after": false,
+  "template_restored": true,
+  "exit": 0
+}
+
+Literal synthetic negated-ignore stdout (outer exit 0; stderr empty):
+[PASS] secret ignored: .env: .gitignore:2:!.env
+{
+  "verbose_rc": 0,
+  "verbose_stdout": ".gitignore:2:!.env\t.env",
+  "quiet_rc": 1,
+  "quiet_stdout": "",
+  "quiet_stderr": "",
+  "verifier_record": [["secret ignored: .env", true, ".gitignore:2:!.env\t.env"]],
+  "exit": 0
+}
+
+## Local verification
+- Full current-main command: rtk proxy /tmp/nm-cross-harness-sync-test-20261122/bin/python -m pytest -q --tb=no. Outer exit 1. Pytest cache reports 555 nodeids / 252 failed; captured progress has 298 dots, 252 F, 5 s. Native POSIX tests are explicitly distinguished from the release note claims. Test fixtures use temporary git repos under pytest tmp_path; source checkout remained clean after the run.
+- Exact shipped verifier command, with dev venv on PATH: rtk proxy env PATH=/tmp/nm-cross-harness-sync-test-20261122/bin:$PATH PYTHONDONTWRITEBYTECODE=1 python .ai/scripts/sync_verify.py. Exit 1 before any [PASS]/[FAIL] checks; traceback ends AttributeError: 'os.stat_result' object has no attribute 'st_file_attributes' at .ai/scripts/ai_common.py line 715.
+- CodeGraph indexed 46 files / 1,526 nodes / 4,354 edges; status was up to date after removing only the .codegraph/.gitignore !.gitignore exception. Git source checkout status remained clean after reviewing main and fetching PR #7 to a remote ref.
+- Synthetic force-refresh probe called the checked-in is_template_shaped and copy_file functions with a temporary copy of templates/CURRENT.md; exit 0 and exact output above.
+- Synthetic secret-ignore probe imported checked-in scripts/sync_verify.py, called its check_secrets_ignored against a temporary git repo, and separately compared git check-ignore -v versus -q; exit 0 and exact output above.
+- Targeted source search for ChatGPT/transcript/attachments/Section Groups/token usage/scheduled tasks found no matches; this is corroborative only. Code review and README scope establish that the protocol is not a source transcript importer.
+
+## Recommendation
+Retain as a **high-value narrative-state / handoff architecture reference**, not as a migration implementation or cross-Harness compatibility proof. Borrow the explicit L0/L1/L2 state separation, minimal handoff template and provenance pointers only in a separate derived-state plane. Do not install the current main branch into real memory state: force refresh can overwrite partially filled state and the secret-ignore check can falsely pass a re-included .env. Reconsider its code only after draft PR #7 is merged/released, the POSIX verifier crash is fixed, and the relevant behaviors are reproduced on each target harness/OS. Keep user-authored source transcripts, branches/subtasks, attachments, tokens, memories and schedules in an independent lossless SessionGraph.
+
+## Primary sources
+- Pinned README: https://github.com/Beicxxxx/cross-harness-sync/blob/306683e9ea9a56ab3994a2f0c614a8a021dbe23e/README.md
+- Pinned SKILL.md: https://github.com/Beicxxxx/cross-harness-sync/blob/306683e9ea9a56ab3994a2f0c614a8a021dbe23e/SKILL.md
+- Pinned common runtime: https://github.com/Beicxxxx/cross-harness-sync/blob/306683e9ea9a56ab3994a2f0c614a8a021dbe23e/scripts/ai_common.py
+- Pinned installer: https://github.com/Beicxxxx/cross-harness-sync/blob/306683e9ea9a56ab3994a2f0c614a8a021dbe23e/scripts/init_sync.py
+- Pinned verifier: https://github.com/Beicxxxx/cross-harness-sync/blob/306683e9ea9a56ab3994a2f0c614a8a021dbe23e/scripts/sync_verify.py
+- GitHub repository: https://github.com/Beicxxxx/cross-harness-sync
+- Latest visible GitHub release: https://github.com/Beicxxxx/cross-harness-sync/releases
+- Open draft PR #7: https://github.com/Beicxxxx/cross-harness-sync/pull/7
+- PR #7 diff: https://github.com/Beicxxxx/cross-harness-sync/pull/7/files

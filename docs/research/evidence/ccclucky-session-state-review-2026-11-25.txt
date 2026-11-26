@@ -1,0 +1,38 @@
+# Candidate #272 — ccclucky/session-state (2026-11-25)
+
+## Decision
+**Adjacent session-title/state governance only; not a conversation, project, or session migrator.** It manages `[wip]`, `[pending]`, `[done]` title prefixes for three hosts. It does not transfer a transcript, branch tree, project/section group, attachment, or memory record from one Harness to another. The Skill's mandatory lifecycle behavior requires an AI agent to invoke its instructions; it is not an AI-free universal background migration service.
+
+## Identity and provenance
+- Repository: [ccclucky/session-state](https://github.com/ccclucky/session-state), pinned HEAD `0b19c40d8e79f3871dc5d915d1e32192107b75b5` (2026-10-22; “feat: initial release of cross-harness session-state governance skill”), npm/package `session-state@1.0.0`, MIT license.
+- CodeGraph indexed 3 JavaScript files, 60 nodes, 138 edges. The working checkout remained clean; all adapter tests and safety probes ran only against a disposable `git archive` copy and `/tmp` fixtures.
+- The repository describes three adapters: Google Antigravity, DeepSeek Harness (DSH), and Claude Code. The shipped `bin/dsh-rename.js` is only a CLI wrapper; the DSH native `session_rename` tool mentioned in docs is attributed to an external `dsh-plugin-session-rename` plugin that is not in this repository.
+
+## Actual operation
+- The core behavior maps status aliases to a title prefix, normalizes/truncates the title body, and writes **only the title** into host-specific stores: Antigravity SQLite/pbtxt/aggregate Protobuf; DSH per-session JSON plus aggregate cache; Claude Code by appending an `ai-title` event to a `.jsonl` file. This does not read or transfer the actual conversation content, messages, tool events, task tree, attachments, or session history.
+- Its Claude Code adapter is not a Claude Desktop Chat/Cowork/Code adapter. It does not read ChatGPT/Codex Projects or Section Groups, import Claude Desktop third-party-gateway sessions, open a local API-key transcript, or provision target-native sessions.
+- Host detection and fallback selection are not safe enough for automatic use across a user’s installed Harnesses: auto mode checks whether a host’s storage path exists, preferring Antigravity, then DSH, then Claude Code. If no explicit host/session ID is provided, Antigravity selects the newest `brain` directory or latest DB row; DSH selects the newest shard when the cwd misses, then the newest global cache record; Claude Code selects the latest session in the current project or, failing that, across all projects. These are recency heuristics, not proof of the active foreground session.
+
+## Synthetic safety probes (temporary paths only)
+1. The actual `ClaudeAdapter.rename` was invoked with a synthetic `id="../../outside"`, a temporary Claude-like project directory, and a synthetic sibling `.jsonl` file. It returned that ID and appended an `[wip]` title event to the file **outside the configured project session directory**. This is a path-containment defect; no real home or transcript was used.
+2. The actual `DshAdapter.rename` was given a synthetic DSH session directory, two fixture shards with distinct mtimes, no session ID, and an unrelated cwd. It selected `session-newest` and renamed it. This confirms the global-latest fallback when cwd does not match.
+3. Antigravity updates SQLite, pbtxt and aggregate `.pb` as separate operations; pbtxt/aggregate errors are caught and ignored after the DB has already changed. DSH shard and aggregate-cache writes are also separate, without a single transaction. The CLI can therefore report a successful title change while mirrors disagree. The test suite does not inject these failures.
+
+## Test evidence and test-suite hygiene
+- `npm test` run on an isolated `git archive` copy with Node v26.7.0: **30 assertions passed, 0 failed**, exit 0. Tests cover title normalization, one synthetic Protobuf buffer, three happy-path fixture adapters, and CLI invalid-argument rejection; they do not cover path traversal, wrong-session fallback, host ambiguity, concurrent writes, rollback, crash consistency, or live app versions. There is no CI workflow or coverage instrumentation.
+- The test script writes fixed names under `tests/fixtures`. Those paths are tracked despite being listed in `.gitignore`; comparing the isolated test run with `git show HEAD:<path>` showed 3 tracked files changed (`mock_antigravity.db`, DSH aggregate cache, and DSH shard). The source checkout was not run against these in-place, to avoid leaving it dirty.
+- No actual app process, user home data, API key, login, or session store was used. Real host integrations were not executed.
+
+## Fit against the requested target matrix
+| Target | Result |
+|---|---|
+| ChatGPT/Codex Projects and Section Groups | No reader/importer, no project or section representation |
+| Destruction Era session hierarchy/branches/subtasks | No conversation graph or content transfer; only a title/status field update |
+| Claude Desktop third-party-gateway Chat/Cowork/Code | No Desktop adapter or store reader/writer |
+| Local/self-hosted Claude Code API-key/gateway | Claude Code title-only JSONL append; does not restore historical messages or session state |
+| Skills/MCP/plugins/memory/schedules | The Skill itself is an instruction set; no resource migration or schedule transfer |
+
+**Reuse recommendation:** retain the three normalized lifecycle labels as a small optional status vocabulary, but do not use its auto-detection or direct storage writers in Nexus without explicit session identity, path containment, per-host version gates, staged/atomic multi-store writes, backups, and host-level integration tests. It contributes almost no migration fidelity.
+
+## Sources
+Pinned primary links: [repository](https://github.com/ccclucky/session-state/tree/0b19c40d8e79f3871dc5d915d1e32192107b75b5), [README](https://github.com/ccclucky/session-state/blob/0b19c40d8e79f3871dc5d915d1e32192107b75b5/README.md), [SKILL.md](https://github.com/ccclucky/session-state/blob/0b19c40d8e79f3871dc5d915d1e32192107b75b5/SKILL.md), [runner](https://github.com/ccclucky/session-state/blob/0b19c40d8e79f3871dc5d915d1e32192107b75b5/bin/session-rename.js), [tests](https://github.com/ccclucky/session-state/blob/0b19c40d8e79f3871dc5d915d1e32192107b75b5/tests/test_session_state.js), [license](https://github.com/ccclucky/session-state/blob/0b19c40d8e79f3871dc5d915d1e32192107b75b5/LICENSE).

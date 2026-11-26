@@ -1,0 +1,53 @@
+# GitHub candidate #219 — `sjmgarnier/skill-manager`
+
+Review date: 2026-11-23. Bound Nexus goal remains full ChatGPT/Codex Project/Section/`Destruction Era` SessionGraph preservation and target coverage of Claude Desktop on a third-party provider/API gateway in **Chat, Cowork, Code**, plus local/self-hosted Claude Code.
+
+## Identity and repository status
+
+- Upstream: https://github.com/sjmgarnier/skill-manager. Shallow checkout `main`, HEAD `7ab49b0735a6a50082222cb1b93b5ba13ba7d8f9`, commit date `2026-06-07T18:19:54-04:00`, subject `fix: correct npx skills command flags for per-platform install`; `rtk git status --short --branch` was clean (`## main...origin/main`).
+- GitHub reports 18 commits, 0 stars/forks, no release, no open issues or PRs, no configured Actions workflow, and no LICENSE file/license metadata. Repository contains only README, one `SKILL.md`, three shell/Python helper scripts and three Bats files (23 declared tests); it is not a standalone CLI, app, packaged product or session archive utility.
+- Local environment has GitHub CLI `2.96.0` (2026-07-02); `gh skill install --help`, `gh skill list --help`, and `gh skill update --help` all exit 0. Bats is absent, so `rtk proxy bats tests/` failed to start with `rtk: Failed to execute command: bats: No such file or directory`, exit 1. This is a missing test runner, not a failed Bats assertion. Shell syntax checks for all three scripts passed, exit 0. Manual, isolated script probes are recorded below; the official 23-case Bats suite was not run.
+
+## Product and data model
+
+This is an **AI-invoked Agent Skill** that tells a shell-capable agent to install/update skills from GitHub. It depends on the model following its confirmation flow, GitHub CLI, Git, Python, and optionally `npx skills`. It asks the user to choose a platform/repo/skill and to confirm repo-provided platform instructions. It fetches GitHub repo metadata/tree, invokes `gh skill install` or `npx skills add`, then writes a local `.registry.yaml` under `~/.agents/skills/` (JSON syntax with a header) to track source repo, tool, install command, skill names, SHA and install date.
+
+`registry.sh` is the only local state store. It has one row per source repo, not one row per `(repo, skill, host, scope, version)`; although the SKILL asks about multiple target platforms, it records no per-host/scope mapping. It stores no session/thread/project hierarchy, source message IDs, parent-child/fork relations, prompts/turns, interruption/re-prompt transitions, media, files, links, token/cost data, scheduled-task state, MCP invocation history, plugin auth, or target-native resume identifiers. It cannot migrate the requested ChatGPT/Codex Projects/Sections or any Claude session.
+
+The upstream [GitHub CLI `gh skill install`](https://cli.github.com/manual/gh_skill_install) is now the underlying multi-host resource tool: it supports host-specific/user/project installation, commit/tag pinning, source metadata, update/list commands and many agent names; several clients share project `.agents/skills`. `skill-manager` adds an AI confirmation/inspection prompt and a JSON registry, but that remains a Skill-resource workflow, not session transport or a new general-purpose cross-harness engine.
+
+## Source review and confirmed compatibility issue
+
+- `skills/skill-manager/scripts/registry.sh`: user override `AGENTS_SKILLS_DIR` or default `~/.agents/skills`; registry read/write is standard-library JSON. Writes use ordinary `open(..., "w")` directly, without temp-file replace, backup or locking; entries are merged by repo and have no schema/version or per-agent install matrix. A one-shot 32-process synthetic write test retained all 32 rows, so a race/data-loss defect was **not reproduced**; absence of serialization remains a resilience risk, not a proven exploit. The file was created mode `0644` under the temp fixture, but it stores repo metadata, not credentials.
+- `check-updates.sh`: argument-list `subprocess.run` avoids shell interpolation in the Python helper. It compares GitHub HEAD SHA for `npx`/`manual` records, calls `gh skill update --dry-run` for `gh`-managed skills, then lists unregistered skill directories. It intentionally scans host directories using the upstream CLI.
+- `detect-platform.sh`: identifies host from the script's filesystem path, then environment variables. It classifies every path under `$HOME/.agents/` as `warp`. A synthetic copy at `$HOME/.agents/skills/skill-manager/scripts/detect-platform.sh` returned `warp` (exit 0). Current OpenAI documentation says Codex user Skills live at `~/.agents/skills/` and project Skills at `.agents/skills/` ([OpenAI CLI reference](https://developers.openai.com/api/reference/cli)); current GitHub CLI docs also say project `.agents/skills` is shared across Codex and several other hosts. Therefore that path is not a unique Warp identity. The candidate's table separately documents Codex at `~/.codex/skills/`, which conflicts with the current official Codex CLI reference. Because its prompt asks the user to confirm the detection, this is a bad default/compatibility contract rather than an automatic wrong-host write, but it undermines reliable unattended cross-harness routing.
+- The Skill's script-discovery loop includes `~/.agents/skills` and `~/.claude/skills` but not every path its table claims (for example `~/.codex/skills`); it does not resolve `CODEX_HOME`. It has no explicit Claude Desktop on 3P Chat/Cowork/Code adapters or app-managed Skills inventory.
+- Shell script syntax: `bash -n` on `registry.sh`, `check-updates.sh`, `detect-platform.sh` all exited 0. `git status` remained clean apart from ignored local CodeGraph data.
+
+## Synthetic manual checks (all under `/tmp/nm-candidate219-manual-probes`)
+
+A temp registry was seeded with `example/demo` / `test-skill`; a fake `gh` executable returned SHA `newsha`. All manager commands ran with `AGENTS_SKILLS_DIR` pointed at the temp directory; no personal skill folders were read or changed.
+
+- Missing registry `read`: exit 0, stdout `[]\n`, stderr empty.
+- First `write` and partial same-repo `write`: each exit 0 with empty stdout/stderr; subsequent `read` exit 0 returned one merged entry, retaining `install_cmd`, `skills_installed`, and date while changing SHA to `newsha`.
+- `list-unregistered`: exit 0, stdout `orphan\n`, stderr empty; ignores registered `test-skill`, dot directory `.hidden`, and `gh-managed/SKILL.md` whose frontmatter includes `metadata.github-repo`.
+- Initial update-check fixture mistakenly stored the same `newsha` as the fake remote. Its exit 0 output only the expected orphan notice. Corrected the fixture to store `oldsha`; rerun exited 0, stderr empty, and output:
+```text
+Skill updates available:
+  ↑ test-skill (example/demo) — SHA changed
+
+Unregistered skills (no update tracking):
+  ? orphan — would you like to register it?
+```
+- 32 parallel synthetic `registry.sh write` processes all exited 0; final registry parsed and contained 32/32 unique rows. No write-loss POC was observed under that single stress run.
+- A detector fixture copied under `.agents/skills/skill-manager/scripts` printed `warp` despite being the official Codex user directory in the current OpenAI CLI reference. This check used only a synthetic `$HOME` beneath `/tmp`.
+
+## Current Claude/Desktop scope cross-check
+
+Current official [Claude Desktop on 3P extension docs](https://claude.com/docs/third-party/claude-desktop/extensions) state the 3P app supports MCP connectors, Skills and plugins, with a managed/admin filesystem/configuration layer and user-added in-app extensions. Desktop keeps its own records of app-created/uploaded Skills and recommends organization plugins/marketplaces for delivery; Code also loads filesystem Skills from its Claude Code directories. The official [local data map](https://claude.com/docs/third-party/claude-desktop/data-storage) separates Chat/Cowork state under `local-agent-mode-sessions/` from Code metadata under `claude-code-sessions/` and its `~/.claude/projects/` transcript store. The current [Claude Help Center directory page](https://support.claude.com/en/articles/14328846-browse-skills-connectors-and-plugins-in-one-directory) describes account-level Skills/Plugins that can appear in Chat, Cowork and Code when signed into the same Claude account. That account-backed behavior is conditional: it does not prove that every local/API-key/gateway 3P deployment has the same identity or sync availability. Preserve device-local vs account/org-managed Skill source, per-mode visibility, plugin dependencies and auth separately; do not collapse these into one `~/.agents/skills` folder.
+
+No Claude Desktop profile, gateway credential, user Skill store or session was accessed. This repository has no SessionGraph or target app-data reader/writer. It cannot satisfy the requested data migration even if its Skill installation works.
+
+## Disposition
+
+Classify as a low-priority **Skill resource / update workflow** reference only. Its strongest reusable ideas are explicit source/version metadata, platform-specific Skill adapters, user confirmation and update checks. Do not treat it as a session migration candidate, a ChatGPT/Codex Section/Session exporter, or proof of Claude Desktop 3P interoperability. Fix shared-directory identity (including Codex/`CODEX_HOME`), track host/scope per installed skill and add transactional registry updates before relying on it for unattended resource management. Full evidence: `docs/research/evidence/sjmgarnier-skill-manager-review-2026-11-23.txt`.

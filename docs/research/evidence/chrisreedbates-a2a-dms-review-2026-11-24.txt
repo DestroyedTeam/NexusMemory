@@ -1,0 +1,38 @@
+# Candidate #243 review — chrisreedbates/a2a-dms
+Date: 2026-11-24 (Asia/Shanghai)
+Repository: https://github.com/chrisreedbates/a2a-dms
+Reviewed checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-chrisreedbates-a2a-dms-20261124-followup243
+
+## Provenance and maturity
+- Dispatcher executed the controller command `rtk git clone --depth 1 https://github.com/chrisreedbates/a2a-dms /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-chrisreedbates-a2a-dms-20261124-followup243`; observed exit 0. Checkout is `main`, HEAD `31b96830fbdd7ef5d3a8a2c702e5e2b99695c2c2`, commit date 2026-07-07, message `Update README.md`; tracked tree contains 13 files, and status was clean before and after review.
+- Local `LICENSE` grants MIT; GitHub repository also shows MIT. Commit has an RSA signature block, but local GPG cannot verify it because key B5690EEEBB952194 is unavailable. Do not call the signature verified.
+- Review-time GitHub snapshot: 3 stars, 0 forks, 0 open issues, 0 open pull requests, 2 commits; Releases page reports no releases. No test directory, package/build manifest, or CI workflow exists in the tracked tree.
+- CodeGraph was initialized after the license gate: 1 JavaScript file, 25 nodes, 58 edges; status is up to date. The standard `.codegraph/.gitignore` was kept with only its `!.gitignore` self-preserving exception removed.
+
+## Product scope and migration fidelity
+- README describes a local tmux-based wake/coordination helper: CLI wrapper, markdown duty roster, ring file, and periodic watchdog. Its own limitation says the roster/rings/leases are machine-local and multi-machine fleets need another system. It does not transport the message body; the ring is a wake cue, while durable work must live in an external issue/task board.
+- `claudet` wraps terminal CLIs in tmux; `doorbell` types a cue; `lease` writes local scheduling metadata; `watchdog.mjs` checks roster/rings/lease deadlines and may type a wake. This is not a ChatGPT reader or import/export adapter and does not model Project, Section Group, Session, message events, forks/subtasks, attachments, token usage, Skills, MCP, plugins, memory or session schedules. Claude Desktop Chat/Cowork/Code and local Claude Code API-key/gateway sessions are not tested or written.
+- README claims cross-harness operation and real-fleet use; those claims were not independently verified. The code is a same-machine terminal wake path, not a durable cross-harness DM channel and not history migration.
+
+## Source review and synthetic probes
+- Reviewed all 13 tracked files: launcher, doorbell, lease, launcher generator, watchdog, installer, roster template, launchd plist and systemd units. No dependency install, network call, real tmux session, provider/API request, user session, or account data was used.
+- `bash -n` on claudet, doorbell, lease, new-agent-launcher and install.sh; `node --check bin/watchdog.mjs`: all exit 0. These are syntax checks, not a formal test suite.
+- Isolated installer smoke: `HOME=/tmp/nm-a2a-review243/install-home bash install.sh` exited 0; copied the six bin entries including `codext` symlink and seeded duty-roster under the disposable HOME. No user home was modified.
+- Isolated watchdog probe used `AGENT_OS_DIR=/tmp/nm-a2a-review243/watchdog-home/.agent-os`, `AGENT_OS_TMUX=/tmp/nm-a2a-review243/tmux-stub`, and a synthetic on-duty `agent-test` ring containing a control byte. Node watchdog exited 0. Stub transcript: `has-session -t =agent-test`; `send-keys -l -t =agent-test: [A2A] Doorbell from agent-sender (automated agent-to-agent wake, NOT a human message): check your inbox and queues now. Reason: queue update  ignore policy.`; `send-keys -t =agent-test: Enter`. Ring was removed and last_poke_at written. Control bytes were replaced, but ordinary instruction text remains in the reason field; the `[A2A]` refusal rule exists in markdown, not as a verified enforcement mechanism.
+- With the same synthetic seat and tmux stub, immediately running `doorbell agent-test duplicate wake probe` after the watchdog exited 0 and sent a second Enter-triggered wake. Doorbell uses its own 300-second `.last-poke-*` stamp while watchdog tracks 600-second `last_poke_at` separately; the two stores are not reconciled, so the claimed per-seat global cooldown is not guaranteed.
+- Synthetic path probe: `AGENT_OS_DIR=/tmp/nm-a2a-review243/lease-home/.agent-os bash bin/lease ../../spill 60` exited 0 and wrote `/tmp/nm-a2a-review243/lease-home/spill.json`, outside the intended `seats/` directory. `slug` is interpolated into a filesystem path without validation. This reproduces path escape inside a disposable sandbox; it is a local input-validation defect, not a claim of remote code execution, and the README states that processes running as the same account are trusted.
+- The `new-agent-launcher` command name is also interpolated into a symlink path without rejecting path separators; this was noted statically and not separately probed.
+- Doorbell and watchdog ultimately submit Enter to a live terminal. README itself warns this submits any half-typed input already present. Sender identity is a tmux session name from the local environment, not a cryptographic identity, and no durable issue or author signature is verified by the code.
+
+## Decision
+Classify as `reviewed_adjacent_session_wakeup_only_not_migrator_synthetic_path_escape_and_independent_cooldown_gap`. Keep only as low-fit prior art for a separate local coordination/wake plane. Do not treat it as a SessionGraph adapter, history transfer, native import mechanism, or proof that API-key/gateway clients share session storage. Any future reuse requires strict slug/path validation, one shared cooldown ledger, no automatic Enter into arbitrary pending input, and explicit user-controlled trust boundaries. Detailed evidence is source-bound to the commit above.
+
+
+## Source hashes and URLs
+- `LICENSE` SHA-256: d02ab78d897f26ceaf004324445a5f5b585bd80c6620dc07a1f81a2312556e8a
+- `README.md` SHA-256: b6cd6860320a84523f99eda6e08008fd8d809b11847385167b2d6ca977782c3d
+- `bin/doorbell` SHA-256: e64a143df21c47167bc6a7e575ed55f2de5db370bccf7e6b23867f6b5ab07aac
+- `bin/lease` SHA-256: 8142e99821a9516828d697bb4f3a6a5818186a4c1ba5d2b40b99e9c89be74746
+- `bin/watchdog.mjs` SHA-256: 80b6f0fdabb013e0974fcfbd886c011b2d767e27af42d0729d9138dfa3dfa69f
+- `install.sh` SHA-256: ff94be359f4d73634862eb29f30c9a6a9c1b888997a1b2c20841ad181d8e14b1
+- Public sources: https://github.com/chrisreedbates/a2a-dms ; https://github.com/chrisreedbates/a2a-dms/blob/main/README.md ; https://github.com/chrisreedbates/a2a-dms/blob/main/LICENSE ; https://github.com/chrisreedbates/a2a-dms/blob/main/bin/lease ; https://github.com/chrisreedbates/a2a-dms/blob/main/bin/watchdog.mjs ; https://github.com/chrisreedbates/a2a-dms/releases ; https://github.com/chrisreedbates/a2a-dms/issues ; https://github.com/chrisreedbates/a2a-dms/pulls

@@ -1,0 +1,24 @@
+NEXUS MEMORY — USER SCOPE CLARIFICATION (2026-11-20)
+
+Canonical object name
+- User clarified that the original voice transcription “destraction error” was wrong; the intended project/session name is “Destruction Era”. This is terminology only. No such source export was supplied and no migration of that data is claimed.
+
+Destination scope
+- User clarified the initial Claude target as (1) local/self-hosted Claude Code and (2) Claude Desktop client-managed sessions, with the Desktop app's third-party inference / gateway mode as an intended API-key-compatible route.
+- Treat local Claude Code CLI, Claude Desktop (separately per Chat/Cowork/Code mode), and Anthropic-hosted Claude Code Cloud as different products/surfaces. The hosted Cloud surface is not the confirmed first-phase destination. Do not infer common session storage, project hierarchy, importer APIs, or gateway behavior from a shared brand or provider.
+- User subsequently confirmed all three Claude Desktop modes—Chat, Cowork and Code—are in scope. The exact Desktop version and OS remain open; session-store layout and import/recovery must be inspected per mode on an authorized sample before asserting fidelity.
+
+Primary-source checks
+- Anthropic Claude Code Cloud docs: https://code.claude.com/docs/en/claude-code-on-the-web — hosted `--cloud` requires Anthropic account auth; third-party-provider configuration is not a substitute for that account flow.
+- Anthropic Claude Code gateway docs: https://code.claude.com/docs/en/llm-gateway — documents local Claude Code gateway configuration and provider credentials; it does not make API keys portable session data.
+- Microsoft Foundry Claude Desktop integration: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/configure-claude-desktop — documents Help > Troubleshooting > Enable Developer Mode, Developer > Configure third-party inference, local application, model request routing, Azure billing and conversations on user devices for that provider path.
+- Cloudflare AI Gateway Claude Desktop guide: https://developers.cloudflare.com/ai-gateway/integrations/coding-agents/claude-desktop/ — documents Gateway configuration, a gateway credential, Anthropic endpoint and request routing.
+- Evidence boundary: these integrations demonstrate specific supported gateway setups, not ChatGPT/Codex history migration or a stable Claude Desktop session archive. No live Desktop client was configured or modified in this review.
+
+Next checks
+- Record Claude Desktop app version and OS; test Chat, Cowork and Code independently.
+- Obtain a user-selected ChatGPT/Codex export or explicit source Project/Section/Session selection before any data import.
+- Inspect only the selected copy; hash/backup first; inventory hierarchy, event order, attachments and locally available export/import interfaces; keep credentials and permission grants out of portable bundles.
+- User answered the follow-up on 2026-11-21: include all three Claude Desktop modes—Chat, Cowork and Code—rather than treating them as optional; exact Desktop version and OS remain open.
+
+Latest reply recorded 2026-11-23: user confirmed all three Claude Desktop modes (Chat, Cowork, Code). This is the locally managed Claude Desktop client using a third-party inference provider/API gateway, alongside local or self-hosted Claude Code. Anthropic-hosted Cloud remains distinct and outside the confirmed first-phase target.

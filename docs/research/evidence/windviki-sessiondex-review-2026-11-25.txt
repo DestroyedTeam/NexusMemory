@@ -1,0 +1,36 @@
+# Candidate #264 review — windviki/sessiondex (2026-11-25)
+
+## Decision
+**High-value adjacent local session-reader/search/MCP architecture; not a migration engine.** SessionDex indexes six local coding-agent formats and can return original messages by source locator. It has no ChatGPT source, Claude Desktop Chat/Cowork/Code source/target, Claude Code API-key/gateway restore writer, Project/Section graph or cross-session parent graph. It can be a read-only search companion, but does not move or recreate sessions.
+
+## Provenance and license
+- Repository https://github.com/windviki/sessiondex, public MIT; `main` and origin main are pinned to `5c0263adbc34878af786b339bf2caaca50f251cc` (2026-10-29, 7-commit history at review; no GitHub release/tag). GitHub page reported one star and zero forks.
+- `pyproject.toml` version 0.1.0, Python >=3.10; declared runtime dependencies FastAPI, Uvicorn, Typer, Rich, orjson, zstandard, MCP and httpx; dev dependencies pytest/pytest-cov. No lockfile was present.
+- CodeGraph indexed 29 Python files/474 nodes. No candidate source edits; only local untracked `.codegraph/` analysis index.
+
+## Data model, coverage and fidelity
+- Six local source adapters: Claude Code CLI JSONL (+ subagent transcript files), ZCode SQLite, Kimi Code event/wire JSONL, DeepSeek CLI (dsh) zstd JSONL, Qoder Claude-style JSONL, and OpenCode SQLite. No ChatGPT export, Claude Desktop, Cursor, Gemini, Codex or general harness adapter was found in this pinned tree.
+- `SessionMeta` stores agent, session id, title, cwd, file path/source paths, first/last timestamps and a `subagent` boolean. It has no `parent_session_id`, Project, Section/Section Group, branch graph, or typed resources. `MessageRecord` stores agent/session id, timestamp, role, text, reasoning, tool summaries, locator, subagent flag and cwd; it has no attachment/image/link payload, token usage, model config, Skills/MCP/plugin/schedule state, or target import record.
+- The CLI/REST/MCP expose scan/search/list/show/full-message read operations, not export/import or target creation. The installed Skill is a natural-language-to-search-parameters guide; MCP tools enable retrieval, not cross-Harness resource transfer.
+- “Contentless FTS” is a legitimate privacy-oriented index design, but not literally zero data: the SQLite `messages` table stores capped plaintext text (2 KB), reasoning (1 KB), tool name/input summaries/output previews, session metadata, absolute source paths and raw locators. The FTS index holds searchable postings, not reconstructable full documents. Full records are re-read from original source by locator; deleting/moving source files breaks full readback. No encryption layer was found in reviewed code.
+- README's ~4.3 GB/157k message -> ~890 MB footprint is an author claim, not independently reproduced here.
+
+## Security probe: locator path escape from configured sources
+Source flow: `/api/messages/read` accepts `agent` and a caller-supplied `locator` dictionary, calls `reader.read_raw(agent, locator)`, then the Claude-style provider opens `locator["path"]` directly. There is no check that the locator came from the index or that its path lies under configured provider roots. The API auth middleware checks Bearer only when `SESSIONDEX_TOKEN` is nonempty; default config sets token to `None` and host to `127.0.0.1`.
+
+Synthetic isolated TestClient probe (no real sessions): configured Claude root was `/tmp/.../configured/claude`; a separate temporary JSONL with `{"fixture":"SYNTHETIC_ONLY_SECRET_9f2a"}` was placed outside that root. POST `/api/messages/read` with `agent=claude`, locator `{path:<outside file>, line:1}`, no token, and an attacker Origin returned HTTP 200 and the synthetic JSON record. With `SESSIONDEX_TOKEN="SYNTHETIC_TOKEN"`, the same request without Authorization returned 401; with the correct Bearer returned 200. This proves a caller reaching the default loopback API can use arbitrary parseable JSON/JSONL paths to read local files. It was an in-process HTTP test, not an external browser/network test; no browser CORS/LNA behavior or remote reachability was tested. Do not expose on non-loopback without a token; token alone does not bind locators to the source/index.
+
+## Verification
+- Installed only declared dependencies (not the SessionDex package) into disposable `/tmp/nexusmemory-research-followup264-20261125/venv` using `pip --only-binary=:all:` from `https://pypi.org/simple`; resolved versions are recorded in the candidate registry/evidence. This avoided running a candidate build/install hook.
+- `PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -rA`: exit 0, **61 passed, 0 failed**, all repository synthetic fixtures. API tests cover normal locator roundtrip and token-on behavior but do not test a caller-injected locator path or require token by default. No live user history or actual external client was used.
+- Source check confirms default host 127.0.0.1 and token None. The token-on positive control passed; path escape probe above passed against the temporary test server.
+
+## Nexus Memory disposition
+Keep as a **source-reader / query API / MCP and reusable Skill prior-art reference**, not a migration foundation or cross-Harness compatibility claim. Reuse the idea of separate native ReaderAdapters, incremental source watermarks, contentless search indexing and original-record locators only after designing a safer opaque locator boundary and explicit consent/auth for exposure. Nexus Memory's canonical migration object must remain richer than SessionDex's searchable projection, retaining Projects/Sections, parent/branch structure, attachments, usage/events and target-specific loss records.
+
+## Primary sources
+- https://github.com/windviki/sessiondex
+- https://github.com/windviki/sessiondex/blob/5c0263adbc34878af786b339bf2caaca50f251cc/src/sessiondex/api.py
+- https://github.com/windviki/sessiondex/blob/5c0263adbc34878af786b339bf2caaca50f251cc/src/sessiondex/provider/claude_style.py
+- https://github.com/windviki/sessiondex/blob/5c0263adbc34878af786b339bf2caaca50f251cc/src/sessiondex/index.py
+- https://github.com/windviki/sessiondex/releases

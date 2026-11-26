@@ -1,0 +1,36 @@
+# Candidate review: nicolavalenti/mem (2026-11-22)
+
+## Snapshot and disposition
+
+- Pinned commit: `nicolavalenti/mem` at `24bab43df29181cb4dcdd50b26f7466b3e9dfd66`, “Add idle session checkpointer and /resume handoff notes”, 2026-08-28. MIT, 1 star / 0 forks, 11 commits. Git tag list is empty, GitHub Releases has none, and `rtk gh run list --repo nicolavalenti/mem --limit 10` returned `[]`; repository tree has no tests or CI workflow.
+- This is a local SQLite + CPU embedding semantic memory tool. Its shared CLI/MCP store can serve Claude Code, Codex and Pi; ingestion/checkpoint sources are Claude Code `~/.claude/projects`, Pi `~/.pi/agent/sessions`, and Codex `~/.codex/sessions`. It is a **memory and handoff layer**, not a ChatGPT Project/Section/Session migrator. It has no Claude Desktop 3P Chat/Cowork/Code store adapter, Project/Section tree, branch/subtask parent graph, attachment/tool/usage/token fidelity, plugin/Schedule migration or generic resource-transfer format.
+- Keep only the memory/context-plane and explicit handoff ideas as adjacent architecture references. Do not treat its semantic store or resume note as a native cross-harness session import/restore.
+
+## Source and behavior findings
+
+- `mem.py` stores text chunks with `source`, `kind`, `tags`, a content SHA and timestamp in one SQLite DB plus a `sqlite-vec` vector table. The embedder is local (`fastembed`, `BAAI/bge-small-en-v1.5`, 384 dimensions), and the CLI/MCP/Pi integration share one query/add implementation. This is useful for durable fact recall, but has no first-class Projects, Section Groups, conversation graph, source message IDs, parents/children, branches, attachment/blob store, model/token/tool-call metadata, or exact turn replay.
+- `nightly_ingest.py` converts only readable user/assistant text from three transcript formats into Markdown; tool events and non-text content are discarded, each turn is truncated to 2,000 characters, and it indexes only Markdown. There is no generic transcript-export parser or Claude Desktop Chat/Cowork/Code input.
+- `idle_checkpoint.py` filters sessions by file mtime/turn counts, uses only the first 3 and last 30 turns (40,000-character prompt cap), and asks `$HOME/.local/bin/claude -p --model haiku --output-format json` to produce a handoff note. Python writes the file and timestamps; state is tied to the transcript mtime. This preserves a useful freshness/idempotence model, but the text is sent to the installed Claude CLI's configured model endpoint; the memory tool does not guarantee that summarization traffic is local. No summarization/API call was made during review.
+- Handoff metadata includes harness/session/title/project/repo/turn count, but no parent or child links. `resume.py` lists and prints Markdown notes; it does not restore a non-Claude native session. `write_handoff` hardcodes a `claude --resume <session-id>` instruction for every harness. A synthetic Pi handoff was written under a disposable directory and observed literal line `Resume this session with: `claude --resume pi-synthetic-123` ...`; that is a misleading resume action for Pi/Codex. The note itself says to prefer a fresh session from the handoff.
+- Repo path attribution scans `file_path` strings only and recognizes `/Projects/<name>` or `/Apps/<name>`, capped at the first 30 MiB and top three repositories. It is not a general workspace map.
+- `checkpoint_now.sh`, `bin/Mem Checkpointer`, and `session_catchup.sh` are user-specific shell/launchd integrations. Two scripts hardcode `/Users/nickvalenti/Projects/mem` and `.local/bin/uv`; these are not reusable cross-platform adapters. `integrations/pi/mem.ts` is the only harness-specific extension shipped. Claude Code and Codex setup instructions are manual; no Claude Desktop config writer or developer-mode gateway integration exists.
+- Privacy boundary: embedding/query storage is local after installation, but checkpoint summarization invokes the Claude CLI with transcript text. The README’s “no cloud” describes storage/embedding, not a tool-enforced guarantee about the summarizer backend.
+
+## Validation at pinned checkout
+
+- No formal test suite, CI workflow, release or tag exists in this checkout. `rtk gh run list --repo nicolavalenti/mem --limit 10` → exit 0, stdout `[]`; `rtk git tag --list` → exit 0, empty stdout. GitHub Releases page shows none.
+- Python AST parse of `idle_checkpoint.py`, `mem.py`, `mem_mcp.py`, `nightly_ingest.py`, and `resume.py` → all 5 parsed successfully. `bash -n` for `checkpoint_now.sh`, `session_catchup.sh`, and `bin/Mem Checkpointer` → all exit 0.
+- `rtk proxy env HOME=/tmp/nm-mem-empty PYTHONDONTWRITEBYTECODE=1 python3 mem.py --help` → exit 0, CLI usage printed. No database or embedding model was created/downloaded.
+- Synthetic dry-run only: generated one stale (13-minute idle) 8-turn transcript for each supported Claude/Pi/Codex harness under `/tmp/nm-mem-candidate-fixture`, then ran `idle_checkpoint.py --dry-run` with `HOME` bound to that temp fixture. Exit 0; stdout found 3 candidates and logged each as `8 turns, idle 13m`, then `dry run: 3 candidate(s) of 3 due`. Dry-run invoked no Claude summarizer, embedding, DB write, or user transcript. Fixture removed.
+- Synthetic `write_handoff` test wrote a Pi note into a temp directory; observed the hard-coded Claude `--resume` line quoted above; fixture removed. A Python import created only `__pycache__/` in the candidate checkout; generated cache removed; final candidate Git status clean.
+- CodeGraph index up to date: 6 supported source files / 128 nodes / 264 edges (5 Python, 1 TypeScript). `.codegraph/.gitignore` retained, with only its `!.gitignore` exception removed.
+
+## Primary sources checked (2026-11-22)
+
+- Repository: https://github.com/nicolavalenti/mem
+- Pinned commit: https://github.com/nicolavalenti/mem/commit/24bab43df29181cb4dcdd50b26f7466b3e9dfd66
+- Releases (none): https://github.com/nicolavalenti/mem/releases
+- Actions (no runs surfaced): https://github.com/nicolavalenti/mem/actions
+- Current Claude Code MCP scopes / installation locations: https://code.claude.com/docs/en/mcp
+
+Evidence boundary: pinned local source, syntax/help commands, three synthetic transcripts, one synthetic handoff, current GitHub pages and current official Claude Code docs. No real user transcript, API key, memory store, Claude Desktop data, database, model endpoint or user config was read or changed.

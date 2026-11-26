@@ -1,0 +1,45 @@
+# Candidate #216 — `sefas-labs/ai-skills-manager`: strong Skill ResourcePlane, not session migration
+
+Review date: 2026-11-23. Pinned upstream `main` / `origin/main` at `95fad6764918a639b52c9cc1ef810f27cf5b7d12` (`chore: change readme to english`, 2026-10-18). MIT-licensed VS Code-compatible extension, also designed for Cursor. GitHub showed 2 commits, 0 stars/forks, 1 open PR (#1 `Feat/v0.3`), 0 closed PRs, 0 issues, and no releases. The only visible Actions run was PR CI #1 on `feat/v0.3`, marked Failure because the macOS runner was not acquired and GitHub reported an internal CI error; that is infrastructure evidence, not a failed source test. Main has no demonstrated green upstream CI run.
+
+## Product boundary
+
+The app scans local Agent Skill directories for four declared providers: Claude Code, Cursor, Codex, and GitHub Copilot. It builds a visibility matrix, validates Skill frontmatter, diagnoses duplicates/broken links, inspects GitHub Skill repositories, stages and reviews files, installs with provenance, supports update diffs/backups, copy/move, and recoverable uninstall. Code uses commit-resolved GitHub tree entries and stores repo/ref/commit/tree SHA metadata. Read access can be extended via user-configured `extraLocations`.
+
+The Claude adapter is a **Claude Code Skills-path** reader (including read-only `~/.claude/skills/synced` discovery); it is not an adapter for Claude Desktop 3P Chat, Cowork, or Code session stores. No ChatGPT/Codex Project, Section Group, transcript/session graph, parent/child conversation, interruption/re-prompt, attachment/media byte, tool-result, token/cost, schedule, MCP-server, plugin, memory, or native resume/restore migration model exists. Shared Skill files do not imply that the surrounding harness history or state is portable. This candidate is useful for Nexus Memory's future ResourcePlane/discovery UX only; it cannot satisfy the SessionGraph transfer objective.
+
+## Source-level safety review
+
+Positive controls are implemented (not just described):
+
+- `validateRelativePath` rejects empty/long/NUL, absolute/drive, backslash, `.`/`..`, Windows-invalid/reserved and trailing-dot/space segments; `safeJoin` rechecks containment.
+- GitHub tree symlinks and submodules are skipped; ignored dependency/build directories are filtered. Limits include 500 files/skill, 5 MiB/file, 25 MiB/skill, 200 candidates and bounded concurrency.
+- Download requests are pinned to the resolved commit. Staging uses a random directory, `wx` non-overwrite writes and mode `0644`; content is inspected. High-risk findings require a second confirmation, with an explicit warning that heuristic scanning is not a guarantee.
+- Existing target content requires consent and is moved to a recoverable backup; install failure attempts to restore the previous folder. Uninstall moves real folders to backup/trash and only unlinks a symlink, not its target. Update previews upstream changes and local edits, then uses the same backup path.
+- Optional editor GitHub auth is added only to allowlisted `api.github.com` / `raw.githubusercontent.com` requests; token never enters the webview. The webview CSP uses a nonce and disables inline script. Workspace Trust blocks writes to untrusted workspace locations.
+
+Residuals/bounds: product claims are largely Skill-directory and UI behavior, not migration guarantees. The repo's own dated `docs/ANALISIS.md` lists manual install/update/copy/move/uninstall modal walkthroughs and Cursor Settings discovery as pending; plugin skills, Claude Code enterprise paths and VS Code extension-provided Skills are out of scope; Cursor recursive Skill discovery is not fully implemented; huge GitHub trees can be truncated. The author analysis (2026-10-18) is a small dated market sample with several hypotheses, not evidence of a complete market survey.
+
+## Local gates observed on pinned source
+
+Install command was run only in the disposable checkout and with scripts disabled: `rtk proxy npm ci --ignore-scripts --prefix /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sefas-labs-ai-skills-manager-20261123-followup216` — exit 0; stdout: `added 289 packages in 2s` and `85 packages are looking for funding`; stderr contained deprecation warnings for `whatwg-encoding@3.1.1` and `prebuild-install@7.1.3`. No source or lockfile was changed by the install.
+
+- `rtk proxy npm test --prefix <checkout>` — exit 0; 57/57 tests passed, 0 failed, 0 skipped. These use a fake GitHub API and temporary fixture directories; tests cover path validation, symlink/submodule rejection, staging/install, overwrite consent, backup/rollback, provenance, update diffs and discovery. They do not validate the target's real session import/resume; no SessionGraph exists.
+- `rtk proxy npm run typecheck --prefix <checkout>` — exit 0 (`tsc -p tsconfig.json --noEmit`).
+- `rtk proxy npm run build --prefix <checkout>` — exit 0; esbuild emitted `dist/webview.js` (30.6 KB) and `dist/extension.js` (118.9 KB).
+- `rtk proxy npm run test:smoke --prefix <checkout>` — exit 0; 1/1 simulated VS Code API activation/dashboard handshake passed.
+- We did **not** run `npm run test:e2e`: its script reads the actual home Skill directories and contacts live GitHub for a fixture; that would unnecessarily inspect user-local resources. Its source installs only into a temporary editor profile, and the upstream analysis reports editor E2E passes, but that upstream claim was not independently reproduced here. Its manual modal tests remain author-listed as pending.
+
+## Dependency audit
+
+The initial `npm audit` used the machine's default registry `registry.npmmirror.com`, whose audit endpoint returned HTTP 404 `[NOT_IMPLEMENTED]`; corrected with the official `--registry=https://registry.npmjs.org` option. Full dev/build dependency scan then exited 1 with **7 affected package records: 2 high, 5 moderate, 0 critical**. `npm audit --omit=dev --registry=https://registry.npmjs.org` exited 0: `found 0 vulnerabilities`. The package manifest has no production `dependencies`; the findings are in the developer/publishing toolchain, not demonstrated in the installed extension runtime:
+
+- High: `@azure/identity@4.13.1` and `@azure/msal-node@5.6.0` (through `@vscode/vsce@3.9.2`; MSAL authorization-code flow advisory GHSA-xcx6-jx8p-x3h5; patched MSAL 7.1.0).
+- Moderate: direct `esbuild@0.24.2` (GHSA-67mh-4wv8-2f99), `fast-uri@3.1.8` (4 URI parsing/path advisories), transitive `glob@13.0.6` (GHSA-3g3m-2fjr-6pw4), `minimatch@10.2.6` (GHSA-g3hv-75wg-m249), plus direct `@vscode/vsce@3.9.2` affected through glob/minimatch. Fixes are offered by npm audit, with major upgrades indicated for vsce/esbuild. We did not modify the candidate lockfile or apply fixes. Treat this as a dev/publish-chain update requirement, not proof of runtime exploitability.
+
+## Nexus disposition
+
+**Keep as a high-value Skills/ResourcePlane reference; do not select as the SessionGraph migration engine.** Its strongest reusable ideas are source-pinned inspection, per-provider visibility, explicit conflict previews, staging, provenance hashes, read-only discovery and recovery UX. Re-implement/adapt only after checking exact host/version/path discovery, and keep Skill payload transfer distinct from MCP/plugin/config/session history. It has no route into the user's confirmed Claude Desktop 3P Chat/Cowork/Code stores or Anthropic-hosted Cloud. No real user data, home Skill folders, API key, Claude session, or provider request was accessed.
+
+
+Exact stdout/stderr and exit status for the final repeated `npm test`, `typecheck`, `build`, and `test:smoke` runs are recorded in `docs/research/evidence/sefas-labs-ai-skills-manager-gates-2026-11-23.txt`.

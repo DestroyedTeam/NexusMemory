@@ -1,0 +1,39 @@
+harperreed/toki — implementation review (2026-11-21)
+
+VERDICT
+- Adjacent local workflow/task manager with Projects, Todos and MCP; not a conversation/session migration candidate. Keep only as a low-priority task-context/MCP interoperability reference, not in the core migration engine shortlist.
+- Stable review TARGET is `/private/tmp/nm-next-agent-sessions-review-20261120/candidate/project`; no real Toki database, host configuration, MCP server, Claude Desktop install, provider account, secret, or session was opened or modified.
+
+PROVENANCE / CURRENTNESS
+- Repo: https://github.com/harperreed/toki. Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-harperreed-toki-20261121`. CodeGraph index verified current: 55 files, 965 nodes, 2,983 edges (50 Go, 5 YAML); tracked checkout stayed clean.
+- HEAD `c79f094b70467d8bed65fb9c674606c16164aa1e` (2026-09-26) matched live `refs/heads/main`. Current GitHub page snapshot: 10 stars / 2 forks. Latest release page: v0.7.4 (2026-02-12); main is substantially newer than release. Exact-main CI run #75 on 2026-09-27 reports Status Success, 1m50s. Its page also shows action annotations for cache-restore errors/warnings, so “green status” is not “clean warning-free log.”
+- `go.mod` says Go 1.24.9 while `.github/workflows/ci.yml` matrix lists 1.21, 1.22, and 1.23. GitHub’s exact-head run succeeded, but the available run summary does not verify which Go toolchain each matrix job ultimately used.
+- The README claims MIT, but the checked-out repository has no LICENSE file and the candidate/official metadata has no SPDX license. Treat licensing as unverified until the actual license text is supplied. Do not label it MIT-licensed solely from the README claim.
+
+IMPLEMENTATION OBSERVED
+- Core model is `Project{ID, Name, DirectoryPath, CreatedAt}` and `Todo{ID, ProjectID, ProjectName, Description, Done, Priority, Notes, Tags, CreatedAt, UpdatedAt, CompletedAt, DueDate}`. One project groups todos; no nested Sections, Section Groups, session parents/children, conversation IDs or event stream. Git-aware current-directory detection resolves a project path; it does not identify a harness session.
+- SQLite and Markdown backends share a storage interface. Backend migration copies Projects/Todos/tags. `MigrateData` creates destination rows in a loop without a transaction. `--force` only bypasses the non-empty target-dir guard; `openTargetStorage` opens the existing destination and does not clear it, so this flag is not an overwrite/replace transaction and errors can leave partial writes. Config is not auto-switched afterward.
+- Export envelope is `version`, `exported_at`, `tool`, `projects[]`; each project has ID/name/path/todos; each todo has ID, description, done, priority, notes, tags, created/updated/completed/due timestamps. Export commands cover YAML, JSON, Markdown and SQLite; `toki import` reads only YAML. Project `CreatedAt` is omitted; importer creates new Projects with `time.Now()`, so that value is not preserved. Import is idempotent by IDs and skips existing records; it does not merge/update conflicts. Invalid optional update/completion/due timestamps are silently ignored, while invalid created_at is an error.
+- Major reliability issue: `runImport` prints each project/todo error and continues, then returns nil. A partial import can therefore finish with a successful process exit and no machine-readable failure summary. `TestImportCommand` checks registration/flag/argument setup only; helper tests exist for ImportProject/ImportTodo, but no direct end-to-end runImport error/partial-import test was found.
+- SQLite export copies only the main `.db` bytes with `io.Copy`; SQLite is opened in WAL mode. `TestExportSQLite` closes the database before exercising the file copy. Active WAL/multi-connection snapshot consistency is not demonstrated; treat it as a backup-fidelity risk pending a focused test, not as a proven data-loss event.
+- MCP server runs over stdio; README shows Claude Desktop config and says any MCP-compatible client can connect. It provides 11 todo/project tools, 7 read-only resources and 6 task/workflow prompts. `toki install-skill` installs a Claude Code Skill. These APIs operate on Toki’s task DB; they do not import a ChatGPT/Claude session or write a client-managed Cloud Session.
+
+NEXUS MEMORY FIT
+- No ChatGPT Project/Section/Section Group source adapter; no Claude Desktop Chat/Cowork/Code session adapter; no local/self-hosted Claude Code transcript/session parser; no Cloud/API-Key session writer. No message turns, attachments/images/links, tool event timeline, fork/subtask/session graph, token billing, memory files or scheduled task source.
+- The MCP design is only a general example of exposed todo/project CRUD and read-only resources. Toki Projects are task containers keyed by UUID/path, not chat Projects; MCP prompts are workflow templates, not imported per-session instructions.
+- Reuse nothing as a “fidelity solution.” If ever integrating its task list, keep task-project links in a separate optional workflow plane and make activation/delete/data writes user-approved.
+
+QUALITY / ERROR LEDGER
+- Local test attempt `rtk proxy go test ./...` in the exact main checkout: exit 1, stdout empty, stderr exactly `rtk: Failed to execute command: go: No such file or directory (os error 2)`. No local Go tests or build claimed. Upstream exact-main CI status is above.
+- Initial CodeGraph command `rtk codegraph init --yes <checkout>` failed exit 1 because installed CodeGraph rejects `--yes` (`error: unknown option '--yes'`). `rtk codegraph init --help` showed valid usage; corrected `rtk codegraph init <checkout>` succeeded, then `rtk codegraph status <checkout>` confirmed 55 files / 965 nodes / 2,983 edges. Removed only `.codegraph/.gitignore`’s `!.gitignore` exception.
+- `rtk read LICENSE` failed exit 1 with missing file; corrected by listing repo root and checking the official repo page. No source file changes were made.
+
+OFFICIAL SOURCES
+- README and product feature claim: https://github.com/harperreed/toki
+- Exact-main GitHub Actions CI #75: https://github.com/harperreed/toki/actions/runs/36288913299
+- Latest release page: https://github.com/harperreed/toki/releases
+- Reviewed go.mod: https://github.com/harperreed/toki/blob/c79f094b70467d8bed65fb9c674606c16164aa1e/go.mod
+- Import implementation at reviewed commit: https://github.com/harperreed/toki/blob/c79f094b70467d8bed65fb9c674606c16164aa1e/cmd/toki/migrate.go
+- Export/SQLite implementation at reviewed commit: https://github.com/harperreed/toki/blob/c79f094b70467d8bed65fb9c674606c16164aa1e/cmd/toki/export.go
+- Backend migration at reviewed commit: https://github.com/harperreed/toki/blob/c79f094b70467d8bed65fb9c674606c16164aa1e/internal/storage/migrate.go
+- MCP usage docs: https://github.com/harperreed/toki/blob/c79f094b70467d8bed65fb9c674606c16164aa1e/docs/MCP_USAGE.md

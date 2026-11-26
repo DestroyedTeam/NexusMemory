@@ -1,0 +1,33 @@
+# ekupekuAI/agenthub review — 2026-11-23
+
+## Pinned identity and public state
+
+- Repository: <https://github.com/ekupekuAI/agenthub>
+- Reviewed checkout: shallow clone at `bc74259f22ab2c043aaed3f5abb3e1e29e72dbb4` (`Make the Ctrl+K e2e test wait for hydration`, 2026-10-21); working tree clean after the required local CodeGraph ignore exception cleanup.
+- License: MIT. GitHub snapshot: 0 stars, 0 forks; no GitHub Releases. GitHub Actions lists 15 runs; the latest shown is CI #15 on the pinned commit, successful (2026-10-21). npm registry metadata: `@ekupekuai/agenthub` latest `0.1.0`.
+- CodeGraph: 367 files, 5,048 nodes, 20,786 edges; index current. Root inventory lists TypeScript/Next.js CLI, registry, and web packages.
+
+## Capability boundary against Nexus Memory
+
+This is a useful **Skills resource-package manager and trust layer**, not a cross-Harness memory/session migration engine. It installs `SKILL.md` packages to Claude Code, Codex, Cursor, and VS Code/GitHub Copilot target directories. The adapters and README do not provide a ChatGPT/Codex Projects, Section Group, or Session reader/writer; no Session event/fork/parent-child graph, transcript/turn chronology, attachments, token/cost state, MCP/plugin transfer, schedule/task transfer, or memory-plane migration was found. The TUI's own `Session` concept is transient application UI state, not a model-conversation session. It does not target Claude Desktop third-party-gateway Chat, Cowork, or Code session stores, and it does not import/export local Claude Code conversation files. Those three Desktop surfaces remain separate acceptance tracks, alongside local/self-hosted Claude Code.
+
+Keep as **adjacent design references only**: explicit Skill capabilities and consent, package SHA-256 lock/integrity verification, archive path/symlink/size validation, static scan plus policy gating, transactional multi-target writes, journaled crash recovery, and rollback. Its security docs correctly warn that static scan is not a safety verdict; no sandbox is provided and runtime-generated/reworded behavior can evade heuristics. Treat any candidate use as untrusted package-management code requiring independent security review; do not reuse it as the migration engine or infer a Skill match from names alone.
+
+## Source and test review
+
+Inspected the archive parser, policy/scanner, adapters, apply/rollback/recovery transaction engine, CLI/web boundaries, `apps/web/src/lib/scan-runner.ts`, worker bundle build and CI workflow. The transaction engine revalidates plan/policy/capability expansion/state drift before writes, uses a journal for rollback/recovery, and hardens archive entries against traversal, symlinks, duplicates, malformed checksums, and limits. This is strong resource-plane practice but does not bridge native session schemas.
+
+Observed executions:
+
+- `npm ci --ignore-scripts --no-audit --no-fund`: exit 0 (176 packages added).
+- Node `v24.22.3` / npm `11.19.1`: `npm test` exit 0, 54 files passed (1 skipped), 1,166 tests passed (8 skipped); `npm run lint` exit 0 (Biome checked 374 files); `npm run typecheck` exit 0; `npm run build` exit 0. This corresponds to the upstream CI matrix's Node 22/24 commands; its OS matrix is Ubuntu/macOS/Windows.
+- Host Node `v26.7.0` / npm `11.19.0`: full `npm test` failed (46 failed, 1,103 passed, 25 skipped; 8 failing files plus 2 worker errors). The source/dev worker path sets `execArgv: ['--experimental-transform-types', '--disable-warning=ExperimentalWarning']`; Node throws `Initiated Worker with invalid execArgv flags: --experimental-transform-types` because Node 26 removed that flag. Root `engines.node` says `>=22`, while CI tests only 22 and 24. The failure is reproducible in source/test mode, not a claim that production web requests fail.
+- Under Node 26, `npm run build -w @agenthub/web` exit 0: the prebuild produced `apps/web/dist/scan-worker.mjs`, then Next production build succeeded. `npm test -- apps/web/test/scan-worker-bundle.test.ts` also passed 1 file / 3 tests. The bundled worker path uses no TypeScript-transform execArgv, so these observed checks distinguish the Node 26 source/test compatibility gap from the bundled production worker.
+- Bundle SHA-256 after the successful web build: `66682acbeb5ba59975cb2db3051469842fb4c271d2f813ab3e26474786efb35b`.
+- `rtk git status --short` was clean at pinned HEAD; CodeGraph status reported its index current.
+
+The Node 26 finding agrees with the official Node TypeScript documentation: v26.0 removed `--experimental-transform-types` (introduced in v22.7); the official release table labels v26 LTS. Sources: <https://nodejs.org/api/typescript.html> and <https://nodejs.org/en/about/previous-releases>.
+
+## Disposition
+
+Reject as a session/project migration dependency. Preserve only its resource-plane transaction, integrity, capability-declaration, and explicit security-limit lessons for Nexus Memory's future Skills/MCP/plugin adapters. No user export, account, API key, live Harness session, or personal settings were accessed. Full candidate source/pinned CI links: <https://github.com/ekupekuAI/agenthub/tree/bc74259f22ab2c043aaed3f5abb3e1e29e72dbb4>, <https://github.com/ekupekuAI/agenthub/actions>, <https://github.com/ekupekuAI/agenthub/releases>, <https://github.com/ekupekuAI/agenthub/blob/bc74259f22ab2c043aaed3f5abb3e1e29e72dbb4/apps/web/src/lib/scan-runner.ts>.

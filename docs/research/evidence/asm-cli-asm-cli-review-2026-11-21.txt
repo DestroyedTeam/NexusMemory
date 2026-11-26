@@ -1,0 +1,71 @@
+NEXUS MEMORY CANDIDATE REVIEW — asm-cli/asm-cli
+Review date: 2026-11-21 (Asia/Shanghai)
+Disposition: a useful multi-resource management plane reference, not a conversation migrator. No source changes were made to the upstream checkout.
+
+IDENTITY / RELEASE / LICENSE
+- Repository: https://github.com/asm-cli/asm-cli
+- Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-asm-cli-asm-cli-20261121
+- Default branch main; clone/fetch returned exact HEAD 2537ee2ba8941ace891dfced324f2b411a5c0ba9, matching origin/HEAD. This is the v0.1.2 release commit.
+- GitHub metadata at review: created 2026-04-21, last push 2026-04-22, updated 2026-05-22, 2 stars, 0 forks, 0 open issues, not archived. GitHub reports no license (license_spdx=null); root git file list has no LICENSE. Do not copy/reuse code until license is clarified.
+- Latest release v0.1.2 publishes checksum files and CLI binaries for Linux amd64, macOS arm64 and Windows amd64. This is a CLI binary, not a Mac .app or GUI Windows EXE. The release workflow has a 3-platform build matrix. Exact HEAD release run #2 succeeded but is a build-only workflow, not test CI.
+- No separate CI/test workflow was listed; one active workflow is Release. The repository README describes a local central store for Skills, MCP servers and Plugins.
+
+WHAT IT ACTUALLY DOES
+- One local store under ASM_HOME (~/.asm by default) contains Skill/Plugin files and MCP config/binaries; agent profiles project Skill/Plugin symlinks and inject MCP entries into native config.
+- Built-in Agent enum is exactly Claude, Codex, Cursor, Gemini. Skill path support is broader than the management logic; MCP discovery/injection and plugin scans are explicitly implemented only for Claude and Codex.
+- The generic migrate operation scans unmanaged Skill/MCP/Plugin packages, imports packages into ASM, and projects them back. This is package/resource migration only: it contains no provider transcript reader or writer, Project/Section Group hierarchy, Session/Message/turn/fork/subtask model, branch graph, attachments, token usage, schedules, memory, or source-side conversation archive.
+- No Claude Code session history and no Claude Desktop Chat/Cowork/Code/API-key gateway session adapter. The function MCPConfigPath returns a Claude Desktop config filename but CodeGraph callers show it is only used in unit tests; runtime migration scans ~/.claude/settings.json and Codex config.toml, and injection writes those paths. It is not a Claude Desktop adapter.
+- Positive design patterns: central content store and link records, separate packages by kind, explicit dry-run of unmanaged package migration, and an eject command intended to restore materialized package copies. Treat these as concepts only, not code to reuse.
+
+TEST / BUILD EVIDENCE
+- Initial rtk go version failed to start because no Go binary is installed; rtk docker ps also failed because Docker daemon is not running. Corrected by downloading the official Go 1.27.4 darwin/arm64 archive into a temporary directory, checking SHA-256 against the official Go downloads page, running tests/vet/build, then deleting the temporary toolchain. No host Go installation was made.
+- Toolchain: go version go1.27.4 darwin/arm64; archive SHA-256 91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4.
+- rtk proxy go test ./... exited 0. Literal stdout:
+  ? github.com/asm-cli/asm-cli [no test files]
+  ok github.com/asm-cli/asm-cli/cmd 0.032s
+  ? github.com/asm-cli/asm-cli/cmd/pkgcmd [no test files]
+  ok github.com/asm-cli/asm-cli/internal/agent 0.008s
+  ok github.com/asm-cli/asm-cli/internal/config 0.009s
+  ? github.com/asm-cli/asm-cli/internal/ejector [no test files]
+  ok github.com/asm-cli/asm-cli/internal/initializer 0.041s
+  ok github.com/asm-cli/asm-cli/internal/installer 0.029s
+  ok github.com/asm-cli/asm-cli/internal/linker 0.041s
+  ? github.com/asm-cli/asm-cli/internal/migrator [no test files]
+  ok github.com/asm-cli/asm-cli/internal/store 0.022s
+  ? github.com/asm-cli/asm-cli/internal/version [no test files]
+  stderr: Go downloaded cobra and pflag from go module proxy. No user data was involved.
+- rtk proxy go vet ./... exited 0, stdout/stderr empty.
+- rtk proxy go build ./... exited 0, stdout/stderr empty.
+- Tests cover installer/store/linker basics and basic command integration, but package migration, MCP config injection, plugin migration, and eject behavior have no test package coverage. The release workflow builds artifacts only; no exact-head test job was found.
+
+CONFIRMED SAFETY FINDINGS — TEMPORARY FIXTURE ROOTS ONLY
+1. MCP local-binary path boundary:
+   - Source localBinaryPath uses strings.HasPrefix(command, agentHome), not a separator-aware relative-path check. migrator.Apply copies the resulting file into ASM and then calls os.Remove on the original before native-config injection has completed.
+   - A checksum-verified v0.1.2 release binary (asm v0.1.2, short commit 2537ee2; the same full HEAD as the clone) was executed against a temporary HOME. Fixture agent home was /.../home/.claude; MCP command path was a sibling /.../home/.claude-shadow/mcp-helper. It passed the string-prefix check. Command: asm mcp migrate --agent claude.
+   - Literal result:
+     {"checksum_verified":true,"binary_version":"asm v0.1.2 (commit: 2537ee2, built: 2026-04-22T07:27:09Z)","mcp_prefix_probe":{"exit_status":0,"path_shares_prefix":true,"outside_original_binary_exists":false,"binary_copied_into_asm_store":true,"stored_config_mode":"0644","fixture_env_value_plaintext_present":true}}
+   - No actual secret was used; the fixture env value was “not-a-secret”. The temporary HOME tree and downloaded binary were removed.
+2. Store ID traversal:
+   - store.PackagePath joins ASM_HOME/store/<kind> with raw package ID, and the CLI accepts --id without validation.
+   - Using the same verified release binary and a local fixture directory, asm skills install <fixture> --id ../../../../escaped-package exited 0 and copied payload.txt to a temporary sibling outside ASM_HOME.
+   - Literal result:
+     {"exit_status":0,"id":"../../../../escaped-package","target_outside_asm_home":true,"payload_written_outside_asm_home":true}
+   - The escaped output remained inside the temporary root and was deleted with that root.
+3. MCP config confidentiality/transaction:
+   - MCPServerConfig has Env string values. InstallMCPConfig stores config.json as plaintext with requested mode 0644 under a directory created 0755; the temp POC observed actual 0644 and confirmed a dummy env value persisted. Effective access still depends on the parent directory permissions/umask.
+   - migrator.Apply removes the original local MCP binary before the following enable/config-injection step. If a later step fails, there is no rollback of that removed binary. Static ordering observation; no forced post-deletion failure was run.
+4. Plugin migration similarly trusts installPath from Claude's installed_plugins.json and EnableAtPath recursively RemoveAlls that path before creating the store symlink. This is a static boundary concern; no plugin deletion POC was run.
+
+CLAUDE DESKTOP / PRODUCT BOUNDARY
+- MCPConfigPath has a test expecting claude_desktop_config.json, but the only codegraph caller is the test. Runtime MCP discovery/injection does not call this helper, so do not count it as Claude Desktop support.
+- No Chat/Cowork/Code session import, Claude Code local session reader, API-key gateway writer, ChatGPT/Codex source reader, or Session fidelity benchmark exists.
+- No release/tool workflow can restore native conversation/project structure. This candidate's “migrate” means resource package import/enable, not conversation migration.
+
+SOURCES
+- Repo, release and exact build run: https://github.com/asm-cli/asm-cli ; https://github.com/asm-cli/asm-cli/releases/tag/v0.1.2 ; https://github.com/asm-cli/asm-cli/actions/runs/24765903039
+- Pinned sources: https://github.com/asm-cli/asm-cli/blob/2537ee2ba8941ace891dfced324f2b411a5c0ba9/internal/agent/agent.go ; https://github.com/asm-cli/asm-cli/blob/2537ee2ba8941ace891dfced324f2b411a5c0ba9/internal/installer/installer.go ; https://github.com/asm-cli/asm-cli/blob/2537ee2ba8941ace891dfced324f2b411a5c0ba9/internal/linker/linker.go ; https://github.com/asm-cli/asm-cli/blob/2537ee2ba8941ace891dfced324f2b411a5c0ba9/internal/migrator/migrator.go ; https://github.com/asm-cli/asm-cli/blob/2537ee2ba8941ace891dfced324f2b411a5c0ba9/internal/store/store.go
+- Official Go 1.27.4 archive and checksum: https://go.dev/dl/?mode=darwin
+
+CORPUS STATE
+- Original GitHub corpus: 87/303 reviewed, 216 pending after this review; next unreviewed candidate: b2amedina/omaset. Candidate review is incremental and not proof of broad-market or Harness-wide completeness.
+

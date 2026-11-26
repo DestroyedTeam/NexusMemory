@@ -1,0 +1,15 @@
+# Candidate #254 — Hrishikesh2512/Smyrti provenance screen (2026-11-24)
+
+## Identity
+- Repository: https://github.com/Hrishikesh2512/Smyrti
+- Local snapshot: `master`, HEAD `3e91debdbf3350af68eae65cb1ebb4533681c7b3`, commit date 2026-05-10; remote `HEAD` and `refs/heads/master` match.
+- GitHub API metadata at review: `license: null`, 1 star, 0 forks, default branch `master`, last push 2026-05-10. The candidate inventory also reports no SPDX license.
+- The tracked-file list and GitHub repository file tree show README/package/manifest/source folders but no `LICENSE`, `COPYING`, or equivalent grant.
+
+## README-only claim (unverified)
+The README describes a Chrome extension that transfers *working memory* between the ChatGPT, Claude and Gemini web interfaces, extracting active conversation state locally and injecting a continuation prompt. It explicitly distinguishes its output from raw chat logs. These are README claims only; no source, tests, package scripts, extension manifest, dependencies, browser permissions, build output, runtime behavior or destination compatibility was inspected or tested.
+
+## Provenance gate and disposition
+**Stop at the license/provenance gate.** With no repository license file and GitHub metadata `license: null`, do not review source for reuse, run/install the extension, or treat the README as evidence of fidelity. No source-derived design, code, tests, local browser profile, ChatGPT/Claude session or credential was accessed. No license was inferred from package metadata or public availability.
+
+This is a high-relevance **discovery lead, not a reviewed migration implementation**. Its claimed web-UI “working memory” transfer may not equal export/import of ChatGPT Destruction Era Projects, Section Groups, full Session trees, attachments or event data. It says nothing about Claude Desktop third-party-provider Chat/Cowork/Code or local/self-hosted Claude Code API-key/gateway targets. Keep it outside the compatibility matrix as “screened — provenance stop, README claims unverified” until an explicit license is added or permission is obtained. Full source review would then require a fresh pinned-version and safety audit.

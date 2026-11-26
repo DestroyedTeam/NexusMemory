@@ -1,0 +1,19 @@
+
+running 2 tests
+test browser::tests::visible_profiles_allow_extensions_but_headless_and_transfer_launches_disable_them ... ok
+test transfer::tests::multiple_internal_profiles_keep_separate_cookie_jars ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 12.71s
+
+
+running 2 tests
+test encrypted_whole_profile_transfer_preserves_cookie_and_site_storage ... ok
+test three_profiles_mcp_ownership_and_persistence ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 107.44s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+

@@ -1,0 +1,56 @@
+NEXUS MEMORY — CANDIDATE #305 REVIEW
+rpeck/claude-explorer — 2026-11-25
+
+Disposition
+- High-value read-only local archive, search/viewer, Cowork/Claude Code/Codex reader, and FastMCP query prior art (Apache-2.0); NOT a cross-Harness session/project migrator or Claude Desktop 3P writer.
+- Reuse architectural and safety patterns (SourceAdapter/SourceDescriptor capability flags, Cowork local-agent-mode-sessions parser, two-stage corrupt-config + cloud-sync write gate, Codex read-only source to archive-copy pipeline with home-path redaction, and test-integrity discipline). Do not treat it as a ChatGPT/Codex-to-Claude Desktop 3P destination adapter.
+
+Identity / provenance
+- Repository: https://github.com/rpeck/claude-explorer
+- GitHub API snapshot (2026-11-25): 26 stars, 3 forks, created 2026-04-26T21:56:51Z, pushed 2026-11-25T07:33:38Z, not archived, licenseInfo `apache-2.0`.
+- Local shallow checkout commit `bdb6434731de39b63b4adbdbc27e120cb1228dbe`, committed 2026-11-24 15:54:24 -0800 (`docs(plans): research for Code Mode, cross-session...`).
+- Local root `LICENSE` verified as Apache License 2.0 (Copyright 2026 Raymond Peck); `pyproject.toml` declares Apache-2.0; contributor `CLA.md` is also present.
+- CodeGraph indexed 741 files (372 Python, 214 TypeScript, 149 TSX, 5 YAML, 1 JavaScript), 12,296 nodes, 37,088 edges; status reports up to date. Kept `.codegraph/.gitignore` (`*`), removed only `!.gitignore`; `git status --short` is empty.
+
+Architecture & Claude Desktop 3P / Nexus scope assessment
+- Registered sources (`backend/sources/{claude_ai,claude_code,cowork,codex}.py`):
+  1. `CLAUDE_AI` (UI label "Claude Desktop"): reads `~/.claude-explorer/conversations/by-org/<org_uuid>/<uuid>.json` fetched from `claude.ai` web APIs via Playwright login or cookie capture (`sessionKey`, `cf_bm`, `cf_clearance` stored in `~/.claude-explorer/credentials.json`, atomic write `0o600`, `CredentialsV2` in `fetcher/credentials.py`). `has_projects=False`, `refetchable=True`, `branch_flag` computed from parent links. Does NOT read Claude Desktop 3P local Chat sessions (`Claude-3p/local-agent-mode-sessions`) and cannot operate via API-key / third-party inference gateway without a `claude.ai` session.
+  2. `CLAUDE_CODE`: reads live `~/.claude/projects/<encoded-cwd>/<uuid>.jsonl` (overridable via `CLAUDE_DIR` or `config.json` `claude_dir`). `has_projects=True`, `branch_flag=False` (explicitly disabled because post-compact duplicate UUIDs poison parent->children counts and CC has no edit-branch UI). Archival gap (`backend/sources/claude_code.py:50`, `AGENTS.md:27`): `archive_sync()` returns `None`; JSONL transcripts are never copied into the Explorer archive (only CC images are cached by `cc_watcher.py`). If Claude Code rotates/prunes a session JSONL, Explorer loses the session.
+  3. `CLAUDE_COWORK`: reads live `<claude_desktop_app_dir>/local-agent-mode-sessions/<deployment_uuid>/<org_uuid>/local_<uuid>/audit.jsonl` plus sibling `local_<uuid>.json` sidecar, plus remote Cowork tasks fetched into the same local Cowork shape (`fetcher/remote_sessions.py`). Default `claude_desktop_app_dir` (`backend/config.py:168-174,347-353`) uses `platformdirs.user_data_path("Claude")` (standard `~/Library/Application Support/Claude` on macOS, NOT `~/Library/Application Support/Claude-3p`), though overridable via `CLAUDE_DESKTOP_APP_DIR` or `config.json` `claude_desktop_app_dir`. Zero references to `Claude-3p` or `ant-did` exist in `backend/`, `fetcher/`, or `mcp_server/`. `CoworkAdapter` sets `has_projects=False`, `branch_flag=False` (Cowork `audit.jsonl` lacks `parentUuid`; `parent_tool_use_id` is ignored). `backend/cowork_reader.py:64` truncates single content payloads exceeding `_CONTENT_BYTE_LIMIT = 1 * 1024 * 1024` (1 MB) with `[truncated; N bytes]` before merging, drops `_audit_hmac` without verifying it (D4), and drops empty-turn sessions (D6). Archival gap (`backend/sources/cowork.py:52`): `archive_sync()` returns `None` for local Cowork sessions (live-read only). Even if `CLAUDE_DESKTOP_APP_DIR` were pointed at a 3P `Claude-3p` root, Explorer would not distinguish 3P local Chat from Cowork, would not preserve Projects/uploads/outputs parity, and has no writer; compatibility with current `Claude-3p` schemas is unverified.
+  4. `CODEX`: reads `~/.codex` (`CODEX_HOME` / `config.json` `codex_home` / `~/.codex`), including plain `.jsonl` and `.jsonl.zst` rollouts, `session_index.jsonl`, and `state_5.sqlite`. Unlike CC/Cowork, Codex implements `archive_sync()` (`backend/sources/codex.py`), treating `~/.codex` strictly read-only and copying into `<data_dir>/codex/<home_key>/{home.json,rollouts/,threads/}` via atomic writes (`atomic_write_bytes`) with home-path redaction (`_display_home`) for MCP outputs.
+- Cross-Harness migration gaps:
+  - Zero ChatGPT export, Projects, or Sections/Section Groups support (0 matches for `chatgpt` in `backend/`, `fetcher/`, `mcp_server/`).
+  - Zero destination writers/importers for Claude Desktop 3P (Chat/Cowork/Code) or local Claude Code CLI.
+  - Outputs are strictly read-only: web viewer/FTS search, Markdown and WeasyPrint PDF export (`backend/exporters/pdf.py`), and 5 read-only FastMCP stdio tools (`mcp_server/server.py`: `list_sessions`, `list_projects`, `get_session_outline`, `get_messages`, `export_session`).
+  - No migration of Skills, MCP server configurations, plugins, memory, permission hints, or scheduled tasks.
+
+Safety, security, and architectural patterns worth reusing
+- Capability-explicit adapter contract: `SourceDescriptor` (`chronological`, `has_projects`, `has_archive_state`, `has_organizations`, `refetchable`, `messages_change_in_place`, `branch_flag`) prevents silently conflating distinct session models across lanes.
+- Two-stage write protection (`backend/write_gate.py`, `backend/config.py`):
+  1. Corrupt-config safe mode: malformed `config.json` never crashes startup; `Settings.load()` records `config_corrupt_reason` (even when a legacy fallback succeeds), surfaces it in the UI, and halts archive writes until repaired while letting CC image-cache backstop continue.
+  2. Cloud-sync write gate: detects Dropbox/iCloud/OneDrive-synced write targets (`data_dir`, `search-index.sqlite`, `cc-images`) and blocks archive writes until explicit consent (`allow_writes_in_cloud_sync` bound to resolved realpath; moving `data_dir` re-closes the gate). MCP notices redact absolute home paths (`_display_home`).
+- Codex read-only source isolation (`backend/sources/codex.py`): never mutates `~/.codex`, streams `.jsonl.zst` safely, writes archive copies atomically, and redacts absolute user paths in MCP responses.
+- Security & test-integrity discipline (`SECURITY.md`, `TESTING.md §0`): documented HTML-injection fix + regression test for WeasyPrint PDF export, enforced single-credentials-loader invariant (`test_one_credentials_loader`), pre-push secret/path/fixture checklist, and disk-vs-collected test file verification.
+
+Verification & test execution (synthetic/unit only — no live accounts, sessions, or gateways)
+- Initial errors & fixes:
+  1. `rtk uv ...` failed (`command not found`) because `uv` is installed at `/Users/vincentadamnemessis/.local/bin/uv` outside default `PATH`. Fixed by setting `PATH=/Users/vincentadamnemessis/.local/bin:$PATH /Users/vincentadamnemessis/.local/bin/uv ...`.
+  2. First `scripts/check.py` run failed on frontend (`eslint` exit 2: `Cannot find package '@eslint/js'`; `tsc` printed `"This is not the tsc command you are looking for"`) because `frontend/node_modules` was not installed. Fixed by running `rtk npm ci` in `frontend/` (installed 594 packages; npm noted 4 packages with lifecycle scripts outside `allowScripts`: `esbuild`, `fsevents`, `msgpackr-extract`, `msw`).
+- Full check command: `PATH=/Users/vincentadamnemessis/.local/bin:$PATH /Users/vincentadamnemessis/.local/bin/uv run python scripts/check.py` (logged under `.verified305/logs/candidate-check.{stdout,stderr,status}`).
+  - Exit code: 0 (`All checks passed (python, frontend). Recorded for the pre-commit and Stop hooks.`).
+  - Python checks: venv dev-tools pass (0s), `ruff` pass (`All checks passed!`, 0s), sources JSON current pass (0s), `compileall` SyntaxWarning-as-error pass (0s).
+  - `pytest` parallel (`-m 'not serial'`): **3,983 passed, 12 skipped** in 288.47s.
+  - `pytest` serial: **5 passed, 1 skipped**, 3,995 deselected in 7.15s.
+  - Frontend checks: `tsc` pass (5s), `eslint` pass (5s), `vitest` **103 passed (103 test files), 1,002 passed (1,002 tests)** in 15.33s, `react-doctor` diff gate pass (5s; shallow clone lacked `main` history, fell back to full scan: 66/100, 261 warnings across 59 files, 0 gating errors).
+- Independent file-count check (`TESTING.md §0`, logged in `.verified305/logs/pytest-collect.*`):
+  - Python: 248 `test_*.py` files on disk vs 247 collected by default `uv run pytest --collect-only -q` (`3995/4001 tests collected (6 deselected)`). The 1 excluded file is `backend/tests/test_search_index_benchmark.py`, intentionally deselected by default `-m 'not serial'` and run in the serial pytest step.
+  - Frontend: 103 `frontend/src/**/*.test.*` files on disk, matching `Test Files 103 passed (103)`.
+- Test-hygiene finding in raw stderr (`.verified305/logs/candidate-check.stderr`, 286,210 bytes):
+  - Despite exit 0, vitest emitted **215 `[MSW] Error: intercepted a request without a matching request handler:` errors** (`GET /api/bookmarks`: 111, `GET /api/preferences`: 104) and **504 React `act(...)` warnings**, because `AllProviders` mounts `SettingsProvider`/`BookmarkProvider` without default MSW handlers in several test suites. `TESTING.md §0` itself flags `Error:` in raw output as a test-integrity warning.
+- Explicitly NOT tested / unverified:
+  - Playwright E2E suite (`frontend/e2e/`, 137 files, `scripts/check.py --only e2e`) was NOT executed.
+  - No real `claude.ai` login/cookie capture, no real `~/.claude`, `~/.codex`, or `~/Library/Application Support/Claude*` directories, and no Claude Desktop 3P runtime or live gateway were accessed.
+
+Nexus reuse boundary
+- Approved for Apache-2.0 design reference and selective read-side/safety pattern reuse: `SourceDescriptor` capability matrix, Cowork `audit.jsonl` + sidecar parsing caveats (preserving full payloads instead of silently truncating at 1 MB and preserving `_audit_hmac` provenance), corrupt-config + cloud-sync write gates, Codex archive-copy isolation + path redaction, and `TESTING.md §0` test-integrity auditing.
+- Rejected as a Nexus migration engine or Claude Desktop 3P adapter: read-only scope (no target writers), no ChatGPT/Projects/Sections/Skills/MCP/plugin/memory/schedule transfer, `CLAUDE_AI` assumes `claude.ai` web cookies rather than 3P gateway/local Chat, default Cowork root assumes standard `Claude` rather than `Claude-3p`, and CC/Cowork `archive_sync()` is unimplemented (live-read only).

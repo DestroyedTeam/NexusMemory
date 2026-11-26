@@ -1,0 +1,39 @@
+# Candidate #236 — neosun100/aiw source, security and tests review
+
+Review date: 2026-11-24 (Asia/Shanghai).
+Requested repository: https://github.com/neosun100/aiw
+Pinned checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-neosun100-aiw-20261124-followup236`
+
+## Provenance and state
+
+Shallow clone exited 0. Branch `main`, HEAD and `origin/main` `a9e4221aa39e20aa7c041528805f8a763c035158`, commit timestamp `2026-01-08T00:45:41+08:00`, subject `v0.2.0: Interactive terminal, keyboard shortcuts, UI improvements`; Git status `## main...origin/main` clean. The repository LICENSE is MIT (copyright neosun100, 2026). README's changelog identifies v0.2.0 as Jan 8, 2026. At review the GitHub releases page showed no Releases and the Issues page showed 0 open issues; repository page showed 5 stars and 0 forks. CodeGraph is current: 13 Python files, 218 nodes, 434 edges. `.codegraph/.gitignore` remains present with only the `!.gitignore` self-preserving exception removed.
+
+## Product model and migration fit
+
+AIW manages running local agent CLIs inside persistent tmux sessions. Each workspace record is a small metadata object (`tool`, `model`, `desc`, `dir`, `created`) keyed by workspace name in `~/.config/aiw/sessions.json`; tmux stores the live process/session. The tool can start a new CLI in a project directory, attach, show recent terminal output, send commands and kill one/all workspaces. REST/WebSocket, local CLI and stdio MCP are management surfaces.
+
+This is **live process/workspace orchestration**, not a transcript importer, history archive or migration graph. A `dir` is a single workspace binding, not ChatGPT Project/Section Group or nested Session hierarchy. The source has no source/target adapter, raw transcript/event model, import/export bundle, parent/fork/subtask/artifact links, attachment/tool/usage preservation, Skills/MCP/plugin transfer, memory migration, or scheduled-task converter. It launches tools such as Gemini/Kiro/Claude CLI from configured commands; it is not a Claude third-party-gateway/API-Key provider adapter or a writer into Claude Desktop Chat, Cowork or Code session stores.
+
+## Security and source defects
+
+- README and source default the HTTP server to `0.0.0.0`; REST endpoints and WebSockets cover create, send-to-agent, kill, logs and interactive terminal attach. No authentication/authorization middleware is present. README itself warns to add an authenticated reverse proxy and HTTPS before exposure. This is a material deployment risk for a service that can control agent shells.
+- `src/aiw/tmux.py::_run` invokes `subprocess.run(..., shell=True)` and interpolates workspace names, paths, tool configuration and terminal commands into shell strings. Treat inputs/config as privileged; do not expose this API as a trusted migration endpoint.
+- `rename_workspace` references `SESSION_PREFIX`, `run_tmux` and `META_DIR`, none of which are defined in the indexed `tmux.py`; it uses a metadata-file layout different from `config.py`'s `sessions.json`. API and README advertise rename, but there is no rename test. A synthetic safe probe patched `workspace_exists` to return true and called `rename_workspace('fixture-old','fixture-new')`; observed `NameError: name 'SESSION_PREFIX' is not defined` before any tmux/shell operation.
+- The MCP server exposes `aiw_create`, `aiw_send`, `aiw_kill`, logs and status through stdio. The HTTP app's API/test paths do not authenticate; tests call routes with no auth header. MCP is a control plane, not an import/export contract.
+
+## Local validation
+
+Test dependencies were installed into `/tmp/nm-aiw-review-236-venv`; no global install, live AI CLI, tmux session, network server, user's config, API key or provider request was used. Existing tests use temporary config roots and patch tmux operations.
+
+- With the newest unpinned compatible `mcp` resolved from `mcp>=1.0.0` (2.3.0), command `rtk test /tmp/nm-aiw-review-236-venv/bin/python -m pytest` exited 1: **14 failed, 52 passed**. Every failure is in `tests/test_mcp.py`, failing during import with `AttributeError: 'Server' object has no attribute 'list_tools'` at `src/aiw/mcp_server.py:13`.
+- After installing `mcp==1.0.0` in the same disposable venv, the same pytest command exited 0: **66 passed in 0.48s**. This demonstrates the declared unbounded `mcp>=1.0.0` range currently permits an API-incompatible version; passing on the old pin is not proof of current dependency compatibility.
+- The original source suite does not exercise rename, auth/security boundaries, a real tmux process or live API exposure.
+
+## Decision
+
+Low migration relevance. Retain only as adjacent local agent-process/workspace orchestration prior art; do not treat tmux sessions as portable conversation Sessions. Do not recommend deployment as-is on a reachable network because its default server can send commands/attach to terminals without built-in auth, it constructs shell commands, rename is broken at the pinned commit, and MCP 2.3.0 breaks the advertised MCP server/tests. No user session was accessed or migrated.
+
+Primary sources:
+- https://github.com/neosun100/aiw/tree/a9e4221aa39e20aa7c041528805f8a763c035158
+- https://github.com/neosun100/aiw/blob/a9e4221aa39e20aa7c041528805f8a763c035158/LICENSE
+- Reviewed code: `src/aiw/tmux.py`, `src/aiw/api.py`, `src/aiw/config.py`, `src/aiw/mcp_server.py`; tests `tests/test_api.py`, `test_mcp.py`, `test_tmux.py`, `test_cli.py`, `test_config.py`.

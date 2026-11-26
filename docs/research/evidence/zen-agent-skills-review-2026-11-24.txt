@@ -1,0 +1,48 @@
+# Candidate #246: zen-solutions-dev/zen-agent-skills (2026-11-24)
+
+## Provenance and observed state
+
+- Repository: https://github.com/zen-solutions-dev/zen-agent-skills. MIT license is present in the shallow clone and on the GitHub repository page. At review, GitHub showed 2 stars, 0 forks, 0 open issues, 3 open pull requests, 348 commits, and no visible release. Local `git tag --sort=-version:refname` returned no tags.
+- Shallow clone of `main`: `b61dab8b1ede6ece42e950e70e820b1a7ee68590`, dated 2026-10-21, title `Merge pull request #96 from hams-ollo/developer`. `git ls-remote` returned the same main commit for both `zen-solutions-dev/zen-agent-skills` and `hams-ollo/zen-agent-skills`; the README's quick-start clone command points at the latter. Treat this as one source snapshot with an owner/clone-alias discrepancy, not two independent implementations.
+- Working tree was clean before CodeGraph setup. CodeGraph initialized successfully with the CLI's supported `rtk codegraph init .` invocation, indexed 50 files (3,181 nodes / 7,815 edges), and `rtk codegraph status .` passed. `.codegraph/.gitignore` was kept and only its `!.gitignore` self-preserving exception removed; the index remained ignored and the checkout status returned clean.
+- The public Actions page at review showed recent passing runs for the Nov. 23 pull requests, as well as older failed/cancelled pull-request runs. Those are PR runs, not proof of a release or a full platform matrix. The local acceptance command's own output explicitly says the run is one of six OS/Python CI cells.
+
+## What is shipped
+
+Zen Agent Skills is a collection of written agent instructions and distribution tooling, not an agent runtime or data migration utility. Its source of truth is one harness-agnostic `SKILL.md` per skill, with supporting templates, references, rules, and scripts. The skills focus on software delivery: project/work tracking, specifications, task decomposition, coding/review, handoff, and verification.
+
+The installer has `core`, `spine` (default), and `all` profiles; it resolves sibling-skill references so a profile does not ship a dangling composed skill. It places native `SKILL.md` directories globally for Claude Code and OpenCode, keeps a hash manifest, avoids overwriting unowned files, supports dry-run/check/uninstall, and installs shared rules. The generator creates project-level Cursor `.mdc` rules and VS Code/Copilot prompt files while rewriting allowed relative links. An optional output generates a Claude Code plugin tree. Docs list other Harnesses as manually reading the canonical skill or receiving a locally authored adapter; Codex is not a first-class target in the install integration table. The acceptance run produced 48 adapter files for 24 skill directories and exercised dry-run plus a temporary install/uninstall cycle, but did not launch every target client or prove its runtime actually loaded the skill.
+
+This is useful prior art for Nexus Memory's **portable Skills plane**: single-source skill bodies, adapter generation, profile/description budgets, explicit ownership, non-destructive installation, and tests for broken relative links. It does not configure MCP servers, gateway/API-key authentication, ChatGPT Projects, Claude Desktop 3P modes, or any session/transcript importer. A Claude Code plugin tree is a Skills distribution format, not a session migration bridge.
+
+## The adjacent session observatory is narrower and not shipped
+
+The same repo includes `scripts/observatory/` and `.agents/skills/agent-observatory`, but its own catalog marks `agent-observatory` as a **draft**, and the README/architecture say observatory is maintainer tooling that `install.py` never places. It is not evidence that the published skill kit supports cross-Harness memory or session transfer.
+
+The observatory reads Claude Code's local `~/.claude/projects` JSONL corpus and `~/.claude/sessions` live-session registry, deriving a local SQLite report. Its schema is useful analytics prior art: a session row; message UUID and `parent_uuid`; `message_occurrence` to account for fork/resume replay; tool-call rows; subagent `agent_run` sidecars with model/status/token/duration/tool counts, worktree branch/path, and spawn depth; and context-budget samples. This is **not a portable archive**: the default adapter is Claude Code-specific, the observatory is not delivered to adopters, and its message table stores identifiers, parent/type/time/model/attribution/token/error metadata rather than raw message bodies or attachment payloads. It has no ChatGPT source decoder, Section Group/project membership mapping, Claude Desktop Chat/Cowork/Code adapter, or import/resume writer. Its read-only session actions are only opening a PR, copying a work path, or copying a `claude --resume` command; it does not execute session actions.
+
+## Relevance to the user's target
+
+The confirmed destination remains Claude Desktop third-party-inference Chat, Cowork, and Code separately, plus local/self-hosted Claude Code via API key or gateway. Source remains ChatGPT **Destruction Era** Project/Section Group/full Session hierarchy and resources. Candidate #246 contributes only to the Skills/adapter design lane. It provides no mechanism for moving project/session structure, branch/fork/subtask links, user interruptions, images/files/links, tool input/output, token accounting, model context, scheduled work, MCP state, or memory. No compatibility percentage can be inferred from its successful skill-install tests.
+
+## Checks and exact outcomes
+
+- Repository acceptance command: `rtk proxy python3 scripts/run-checks.py`.
+- Exit 0: **9 passed, 0 failed, 0 could not run** on Darwin, Python 3.12.10 (one of the six OS/Python CI cells). Exact gate output is preserved in the workspace `VERIFICATION.txt`: skill lint/link checks (24 skill directories, 2 skipped), test suite (2 skipped), backlog (231 task files, 0 errors/warnings), adapter dry-run (48 generated files for 24 skills), install dry-run, temporary install cycle, docs links (61 files, 0 broken), matrix citations (1,116 extracted rows over 13 files), and roadmap bookkeeping (93 IDs, 0 unresolved). A passing local cell is necessary, not proof of the unrun five cells or client behavior.
+- No actual Claude/OpenCode/Cursor/Copilot client was launched. No `~/.claude/projects` corpus, user-installed skills, MCP config, key, provider, or account data was read; no key was configured; no actual session was created or resumed.
+- Tool corrections: `rtk codegraph init --yes .` returned exit 1 (`unknown option '--yes'`); `rtk codegraph init --help` returned exit 0 and showed no `--yes`; corrected to `rtk codegraph init .`, which exited 0 and built the index. A first docs grep was run from the NexusMemory root and exited 2 because the candidate's `docs/INSTALL.md` and `docs/CATALOG.md` do not exist there; corrected in the bound candidate checkout. No candidate code was changed.
+
+## Sources
+
+- Repository and current README: https://github.com/zen-solutions-dev/zen-agent-skills
+- Equivalent README alias referenced by the quick start: https://github.com/hams-ollo/zen-agent-skills
+- MIT license: https://github.com/zen-solutions-dev/zen-agent-skills/blob/main/LICENSE
+- Installation matrix: https://github.com/zen-solutions-dev/zen-agent-skills/blob/main/docs/INSTALL.md
+- Adapter architecture: https://github.com/zen-solutions-dev/zen-agent-skills/blob/main/docs/ARCHITECTURE.md
+- Skill inventory and draft status: https://github.com/zen-solutions-dev/zen-agent-skills/blob/main/docs/CATALOG.md
+- Maintainer observatory contract: https://github.com/zen-solutions-dev/zen-agent-skills/blob/main/docs/OBSERVATORY.md
+- Observability schema pinned to reviewed commit: https://github.com/zen-solutions-dev/zen-agent-skills/blob/b61dab8b1ede6ece42e950e70e820b1a7ee68590/scripts/observatory/db.py
+- Observability parser pinned to reviewed commit: https://github.com/zen-solutions-dev/zen-agent-skills/blob/b61dab8b1ede6ece42e950e70e820b1a7ee68590/scripts/observatory/ingest.py
+- Open issues: https://github.com/zen-solutions-dev/zen-agent-skills/issues
+- Open pull requests: https://github.com/zen-solutions-dev/zen-agent-skills/pulls
+- GitHub Actions: https://github.com/zen-solutions-dev/zen-agent-skills/actions

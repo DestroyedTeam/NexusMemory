@@ -1,0 +1,50 @@
+# Candidate #111 — zzj1965186613/agentforge (2026-11-22)
+
+## Disposition
+Do not use as a Nexus Memory migration dependency. It is a small Skills-library/installer CLI with several useful design ideas, but it has no Session or Project/Section importer, its marketplace client is a stub, its Claude Code adapter writes a different native asset type, and the published package name conflicts with an unrelated PyPI project. Local safety probes also reproduced path escape and symlink overwrite behaviors.
+
+## Identity and source evidence
+- Repository: https://github.com/zzj1965186613/agentforge
+- Pinned checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-zzj1965186613-agentforge-20261122
+- HEAD: 164533ddaf2be7af0c091704392f3be04f79f290, branch main, status clean (## main...origin/main); repository page reports four commits, 2 stars and 0 forks.
+- Repo pyproject: package name agentforge, version 0.1.0, Python >=3.11, MIT; local editable installation was successful.
+- Root contains 15 bundled Markdown skills across five categories, 35 Python files, eight test modules, CI and PyPI publish workflows. No project/session migration schema or assets beyond Markdown skills.
+- Upstream Actions page showed six runs: #1-#3 failed; #4-#6 succeeded. Latest run #6 is for the pinned HEAD, success, seven jobs, 58 seconds, with eight Node 20 deprecation warnings for GitHub Actions steps. No GitHub releases, open issues, or open PRs were observed. CI is a local Linux/Windows/macOS Python test matrix with a separate lint/format job.
+- The pinned GitHub source is MIT, but PyPI's current project named agentforge is not this repository: PyPI JSON reports version 0.6.6, DataBassGit AgentForge, author John Smith/Ansel Anselmi, GPL-3.0-or-later, and Python >=3.12. The PyPI project homepage is github.com/DataBassGit/AgentForge. Therefore the README's pip install agentforge command currently installs a different project, and the identical name is a release/publishing blocker. This review did not run pip install agentforge; it installed only the pinned local checkout in editable mode. Official URLs:
+  - pinned repository README: https://github.com/zzj1965186613/agentforge/blob/164533ddaf2be7af0c091704392f3be04f79f290/README.md
+  - PyPI project: https://pypi.org/project/agentforge/
+  - PyPI JSON endpoint checked: https://pypi.org/pypi/agentforge/json
+
+## Local test and coverage
+- Python 3.12.10 disposable venv; editable local install with declared dev dependencies exited 0.
+- rtk .../python -m pytest -q: exit 0, 226 passed, 0 failed (0.25 seconds).
+- ruff check src/ tests/: exit 0, “All checks passed!”
+- ruff format --check src/ tests/: exit 0, 47 files already formatted.
+- pytest-cov: exit 0, 71% total coverage; src/agentforge/marketplace/{client,cache,models} have 0% coverage.
+- The CI workflow pins broad minimum versions, not a lockfile; local tests used current resolver versions. Tests do not cover the reproduced path escape, symlink write, update source-of-truth, marketplace network calls, or PyPI name collision.
+
+## Capability boundary
+The repository's CLI search uses the local SkillRegistry, which scans bundled Markdown and recorded installs. The user-facing marketplace client is explicitly marked experimental/not available; search, get_skill, download, publish, category listing, and update-check methods all raise NotImplementedError. Marketplace data/cache modules have zero test coverage.
+The model is a single Markdown Skill plus frontmatter metadata/variables, not a directory asset or conversation/event graph. There is no Session, transcript, project/section hierarchy, branch/subtask, attachment, token-usage history, MCP/plugin import, memory, recurring schedule, or native session-restoration path.
+Only five CLI adapters are registered: Claude Code, Cursor, Copilot, Aider, and Hermes. The Claude Code adapter writes .claude/commands/<name>.md, not .claude/skills/<name>/SKILL.md; there is no Codex adapter and no Claude Desktop Chat/Cowork/Code or Cloud/API-key session adapter. Hermes ignores project/global selection and writes only to ~/.hermes/skills/<name>/skill.md. The installer serializes one Markdown file and does not preserve resource directories or attachments.
+The update command reads from the local registry. scan_installed overwrites the bundled Skill entry with the installed file for a matching name; _show_update_check then compares that same installed object to itself, and update --all reinstalls the installed source, not a newer bundled/remote copy.
+
+## Reproduced safety and correctness findings (synthetic data only)
+1. Skill-name validation is not enforced in the production parse/install path. Skill.validate() rejects ../../../escaped, but Skill.from_file/from_string do not invoke it, Registry.scan_bundled accepts non-empty names without validating, and the installer interpolates skill.name directly into dest_dir / f"{name}.md". An isolated CLI install of ../../../escaped exited 0 and wrote a file outside the intended .claude/commands directory.
+2. CLI uninstall path escape. A single command argument based on an absolute temp path to an existing synthetic .md file was appended with .md, escaped the target adapter directory and deleted that file. Single-item uninstall skips the confirmation prompt; the CLI test covers multi-item confirmation but not path containment.
+3. Symlink overwrite. With a valid Skill name and --force, a symlink at the intended destination to an outside temp .md file remained a symlink while write_text changed its external target content.
+4. Update false positive. In a temp registry with bundled demo v2.0.0 and installed demo v1.0.0, update --check printed “All installed skills are up to date.” Calling update single wrote the installed v1.0.0 body again; no v2.0.0 content reached the target.
+5. PyPI identity mismatch. The README install command resolves to the unrelated GPL DataBassGit project in PyPI, not the pinned MIT repo.
+6. Remote marketplace. MarketplaceClient.search raised NotImplementedError; the CLI's local bundled search successfully found code-review, but this is not a remote catalogue.
+All filesystem probes used disposable temporary directories/HOME and synthetic Markdown only. No user files, real tokens, project data, or production Skills were touched.
+
+## Nexus Memory relevance
+Retain only narrow, independently implemented AssetPlane ideas such as an explicit Skill metadata inventory, categories, dependency/conflict metadata, and isolated adapter tests. Do not adopt code or distribution instructions unchanged. Keep it separate from the target ChatGPT Projects / Section Groups / Session hierarchy for Destruction Era and the confirmed Claude Desktop Chat/Cowork/Code + local/self-hosted Claude Code targets. No real export or target Session was accessed.
+
+## Error/correction ledger
+- GitHub REST API and gh run-list calls initially timed out during TLS handshake (exit 1). Corrected with official GitHub repository/Actions pages, which showed the pinned commit and the six run summary. No live run status is claimed beyond that page.
+- A recursive rtk grep attempt against a directory exited 2; corrected to file paths. The corrected search found no traversal/symlink tests (exit 1, no matches); exact source/test call graphs were verified with CodeGraph.
+- Click emitted a DeprecationWarning for the test helper CliRunner.isolated_filesystem; the temporary-data probes completed exit 0 and did not modify the candidate repository.
+
+## Inventory update
+Primary GitHub corpus: 111/303 reviewed, 192 pending. The supplemental catalog still contributes 177 pending candidates; primary + supplemental queues have 369 pending, excluding 11 separately tracked manual additions. Unique names across primary/manual/catalog sources remain 491. Next primary candidate: AidarKhusainov/agent-skills-manager. Research remains incomplete.

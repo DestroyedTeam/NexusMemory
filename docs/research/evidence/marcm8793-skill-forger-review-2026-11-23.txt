@@ -1,0 +1,46 @@
+NEXUS MEMORY CANDIDATE REVIEW — #199
+Repository: https://github.com/marcm8793/skill-forger
+Reviewed: 2026-11-23
+Pinned source: main and tag v0.1.10, 0cd67497e3dc9b92729ae8dcbf26514d9560f96e (2026-03-30)
+License: MIT
+Package: skill-forger 0.1.10, official npm registry.
+
+Scope and disposition
+This is a non-generative declarative Agent Skills CLI built on top of the Vercel skills CLI. It installs, adds and uninstalls skills from skills.json, with a generated skills-lock.json and agent flags. Useful adjacent ResourcePlane/tooling reference, not a Nexus SessionGraph or migration adapter. It has no ChatGPT/Codex Project/Section/session/message/branch/attachment/usage/memory/schedule parser or writer. No Claude Desktop 3P Chat/Cowork adapter; overlap between the default Claude Code target and Desktop Code was not tested and must not be claimed.
+
+Source identity and package provenance
+- Shallow clone command succeeded; main, refs/remotes/origin/main, tag v0.1.10^{}, and npm package version 0.1.10 all resolve to 0cd67497e3dc9b92729ae8dcbf26514d9560f96e. Clone remote is https://github.com/marcm8793/skill-forger.
+- package.json repository URL uses github.com/marcm8793/skillforge.git; that URL redirects to the canonical skill-forger repository. Not treated as a provenance mismatch.
+- GitHub currently shows no Releases; the repository has version tags and a published npm package.
+- Official npm metadata reports tarball https://registry.npmjs.org/skill-forger/-/skill-forger-0.1.10.tgz and integrity sha512-DJf3IeIjpbnwc5vyqnBcXZKGHmUo2RTKYlDf5oAAuw7dWlwHUT0G+XWHmteydAoSSnXyr7tRSkQ7icLcZkB3Wg==. Downloaded tarball integrity matched exactly. It contains LICENSE, package.json, schema, README and dist bundle/declarations; no tarball script was executed.
+- A local bundle rebuild was not byte-identical to the published dist, even after pinning top-level obuild to the bun.lock version 0.4.32. Published dist/cli.mjs was 20,727 bytes (SHA-256 c21c5a894d9048eb51a1d190be1b5a861d98ac70bc65eb83f31980941262a727); lock-pinned local build was 20,751 bytes (SHA-256 497f30d91d3fb60a439a85b1acace1d28f3b0b18855f5d7d7703cc28d4fbdd96). The textual diff shows bundler comments/format changes, pure annotations, equivalent-looking if/else restructuring and a temporary variable extraction, but exact reproducibility was not proven. Bun and its exact full lockfile installation were unavailable, so do not claim a byte-identical release build.
+
+Observed model and behavior
+- skills.json is a repo-level array of source strings plus optional Skill names. The separate JSON Schema requires only a skills key and source per item; runtime assertSkillsConfig only checks that the object has a skills property and otherwise casts it, so it does not enforce the full schema.
+- CLI defaults to Claude Code and delegates actual installation/removal to a locally installed skills binary or npx skills. It accepts an agent flag; README documents Claude Code, Cursor, Codex and GitHub Copilot. The product does not implement each agent adapter itself.
+- handleAdd invokes installSkillSource with yes=true before persisting the source into skills.json. Default install also passes yes=true. It can invoke npx skills when the local binary is not found. The wrapper does not show a content preview/review gate or create a rollback transaction before the delegated write.
+- Config and lock files are rewritten directly with writeFile, without an atomic journal/backup. An install can succeed before skills.json is updated; failures across add/uninstall can leave disk/config/lock out of sync.
+- Confirmed synthetic edge case: uninstalling a source whose skills.json entry has an empty skills list (meaning all skills) prints a warning and returns before invoking skills remove. The CLI then removes the source from skills.json and its entries from skills-lock.json while previously materialized Skill files remain on disk. In an isolated /tmp fixture the command exited 0, skills.json became an empty skills array, skills-lock.json became empty, and .claude/skills/demo/SKILL.md remained. The warning is disclosed by the CLI, but the config no longer tracks the orphaned file. No real user project was touched.
+- Positive: subprocess uses spawn with an argument array, not a shell string; config add merges named skills and a helper appends missing skills directories to .gitignore. The uninstall-all orphan behavior is explicit in a warning; it is not an undetected deletion.
+- This is a small CLI around Skills resources, not projects, sections, sessions or stored chat state. No target app import/resume test was performed.
+
+Verification in the isolated clone
+- CodeGraph initialized and up to date: 11 TypeScript files, 89 nodes, 220 edges.
+- Bun was not installed; initial npm install used --ignore-scripts --no-package-lock and installed 136 packages. Tests ran with npm-resolved dependency versions, not the exact Bun lock. The repository bun.lock pins skills 1.4.6, obuild 0.4.32, TypeScript 5.9.3 and Vitest 4.1.2. Installed npm ranges first selected skills 1.9.0 and obuild 0.4.45; top-level obuild was then replaced with 0.4.32 for a second build, but the full Bun dependency graph was not reproduced.
+- npm test: 4 test files passed; 36 tests passed.
+- npm run typecheck passed.
+- npm run check passed: Checked 17 files in 16ms. No fixes applied.
+- npm run build passed both with obuild 0.4.45 and 0.4.32. The second build emitted a non-fatal timing-report warning that codeSplitting.groups[0].name is a function and suggested debugName.
+- Built CLI --version printed skill-forger 0.1.10; --help rendered the expected install/add/uninstall interface. No real skill was installed, removed or downloaded. The synthetic uninstall fixture is the only lifecycle action.
+- Static/functional findings are not cross-session compatibility evidence.
+
+Nexus disposition
+Keep as a low-priority ResourcePlane discovery/install reference only. It can provide an agent-target flag and declarative Skill source list, but its state is not a harness project/session tree. Do not reuse as a SessionGraph adapter or claim Chat, Cowork, Code or local Claude Code session transfer. Nexus should preserve content preview, explicit per-file ownership, atomic lock/config state, and an undo journal when implementing similar resource operations.
+
+Primary source links
+- GitHub source: https://github.com/marcm8793/skill-forger
+- GitHub Releases: https://github.com/marcm8793/skill-forger/releases
+- npm metadata: https://registry.npmjs.org/skill-forger/0.1.10
+- Claude Desktop 3P overview: https://claude.com/docs/third-party/claude-desktop/overview
+- Claude Desktop 3P feature matrix: https://claude.com/docs/third-party/claude-desktop/feature-matrix
+- Claude Desktop 3P data storage: https://claude.com/docs/third-party/claude-desktop/data-storage

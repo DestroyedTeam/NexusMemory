@@ -1,0 +1,43 @@
+# Juliusolsson05/agent-manager — command and MCP config manager review
+
+Date: 2026-11-22. Candidate #126 of the primary 303-repository GitHub corpus. User scope remains ChatGPT Projects/Section Groups/Destruction Era sessions and associated context/Skills/MCP/plugins/memory/schedules to local/self-hosted Claude Code and Claude Desktop Chat/Cowork/Code as separate modes. This project partially overlaps the ResourcePlane (prompt commands and local stdio MCP configs), but has no session migration model.
+
+## Pinned identity and maturity
+
+- Repository: https://github.com/Juliusolsson05/agent-manager, MIT; clone command from dispatcher exit 0. Pinned local HEAD `1e55d318d80a4abfdf69421add265eac46279b8e`, version 0.2.3, 2026-04-09; GitHub showed 51 commits, 1 star, 0 forks, latest release v0.2.3. Public npm registry `npm view agent-mgr version license` returned 0.2.3 / MIT.
+- Local `package.json` test script is literally `echo "TODO: add vitest" && exit 0`; repository contains no `tests/` directory. A green `npm test` is not test coverage.
+- CodeGraph indexed 26 files / 245 nodes / 653 edges. Candidate source checkout remained clean after build and all disposable CLI probes.
+
+## What it does and where it stops
+
+- A command/prompt and MCP config manager for four targets: Claude Code, Cursor, Codex, OpenCode. It creates project/global Markdown commands, symlinks prompt commands where supported, maintains global command profiles, imports `commands/` from GitHub repos, and stores/rewrites target MCP configuration. Codex has no command support. It does not implement Skills at all; command Markdown is not the same data model/activation semantics as Agent Skills.
+- No Projects, Section/Group hierarchy, Session/Conversation transcripts or event trees, parent/child/subtask relationships, media/artifact preservation, token/cost records, long-term memory, schedules, provider gateway settings, or chat-session codecs. No Claude Desktop Chat/Cowork/Code target IDs.
+- The canonical `McpServer` schema is only `{name, command, args?, env?}` (stdio-style). It cannot preserve remote HTTP/SSE MCP URL/headers/OAuth, endpoint auth, transport, timeouts, approval, enabled/disabled state, or provider-specific MCP metadata. Credentials passed through `--env` are written as plaintext strings to project/global config files; a disposable probe confirmed the literal value in `.codex/config.toml`, then removed the temp directory.
+- OpenCode adapter is not aligned with current official config schema: it writes `<project>/.opencode.json` and `mcpServers` entries with `command`/`args`/`env`, while OpenCode docs use `opencode.json` or `opencode.jsonc`, top-level `mcp.servers`, local server `type: "local"`, `command: [...]`, and `environment`. The temp CLI probe produced the candidate's `.opencode.json`/`mcpServers` structure; OpenCode itself was not launched. See current official docs at opencode.ai/docs/config and opencode.ai/docs/mcp-servers.
+
+## Reproduced issues (isolated temporary directories only)
+
+1. **Command-name path traversal.** `src/commands/add.ts` removes only a trailing `.md` and joins the raw CLI `name` to the commands directory; `remove.ts` uses the same unvalidated name. With a temp HOME and temp project root, `agent-mgr init --targets claude-code --no-gitignore` succeeded, then `agent-mgr add ../../outside --content temporary-path-probe` exited 0 and wrote `outside.md` in the temp parent, outside the project and its `commands/` directory. `agent-mgr remove ../../outside` then deleted that same file. All paths were inside a disposable temp root, deleted afterward. This is arbitrary write/delete outside the configured command root within process filesystem permissions.
+2. **Codex MCP removal is broken.** In another temp project, `mcp add --targets codex` wrote a valid `[mcp_servers.probe]` table to `.codex/config.toml`. `mcp remove probe` calls generic `readJson` rather than the Codex TOML adapter; exit 0 was printed but stdout said `✗ Codex: Unexpected token 'm', "[mcp_server"... is not valid JSON`, and the MCP entry remained byte-for-byte in TOML. The command's zero exit status can therefore mask a failed removal.
+3. **OpenCode MCP output is incompatible with current docs.** Temp `mcp add --targets opencode` exited 0, created `.opencode.json`, and serialized `{"mcpServers":{"probe":{"command":"node","args":["-e","1"],"env":["TOKEN=only-in-temp"]}}}`. It did not create `opencode.json`; it omits `mcp.servers`, `type: "local"`, `command` array shape and `environment` expected by current official OpenCode docs. This is a file-level comparison only, not a live OpenCode launch test.
+4. MCP config stores values supplied through `--env KEY=VALUE` as literal plaintext. Secrets should be references resolved at runtime, not checked into a project config. Candidate supports stdio-shaped data only and not HTTP/OAuth MCP endpoints.
+5. **Validation gate is absent.** `npm test` exits 0 after printing TODO; no tests folder exists. Adapter review found no tests for the Codex/Cursor/OpenCode MCP or command path contracts.
+
+## Build and audit evidence
+
+- `rtk proxy npm ci --ignore-scripts --no-audit --no-fund` → exit 0; `added 114 packages in 5s` (install scripts disabled).
+- `rtk proxy npm test` → exit 0 but only stdout `> agent-mgr@0.2.3 test`, `> echo "TODO: add vitest" && exit 0`, `TODO: add vitest`; **0 actual tests**.
+- `rtk proxy npm run lint` → exit 0; runs `tsc --noEmit`.
+- `rtk proxy npm run build` → exit 0; ESM bundle 54.58 KB, build success.
+- `rtk proxy npm audit --omit=dev --registry=https://registry.npmjs.org` → exit 0; `found 0 vulnerabilities`. This does not address path traversal or broken/mismatched behavior.
+- Temporary probes used a fresh system-temp directory and isolated HOME; no real user config, MCP server, IDE, or credential was read or modified.
+
+## Disposition
+
+Keep as a partial ResourcePlane architecture reference for source command profiles and the idea of target-specific adapters, but do not treat it as a Nexus Memory solution or use its remove/add functions on untrusted names. Its MCP schema drops remote transports and security metadata, it has no Skills/Session support, the OpenCode projection conflicts with current docs, Codex removal fails, command names allow path traversal, and its test gate is a no-op. A production replacement needs validated logical IDs, root-confined filesystem operations, transactional reconciliation, secret references, target-native schemas plus compatibility tests, and actual cross-version/live-host verification.
+
+## Primary sources
+
+- Repository/README/release: https://github.com/Juliusolsson05/agent-manager ; https://github.com/Juliusolsson05/agent-manager/releases
+- Pinned manifest and source: https://github.com/Juliusolsson05/agent-manager/blob/1e55d318d80a4abfdf69421add265eac46279b8e/package.json ; https://github.com/Juliusolsson05/agent-manager/blob/1e55d318d80a4abfdf69421add265eac46279b8e/src/commands/add.ts ; https://github.com/Juliusolsson05/agent-manager/blob/1e55d318d80a4abfdf69421add265eac46279b8e/src/commands/remove.ts ; https://github.com/Juliusolsson05/agent-manager/blob/1e55d318d80a4abfdf69421add265eac46279b8e/src/commands/mcp-remove.ts ; https://github.com/Juliusolsson05/agent-manager/blob/1e55d318d80a4abfdf69421add265eac46279b8e/src/adapters/opencode.ts
+- Current OpenCode config/MCP reference: https://opencode.ai/docs/config ; https://opencode.ai/docs/mcp-servers

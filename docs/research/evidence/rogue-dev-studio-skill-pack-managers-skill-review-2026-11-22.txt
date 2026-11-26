@@ -1,0 +1,41 @@
+# GitHub candidate #137: rogue-dev-studio/rogue-skill-pack-managers-skill
+
+Review date: 2026-11-22. Source is pinned to HEAD `ba9ff33055418484cb984136ee888c8dc1ace471`. No user skill folder, account, Desktop data, session store, or credentials were accessed.
+
+## Repository identity / source scope
+
+- Repository: https://github.com/rogue-dev-studio/rogue-skill-pack-managers-skill
+- GitHub API snapshot: 1 star, 0 forks, not archived; 4 commits. Last commit 2026-09-26; v1.0.0 tag and GitHub release dated 2026-09-21.
+- README calls it a Rogue Development `SKILL.md` package for marketplace/skill housekeeping across OpenSkills, `agent-skills-cli`, and a Claude marketplace. It says to copy `SKILL.md` into an agent skills directory or clone this repository.
+- Actual tracked tree at pinned HEAD has exactly `AUTHORS`, `LICENSE`, `NOTICE`, `README.md`, `SKILL.md`. No scripts, source implementation, tests, build manifest, or GitHub workflow are present. `rtk gh run list --repo rogue-dev-studio/rogue-skill-pack-managers-skill --limit 10` → exit 0, stdout `[]`; `rtk gh release list` reported v1.0.0; tags include v1.0.0.
+- Skill instructions say to compare installed skills with `TEAM.yaml` and duplicates with `ALIASES.md`; neither file exists in the repository. The prompt depends on user/project context to provide them.
+- Not a session parser or native writer; no ChatGPT Project/Section/Session, branch, attachment, MCP/plugin, memory, schedule, or Claude Desktop 3P Chat/Cowork/Code migration functionality exists.
+
+## Format and packaging check
+
+- YAML frontmatter parsed locally with PyYAML. Required `name` and `description` exist; lowercase/hyphen name pattern and non-empty description <= 1024 characters pass.
+- Frontmatter `name` is `skill-pack-managers`; checkout directory is `rogue-skill-pack-managers-skill`. Agent Skills specification requires the installed skill directory to match the `name`, so the repo-root folder fails the directory/name relation if used directly. A client could make it conform by installing into `skill-pack-managers/`, but README's copy instruction does not state that target folder.
+- `skills-ref` was not installed (`rtk proxy command -v skills-ref` → exit 1). The upstream reference library README describes it as demonstration-only, so no unofficial PyPI package was installed. Validation here is a static local YAML/spec check, not a claim of an official validator pass.
+- Static findings are supported by the official [Agent Skills specification](https://agentskills.io/specification), which defines a directory containing `SKILL.md`, required frontmatter, the name/directory match, and the validation CLI.
+
+## License, quality, and disposition
+
+- README says MIT and the `LICENSE` text contains the MIT grant. GitHub API (`gh repo view`) reports `licenseInfo.key=other`, so keep `license_spdx` as NOASSERTION pending licensing review.
+- `NOTICE` separately says author attribution must be retained in distributions. Do not copy/repackage without carrying the license and notice and reviewing the additional attribution wording.
+- No code/test/CI/build exists to run. `rtk codegraph init --yes <checkout>` exited 0 but reported “No files found to index”; `rtk codegraph status <checkout>` reported 0 files, 0 nodes, 0 edges and up-to-date. `.codegraph/.gitignore` was kept and only its `!.gitignore` self-preserving exception was removed; checkout status is clean.
+- Disposition: low-value adjacent prompt/example only. Agent Skills as a resource format remains a portable layer, but this repository does not implement skills/pack management or any session/project migration. It is not a Nexus migration dependency.
+
+## Errors and corrected commands
+
+- The first `rtk git -C` status/tree command omitted the `-20261122` suffix from the checkout path and exited 128 with `fatal: cannot change to ...: No such file or directory`. Corrected to `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-rogue-dev-studio-rogue-skill-pack-managers-skill-20261122`; HEAD matched and tracked tree/status were read successfully.
+- `skills-ref` PATH lookup exited 1 because the reference validator is not installed; corrected by parsing YAML locally and checking the official format constraints without installing an unrelated/unverified package.
+
+## Primary references
+
+- Pinned GitHub repository: https://github.com/rogue-dev-studio/rogue-skill-pack-managers-skill/tree/ba9ff33055418484cb984136ee888c8dc1ace471
+- Pinned README: https://github.com/rogue-dev-studio/rogue-skill-pack-managers-skill/blob/ba9ff33055418484cb984136ee888c8dc1ace471/README.md
+- Pinned `SKILL.md`: https://github.com/rogue-dev-studio/rogue-skill-pack-managers-skill/blob/ba9ff33055418484cb984136ee888c8dc1ace471/SKILL.md
+- Pinned `LICENSE`: https://github.com/rogue-dev-studio/rogue-skill-pack-managers-skill/blob/ba9ff33055418484cb984136ee888c8dc1ace471/LICENSE
+- Pinned `NOTICE`: https://github.com/rogue-dev-studio/rogue-skill-pack-managers-skill/blob/ba9ff33055418484cb984136ee888c8dc1ace471/NOTICE
+- Agent Skills specification: https://agentskills.io/specification
+- Official skills-ref README: https://github.com/agentskills/agentskills/blob/main/skills-ref/README.md

@@ -1,0 +1,53 @@
+# DoryZi/token-efficient-lifecycle — cross-harness workflow tool, not migration (2026-11-23)
+
+## Identity and provenance
+
+- Repository: https://github.com/DoryZi/token-efficient-lifecycle
+- Isolated shallow checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-DoryZi-token-efficient-lifecycle-20261123`
+- Captured `main` HEAD: `e3ef5437767b1cec77e1c2969d86ed391dc7709c`; commit date 2026-11-15; subject `README: link the full experiment page`.
+- Inventory metadata: Python, MIT, 0 stars / 0 forks, active; README calls it an early 0.1.0 release. Main source contains two local tools (Claude Code/Codex task orchestrator and browser worker) plus Skills/Claude plugin packaging. No ChatGPT export, Project/Section/session graph adapter, generic archive reader/writer, or cross-Harness session import exists.
+- CodeGraph initialized and up-to-date: 8 files, 225 nodes, 595 edges. Kept `.codegraph/.gitignore`, removed only its `!.gitignore` self-exception; candidate `git status --short` was empty before tests.
+- `uv` is not installed on this host (`rtk uv --version` exited 127). Browser tests were run from a disposable venv using exact pinned versions and all hashes from the repository's `browser/uv.lock`; no dependency was installed into the checkout. `orchestrate` is stdlib-only.
+
+## Product boundary and relevance
+
+`orchestrate/` hands a bounded task brief to either Claude Code or Codex CLI, stores per-task attempts/logs/results under a project-local `.orchestrate/<task>`, and supports lock, cancellation, retries, time budget, and model usage reporting. `browser/` uses a cheap/decision model loop and a private headless Playwright CLI worker to return compact check evidence. The Claude/Codex support is **workflow delegation under the provider's subscription login**, not a cross-session translator. It does not map Projects, Sections, Sessions, messages, forks, subagents, attachments, memory, MCP/plugins, or schedules between Harnesses.
+
+The task orchestrator explicitly rejects API-key billing: Claude status must report `authMethod` `claude.ai` or `oauth`; Codex must report ChatGPT subscription login. Its Claude path is Claude Code CLI, not Claude Desktop third-party-gateway Chat/Cowork/Code. It therefore does not meet the user's API-key/gateway target.
+
+The 4 separate destination acceptance tracks remain `desktop-3p/chat`, `desktop-3p/cowork`, `desktop-3p/code`, and `claude-code-local`. This repository covers none of them as a session-migration adapter. Best disposition: retain task-attempt bookkeeping, bounded handoff, verification-result discipline, and model-usage accounting as possible operational design references, not migration code.
+
+## Source and safety review
+
+### `orchestrate/`
+
+- The Claude worker is launched with `--permission-mode auto --permission-prompts none` and explicit `Bash,Read,Write,Edit,Glob,Grep` tools. README warns this is **not a filesystem sandbox**. It has no MCP servers, plugin/child-agent switches for Codex, uses Codex `workspace-write`, and filters direct API-key/provider override env vars, but `HOME` is still passed and Claude may access project/user files through unsandboxed Bash. It is unsafe to treat these flags as isolation for untrusted prompts or sensitive workspaces.
+- Authentication/status checks intentionally reject API-key mode. The task state and prompt/result/event logs are local project artifacts, not native provider session records. `.orchestrate/` must be ignored by Git as documented; logs may contain project/task data.
+- State is atomically saved using temp+replace, 0600 files, project lock, limits, no automatic retries, cancellation and process-group termination. These are useful workflow invariants. The unit tests use fake CLI executables; no real account/session was contacted.
+- `resolve()` calls `Path.resolve()`, canonicalizing macOS `/var/folders` temp paths to `/private/var/folders`. One unit test asserts lexical path equality without resolving its expected value; see test result below.
+
+### `browser/`
+
+- Positive containment: the model subprocesses use a filtered environment; Claude starts with no tools, empty MCP config/settings sources, hooks disabled, no session persistence and `dontAsk`; Codex uses read-only sandbox, disables shell/app/plugin/multi-agent features; model actions are JSON-schema validated; page text is declared untrusted; Playwright commands are allowlisted; origins are checked before actions and after navigation; uploads must be listed in task attachments; submit/delete requires task permission and an uncertain external action is never automatically retried. A fresh browser profile is used, existing browser profiles are rejected, and tests use fake models/browser with no network.
+- **Parent-environment exposure to the browser CLI:** `Browser.__init__` sets `self.env = dict(os.environ)` and passes it to `playwright-cli`, unlike the model child environment allowlist. A dynamic synthetic sentinel probe confirmed an arbitrary parent environment variable is present in the child environment object. No Playwright process or real secret was used. This expands the local CLI trust boundary; it does not establish that browser page JavaScript can read process env.
+- **Attachment path containment gap:** `validate_task()` resolves `(base_dir / path)` and checks only `is_file()`. It does not require the resolved attachment to stay beneath the task file's directory. A synthetic task with `attachments: ["../outside-sentinel.txt"]` was accepted; corrected canonical-path check reported `file_exists=True`, `outside_task_dir=True`. No file was uploaded or read beyond the synthetic marker. This conflicts with README's “attachments ... relative to the task file” expectation if that implies containment.
+- `Browser.origin()` validates scheme/credentials and same-origin navigation but does not resolve/deny private IP ranges; a task explicitly authorized for a host can trigger requests before a redirect is caught by the later URL check. No SSRF probe or live page was run.
+
+## Test evidence
+
+- `orchestrate/tests`: `rtk proxy env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v` — 14 tests: **13 passed, 1 failed**. The sole failure is `test_relative_paths_resolve_from_invoking_shell`; on this macOS host `Path.resolve()` returns `/private/var/folders/...`, while the test expects the lexical `/var/folders/...` path. The resolved path is the canonical target of that macOS symlink; the test assertion does not normalize its expected path. No live CLI/account was used; the suite uses fake binaries.
+- `browser/tests`: installed exact dependency lock versions from `browser/uv.lock` into `/tmp/nm-doryzi-test-20261123/venv` using pip hash verification. Command `rtk proxy env PYTHONDONTWRITEBYTECODE=1 /tmp/nm-doryzi-test-20261123/venv/bin/python -m pytest -q -p no:cacheprovider --basetemp=/tmp/nm-doryzi-test-20261123/pytest-tests` — exit 0, **54 passed in 3.47s**. Tests are primarily fakes; no actual browser, subscription login, network page, or model was used.
+- Dynamic synthetic probes: attachment path traversal and environment propagation described above. No actual attachment was uploaded; the environment sentinel was artificial.
+
+## Nexus Memory disposition
+
+Useful as a *token-efficient execution/verification workflow* pattern, but it is not a session migration engine and cannot substitute for canonical SessionGraph transfer. Do not directly adopt the Claude orchestrator on sensitive projects without an actual sandbox or stronger least-privilege isolation. Do not adopt the browser task parser until attachments are canonicalized beneath a declared root and the browser CLI environment is allowlisted. The API-key requirement is an explicit incompatibility, not a missing test.
+
+## Sources
+
+- Pinned [README](https://github.com/DoryZi/token-efficient-lifecycle/blob/e3ef5437767b1cec77e1c2969d86ed391dc7709c/README.md)
+- Pinned [orchestrator CLI source](https://github.com/DoryZi/token-efficient-lifecycle/blob/e3ef5437767b1cec77e1c2969d86ed391dc7709c/orchestrate/orchestrate.py)
+- Pinned [browser worker source](https://github.com/DoryZi/token-efficient-lifecycle/blob/e3ef5437767b1cec77e1c2969d86ed391dc7709c/browser/browser_worker.py)
+- Pinned [browser policy implementation](https://github.com/DoryZi/token-efficient-lifecycle/blob/e3ef5437767b1cec77e1c2969d86ed391dc7709c/browser/browser.py)
+- Pinned [model CLI adapters](https://github.com/DoryZi/token-efficient-lifecycle/blob/e3ef5437767b1cec77e1c2969d86ed391dc7709c/browser/models.py)
+- Official [Claude Desktop 3P configuration](https://claude.com/docs/third-party/claude-desktop/configuration) and [Claude Code settings/permissions](https://code.claude.com/docs/en/settings).

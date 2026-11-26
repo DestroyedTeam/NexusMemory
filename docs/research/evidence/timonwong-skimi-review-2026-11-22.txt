@@ -1,0 +1,60 @@
+# Candidate #141 review evidence — timonwong/skimi
+
+Review date: 2026-11-22  
+Repository: https://github.com/timonwong/skimi  
+Pinned HEAD: 8814b0f64b5afd492999cab6766931e4f7285f03 (tag v0.3.1)  
+Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-timonwong-skimi-20261122
+
+## Repository and quality signals
+
+- GitHub metadata at review: 1 star / 0 forks, MIT detected, not archived, last pushed 2026-08-14T13:57:43Z. Latest release/tag is v0.3.1, published 2026-08-14.
+- GitHub CI run 31807172874 and Release run 31807172997 both completed successfully at the pinned HEAD. Pinned CI source runs go build ./..., go vet ./..., go test -race -count=1 ./..., and golangci-lint. Release workflow additionally builds/smoke-tests six OS/architecture archives and checksums.
+- Candidate checkout has 15 Go test files / 66 top-level Test functions. Local rtk go test ./... exited 1 because this environment cannot spawn Go: “rtk: Failed to run go test: Failed to spawn process: No such file or directory (os error 2)”. CI success is remote evidence; local tests/build are not claimed as run.
+- CodeGraph: 41 files, 519 nodes, 1,249 edges; status was up to date. .codegraph/.gitignore was retained and only the !.gitignore exception removed; candidate Git status was clean.
+- No Skimi installation, user skill-directory scan, config write, actual Git sync, agent launch, model call, session-store access, or target mutation was performed.
+
+## Scope and data model
+
+Skimi is a declarative Agent Skill manager. It reads skills.yaml, obtains SKILL.md directories from a local path or Git repository/subdirectory, and creates flat symlinks into per-agent home directories (Windows directory junction fallback). Its five built-in targets are:
+- Claude Code: ~/.claude/skills/
+- generic Agent Skills: ~/.agents/skills/
+- Codex: ~/.codex/skills/
+- OpenClaw: ~/.openclaw/skills/
+- Pi: ~/.pi/agent/skills/
+
+Configuration supports package order, per-agent include/exclude, name/path selectors, additive installation, and a versioned skills-lock.yaml with source/repo/commit/source path/linked-to provenance. The link adapter resolves targets from the current OS user home. It has no Claude Desktop 3P Chat/Cowork/Code paths or session/project targets. There is no ChatGPT Project/Section/session/event hierarchy, transcript parser/writer, MCP configuration, plugin, memory, permission, artifact, or schedule importer. The lock's host-absolute linked-to paths and fixed global destination paths are installation state, not a portable project/session graph.
+
+The detector extracts only the SKILL.md frontmatter name and description (defaulting the name to the source directory basename); it is not a full Agent Skills spec validator.
+
+## Positive implementation patterns found in pinned source
+
+- Strict YAML known-field decoding and validation occurs before target-directory mutation; selectors require exactly one of name or clean relative path.
+- Source discovery and selected-skill provenance are explicit. Skill names are bounded lowercase/hyphen identifiers. Duplicate-name conflicts are deterministic last-wins and print the winning/losing source.
+- Installer preflight checks destinations and refuses to overwrite a path unless the lock/managed-link identity proves Skimi owns it. The linker verifies symlink target or shared SKILL.md identity before removal, avoiding deletion of user-replaced files.
+- applyPlan stages old managed links under backup names, creates new links, atomically saves the lock, restores links if link/lock writing fails, then cleans backups. An installer test explicitly checks rollback after lock-write failure. This is a useful resource-plane transaction pattern.
+- Dry-run fetches remote refs rather than pulling the linked working tree, because the source comments correctly note that a pull would change skill contents already visible to agents through symlinks.
+
+## Caveats and risks
+
+1. It is strictly a resource installer, not a cross-harness memory/session migrator. Five hard-coded home-directory adapters do not establish Claude Desktop 3P support; all Desktop modes need separate target readers/writers and verification.
+2. The configuration's remote repo subdirectory is not constrained to remain under the clone. source.Parse stores extra path segments as Subdir, and installer.preparePackage computes filepath.Join(dest, parsed.Subdir) without an absolute/canonical containment check. Config validation checks the separate skills selector path, but not traversal segments inside repo. Go filepath.Join cleans dot-dot components. This is a source-level path-confinement risk inferred from the pinned code; no exploit was executed (Go is unavailable and no untrusted config was installed). Before considering any code reuse, reject parent segments and resolve/check the effective source path remains beneath the cloned repository.
+3. Run syncs declared remotes before skill discovery and before applyPlan. Installed destinations are symlinks into the mutable checkout, so a real git pull can change already-active Skill contents before the candidate plan/lock succeeds. Link/lock rollback does not roll back repository working-tree contents. This ordering is especially relevant because dry-run intentionally avoids pull for that reason. A migration tool should snapshot content and make staged, versioned placement transactional rather than pointing live agent paths into mutable Git worktrees.
+4. Config-driven install is a full desired-state sync: skills not named by the config may be pruned from the lock/managed targets. An additive mode exists, but the default must be exposed clearly in any integration UI.
+5. Source parsing accepts http:// and SSH as well as HTTPS; the declared origin is user-configured, but an unattended resource importer should enforce a trust policy and immutable commit/checksum provenance.
+6. CLI remove protects unmanaged destinations, but does not offer a portable archive or project-level placement model. No MCP/Plugin/Memory/schedule configuration is migrated.
+
+## Disposition for Nexus Memory
+
+Classify as a relatively strong adjacent Skill ResourcePlane implementation reference, not a session or project migration dependency. Retain ideas around strict config, per-agent target declarations, lock provenance, collision reports, managed-link identity, dry-run, and rollback of link/lock mutations. Do not copy the live mutable symlink/store update model without snapshot isolation; address source-path containment; keep Skills separate from SessionGraph and keep Desktop Chat/Cowork/Code adapters distinct. The source itself is MIT, but adopting any dependency still requires normal license and security review.
+
+## Primary sources
+
+- [Pinned repository](https://github.com/timonwong/skimi/tree/8814b0f64b5afd492999cab6766931e4f7285f03)
+- [README and target list](https://github.com/timonwong/skimi/blob/8814b0f64b5afd492999cab6766931e4f7285f03/README.md)
+- [Source parsing](https://github.com/timonwong/skimi/blob/8814b0f64b5afd492999cab6766931e4f7285f03/internal/source/source.go)
+- [Installer transaction and source path resolution](https://github.com/timonwong/skimi/blob/8814b0f64b5afd492999cab6766931e4f7285f03/internal/installer/installer.go)
+- [Agent target paths and managed-link identity](https://github.com/timonwong/skimi/blob/8814b0f64b5afd492999cab6766931e4f7285f03/internal/linker/linker.go)
+- [CI workflow](https://github.com/timonwong/skimi/blob/8814b0f64b5afd492999cab6766931e4f7285f03/.github/workflows/ci.yml)
+- [CI run](https://github.com/timonwong/skimi/actions/runs/31807172874)
+- [Release run](https://github.com/timonwong/skimi/actions/runs/31807172997)
+- [Go filepath.Join documentation](https://pkg.go.dev/path/filepath#Join)

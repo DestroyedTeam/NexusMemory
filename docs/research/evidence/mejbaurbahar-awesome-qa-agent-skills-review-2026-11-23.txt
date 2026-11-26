@@ -1,0 +1,51 @@
+# Candidate #201 — mejbaurbahar/awesome-qa-agent-skills
+
+Review date: 2026-11-23. Scope: source-level and isolated installer/catalog validation; no user Skill directory, model provider, ChatGPT export, Claude Desktop session, or real migration was used.
+
+## Identity and current-source check
+
+- Repository: https://github.com/mejbaurbahar/awesome-qa-agent-skills
+- Default branch: main; local shallow checkout and current refs/heads/main both resolve to 1665963f605ceecb2ee14aea140a704c2046cae8.
+- Commit date/subject: 2026-10-15, Make piped --dry-run explain the plan instead of failing.
+- Git status after CodeGraph setup: clean (## main...origin/main). CodeGraph initialized and up to date: 26 indexed files, 297 nodes, 1,152 edges.
+- GitHub currently shows 0 stars, 0 forks, seven commits, and one open issue. The latest visible workflow run is validate#7, completed successfully on the same 1665963 main commit (17 seconds). The open issue suggests a separate upstream vostride/agent-qa skill source; it is not evidence of this repository implementing that runtime or a migration adapter.
+
+## What it is / fit
+
+README describes 194 curated QA/product-management Agent Skills in 21 categories. Its shell installer targets Claude Code (~/.claude/skills) and Antigravity (~/.gemini/config/skills); it also documents the Claude Code plugin and npx skills installation routes. The actual implementation is a static Skill catalog, catalog builder, validator, source-vendor refresher, and link/copy installer. It does not model or import/export ChatGPT or Codex Projects, Sections/Section Groups, nested sessions, parent/child/fork/message event graphs, attachments, usage/token counters, MCP/plugin configuration as project/session resources, durable memory, or schedules. It has no Claude Desktop third-party-gateway Chat, Cowork, or Code session writer. Do not count it as a session/project migration engine or a target adapter. Reusable Skill text belongs only to the separate ResourcePlane.
+
+The local catalog contains 194 Skills from 14 pinned vendor sources (178 MIT and 16 Apache-2.0 Skills); sources.lock.json, upstream licenses and THIRD_PARTY_NOTICES.md provide useful source/commit/license traceability. An optional 77-Skill Product-Manager-Skills pack is explicitly CC-BY-NC-SA-4.0 and is fetched at install time rather than vendored.
+
+## Source and behavior findings
+
+1. Manifest path is treated as ownership proof. install.sh tracks destination strings in $AQS_HOME/.installed. On install and uninstall, any existing path listed there is recursively removed with rm -rf; it does not verify the prior symlink target, copied content, or that the path remains under either configured skill root. In a disposable fake HOME, --pack qa --claude-only installed 120 links. Replacing one recorded symlink with a synthetic user-owned directory and USER_OWNED.txt, then running --uninstall, exited 0 (removed 120 skill entries) and deleted the marker. A second isolated probe appended a synthetic directory outside the skills root to .installed; --uninstall exited 0 (removed 121 skill entries) and deleted its sentinel. These show path-ownership/data-loss hazards if a recorded destination is replaced or the local manifest is stale/tampered; they do not establish remote exploitability.
+
+2. Source refresh is not transactional. scripts/sync_vendor.py removes all previously locked skill directories for a source before validating/copying the new source. copy_skill() also rmtree's a destination before copytree. A later missing SKILL.md, copy failure, or interrupted run can leave the old catalog partially or wholly deleted; lock metadata is only rewritten at the end. This is maintainer-time refresh logic, distinct from the end-user installer.
+
+3. Optional upstream is not commit-pinned by the installer. install.sh --with-upstream shallow-clones or fast-forwards deanpeters/Product-Manager-Skills at use time; the resulting commit is not added to the local source lock. The README discloses the CC-BY-NC-SA-4.0 license, which is a good redistribution boundary, but a reproducible package should record the fetched commit.
+
+## Executed local checks
+
+All side-effecting installer probes used disposable temporary directories and fake HOME/config paths.
+
+- rtk proxy python3 scripts/validate.py: exit 0; stdout 194 skills checked, 0 problem(s); stderr empty.
+- Isolated copy of the checkout, python3 scripts/build_catalog.py: exit 0; stdout catalog: 194 skills in 21 categories; packs pm=56, qa=120, web=18; stderr empty; generated README and pack files were byte-identical to source.
+- Isolated full installer smoke (the workflow's install/uninstall shape): exit 0; stdout reported 388 installed, 0 skipped (194 entries per target); uninstall exit 0 reported removed 388 skill entries; both fake target directories had 0 entries afterward; .installed was removed; stderr empty.
+- GitHub Actions workflow runs the validator, generated-catalog check, and fresh install/uninstall smoke; GitHub showed the latest run green. The repository has no tests/ directory. The CI and local checks validate metadata/catalog/installer lifecycle, not integration with either live Harness or session fidelity.
+- A focused rtk ls tests exploratory command returned exit 1 (ls: tests: No such file or directory); correction: read the official validate.yml and list scripts/, confirming CI consists of scripts/validate.py, scripts/build_catalog.py plus installer smoke.
+- rtk codegraph node install.sh returned Symbol install.sh not found because CodeGraph does not index shell symbols; corrected with successful direct rtk read install.sh. The install script was not run from an untrusted network pipe.
+- An earlier rtk git -C <checkout> status attempt exited 128 (cannot change to ... no such file) because the checkout path was not recognized in that command form; corrected with rtk git status using the checkout as working directory (exit 0, clean).
+- CodeGraph exploration of session/project/memory terms found skill-playbook references, not a product data model or migration implementation; scripts and installer source were inspected separately.
+
+## Disposition
+
+Exclude from the Nexus Memory core migration shortlist; retain as a low-priority example of a curated, commit/license-tracked Skill ResourcePlane catalog. Its existing content can be inventoried as Skill assets, but neither Skills format compatibility nor passing static installer checks implies session/project/Section, attachment, memory, schedule, or Claude Desktop mode fidelity.
+
+## Primary sources
+
+- Repository/README: https://github.com/mejbaurbahar/awesome-qa-agent-skills
+- Installer: https://github.com/mejbaurbahar/awesome-qa-agent-skills/blob/main/install.sh
+- Vendor-refresh source: https://github.com/mejbaurbahar/awesome-qa-agent-skills/blob/main/scripts/sync_vendor.py
+- CI workflow: https://github.com/mejbaurbahar/awesome-qa-agent-skills/blob/main/.github/workflows/validate.yml
+- Third-party notices: https://github.com/mejbaurbahar/awesome-qa-agent-skills/blob/main/THIRD_PARTY_NOTICES.md
+- Current open source suggestion: https://github.com/mejbaurbahar/awesome-qa-agent-skills/issues/1

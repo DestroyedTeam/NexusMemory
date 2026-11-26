@@ -1,0 +1,30 @@
+NEXUS MEMORY CANDIDATE REVIEW — yuvalsuede/claudia — 2026-11-20
+
+TARGET / source provenance
+- Project TARGET is the disposable snapshot `/private/tmp/nm-next-agent-sessions-review-20261120/candidate/project`; original Nexus Memory source was not edited.
+- Candidate: https://github.com/yuvalsuede/claudia — GitHub describes it as a CLI task manager for AI agents with MCP support. Main source snapshot was downloaded from codeload over HTTP/1.1 to `/tmp/nm-review-yuvalsuede-claudia-20261120-http11.tar.gz` (SHA-256 `461613526d9a813b488324ad25953d69b7868d1f197f6a703c1984fa1f7fd0bb`). The snapshot README matched a separate `raw.githubusercontent.com/.../main/README.md` fetch byte-for-byte (`cmp` exit 0; README 15,249 bytes). GitHub's main-branch Atom feed showed latest commit `8898fa8c255470119a6634e699857f666f398b93`, 2026-02-28T05:39:52Z; source archive and README were retrieved during this review. GitHub repository snapshot: 15 stars / 5 forks, GPL-3.0, created 2026-01-13, updated 2026-07-05, pushed 2026-02-28. No Releases page entries. Package version 0.1.3; bundled `.claude-plugin/plugin.json` version 0.1.2 (version drift).
+- Extracted source path: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-yuvalsuede-claudia-20261120-source`. CodeGraph initialized and current: 40 files, 477 nodes, 1,729 edges; index status up to date. `.codegraph/.gitignore` retained with only the required self-preserving `!.gitignore` exception removed.
+
+WHAT IT IS / source-verified behavior
+- Claudia is a local Bun/SQLite project-management tool: Projects, Sprints, Tasks, task dependencies, acceptance criteria, statuses, and an MCP server. Database default is `~/.claudia/tasks.db`, override `CLAUDIA_DB`; task context/metadata/tags/images are JSON text columns. Task schema contains `project_id`, `sprint_id`, `parent_id`, `agent_id`, `context`, `metadata`, `images`, and acceptance criteria. `parent_id` constructs task trees; dependency edges are separate. Projects have name/path/description; sprints group work by date/status. None of these entities is a ChatGPT Project, Section, Section Group, or conversation session.
+- README advertises “remember context between sessions” with 64KB JSON storage per task. Source confirms `setTaskContext`/`mergeTaskContext` persists JSON on the task and rejects serialized context longer than 65,536 characters. This is task memory, not a turn-by-turn transcript or a memory/session lineage format.
+- The only `session_agent_id` is generated as ``session-${randomUUID().slice(0, 8)}`` on MCP server startup and is used to identify the agent claiming/owning tasks. It is not a Claude provider session ID, is not stored as a durable session row, and has no parent/child session graph. Selected current project is an in-memory module variable for the MCP session/process. No transcript importer/exporter or session resume/restore writer was found in source.
+- Task images can hold an external URL, local path, base64 value, caption, and timestamp; this is attachment metadata on a task, not images embedded in ordered user/assistant message events. No audio/video/transcript/token-usage/cost event schema was found.
+- The repository contains a single `.claude-plugin/plugin.json` plus `skill/SKILL.md` and documents a Claude Code MCP config using `.mcp.json`. This is a Claude asset/integration surface, not a cross-harness asset manager and not a Chat/Cowork/Code session transfer. The repo does not read/import another harness's MCP config or prove that its task context is activated as a native skill.
+
+FIT FOR NEXUS MEMORY
+- Reuse selectively as an adjacent workflow/task plane reference: explicit project/task/sprint entities; parent-child task topology distinct from dependency edges; bounded per-task structured context; persistence through a local SQLite database; task images/acceptance criteria metadata; MCP task-service interface.
+- Do not treat its tree as a portable Session graph. In a Nexus canonical model, Claudia tasks might map to a separate task/work-item extension linked to a Project; do not map tasks to turns or use `session-*` IDs as provider/session identities. Preserve task context as typed opaque metadata with explicit provenance/limits only.
+- No support demonstrated for ChatGPT Projects/Sections/Section Groups; Claude Desktop Chat/Cowork/Code session migration; Claude Code local/self-hosted provider session content; Anthropic-hosted Cloud sessions; transcript turn ordering, interruptions, forks/subtasks as conversations, tool outputs, attachments as message events, token usage/cost, schedules, or Skills/MCP transfer between harnesses.
+
+QUALITY / LIMITS
+- Repo CI workflow declares Bun install, TypeScript typecheck, `bun test`, compiled binary build, and binary `--version` smoke check. This describes intended CI only; no exact-run CI result was independently verified.
+- Local `rtk proxy bun test` exit 1 because Bun is unavailable. No test/typecheck/build result is claimed. No installation or provider/account operation was performed.
+- GitHub API request was rate-limited (HTTP 403); commit identity was recovered from GitHub's main Atom feed. Full `git clone` remained in progress after 5m31s behind the local network proxy and was terminated; no clone exit status is claimed. Initial default-HTTP codeload request hit timeout after 40,002ms with 595,562 bytes (curl exit 28); `gzip -t` on that partial archive failed (exit 1). Corrected with HTTP/1.1; complete 1.5MB tarball downloaded and `gzip -t` passed. Source README cross-check passed. These transport errors do not affect the source findings.
+
+SOURCES
+- Repository/README: https://github.com/yuvalsuede/claudia
+- Main commit: https://github.com/yuvalsuede/claudia/commit/8898fa8c255470119a6634e699857f666f398b93
+- Main commit Atom feed: https://github.com/yuvalsuede/claudia/commits/main.atom
+- Releases: https://github.com/yuvalsuede/claudia/releases
+- Local CI source: `.github/workflows/ci.yml`; local implementation source includes `src/db/migrations.ts`, `src/db/client.ts`, `src/schemas/task.ts`, `src/core/task.ts`, `src/core/project.ts`, and `src/mcp/server.ts`.

@@ -1,0 +1,28 @@
+Nexus Memory candidate #182 source review — kamalsrini17/mcp-client
+Review date: 2026-11-23
+Pinned repository state: https://github.com/kamalsrini17/mcp-client/tree/98c224e6bb3dadc307ee9368ef2733c42195c0ec
+HEAD and refs/heads/main: 98c224e6bb3dadc307ee9368ef2733c42195c0ec; shallow clone exit 0. CodeGraph indexed 2 TypeScript source files (15 nodes, 27 edges). After initialization, only `.codegraph/` appeared untracked; removed only `.codegraph/.gitignore`'s `!.gitignore` exception, leaving the index ignored.
+
+Decision
+--------
+False-positive for Harness migration. Despite the repository/package name and search match, it is a tiny generic product-manager REST workflow sample, not an MCP protocol client and not a ChatGPT/Codex/Claude session or project migrator. No import/export, session graph, target adapter, or migration fidelity surface exists.
+
+Source findings
+---------------
+* README is two lines describing an “agentic workflow for product manager.” `package.json` provides only a `start` script (`ts-node src/index.ts`) and Axios runtime dependency; no MCP SDK, tests, or test script. No root license file was present in the checkout; SPDX remains unconfirmed.
+* `src/agenticClient.ts` defines a ProductConcept and uses Axios directly against REST routes `/market_research`, `/prd`, `/prototype`, `/pr_faq`, `/prd/:id`, and `/tools/validate_requirements`. It has no MCP initialize/tools/list/call JSON-RPC flow. It returns generated REST response values in an in-process object; it does not create or import conversation/session history.
+* `src/index.ts` hardcodes `http://localhost:3000`, supplies a sample PM request, and immediately calls `runWorkflow`. The `npm start` path was not run because it would send writes to whatever local service is listening there.
+* Package includes only Axios and TypeScript/ts-node development dependencies. No Skills/MCP server definitions, Plugins, memory, project/section/session hierarchy, transcripts, branching, media, tokens, or scheduler model appears in source.
+
+Observed checks
+---------------
+* `rtk git clone --depth 1 https://github.com/kamalsrini17/mcp-client <isolated #182 checkout>`: exit 0.
+* `rtk git rev-parse HEAD refs/heads/main`: both `98c224e6bb3dadc307ee9368ef2733c42195c0ec`; commit date 2025-05-30T00:41:32-07:00.
+* `rtk codegraph status`: current; 2 TypeScript files / 15 nodes / 27 edges.
+* `./node_modules/.bin/tsc --noEmit`: exit 0.
+* Local-only synthetic HTTP mock invoked `MCPClientAgent.runWorkflow`: exit 0, exactly six requests: `POST /market_research`, `POST /prd`, `POST /prototype`, `POST /pr_faq`, `GET /prd/synthetic-prd-id`, `POST /tools/validate_requirements`. Returned synthetic validation `{ok:true}`. Bound only to 127.0.0.1; no external network/service/data.
+* `package.json` declares no tests; no `tests/` directory. The real entrypoint was not run, and no user/project data, credentials, live API, or external service was touched.
+
+Recommendation
+--------------
+Reject as a migration candidate; optionally retain only as a generic REST-orchestration/PM workflow example, not an MCP, Harness or SessionGraph reference. Do not let GitHub search keyword matches count as implementation evidence. Keep the Nexus design centered on versioned source/target serializers, explicit provider/session models and loss reporting.

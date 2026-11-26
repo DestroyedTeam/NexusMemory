@@ -1,0 +1,36 @@
+# Candidate #215 — `saturnarians/ctx-manager`: context ledger, not session migrator
+
+Review date: 2026-11-23. Disposition: retain the deterministic Markdown slicing / project handoff-ledger idea as an adjacent context-memory reference; do **not** reuse its current MCP file writers or treat it as a Projects/Sections/session migration tool.
+
+## Pinned identity and product scope
+
+- Upstream: https://github.com/saturnarians/ctx-manager; PyPI: https://pypi.org/project/ctx-manager/
+- Default branch `main`, pinned checkout `0112b8c94cd5020fd64a8bc638499f66f4fddc28` (`Fix phase-tracking bugs found during real logis-main onboarding`, 2026-08-27); `origin/main` matched. The public repo showed 16 commits, 0 stars/forks, MIT, no releases, no visible workflow runs, and 0 open/closed PRs or open issues at review time.
+- The project is a local Python CLI + MCP stdio server that slices Markdown by header and appends a `Memory_Ledger.md`; examples target Claude Code hooks and MCP clients such as Cursor/Windsurf/Claude Desktop. It is not a source-session importer/exporter.
+- CLI surface: `ctx build --slice`, `ctx build --auto-phase`, `ctx append-ledger`, `ctx mcp`. MCP tools: `query_slice`, `append_ledger_entry`, `get_current_phase`.
+- The record model is a compact summary/category/phase ledger plus Docs slices; no raw transcript/event graph, source message IDs, parent/child/fork/subtask relations, Project or Section Group graph, images/attachment bytes, tool-result graph, schedule, usage-token ledger, plugin store or restore/resume ID. No ChatGPT/Codex adapter and no Claude Desktop 3P Chat/Cowork/Code session adapter were found. The ordinary MCP stdio server does not itself provide an HTTP inference/API-key gateway.
+
+## Build and tests observed
+
+- `uv sync --locked` succeeded into a temporary environment on CPython 3.14.3 and again with `--python 3.12` on CPython 3.12.4; no global Python environment was changed.
+- Re-run against the pinned checkout: `/tmp/nm-ctxmanager-review-215/project-env/bin/python -m pytest -q` emitted `..................... [100%]` and `21 passed in 0.04s`, exit 0; stderr empty. Python 3.12 environment emitted `..................... [100%]` and `21 passed in 0.03s`, exit 0; stderr empty. Tests cover config, ledger and slicer; they do not exercise MCP transport/path containment/concurrency.
+- `uv build --out-dir /tmp/nm-ctxmanager-review-215/dist` exit 0 built `ctx_manager-0.2.0.tar.gz` and `ctx_manager-0.2.0-py3-none-any.whl`. Literal warning: `build_system.requires = ["uv-build>=0.12.3,<0.13.0"] does not contain the current uv version 0.13.9`.
+- A `pip-audit` scan of the temporary Python 3.12 environment reported 25 known advisories across four packages: `httpx2 2.10.0` (3), `mcp 2.0.0` (5), `opentelemetry-api 1.44.0` (2), and `pyjwt 2.13.0` (15). Treat this as a dependency-risk inventory, **not** 25 demonstrated app exploits: the shipped server is stdio-only and several MCP findings are scoped to HTTP/SSE/OAuth paths not invoked by the documented default. Review the current primary [MCP Python SDK security advisories](https://github.com/modelcontextprotocol/python-sdk/security/advisories) before any reuse.
+
+## Synthetic-only behavior probes
+
+All probes used files in `/tmp/nm-ctxmanager-followup215-poc/`, synthetic sentinels and no account, real user data, API key or provider request.
+
+1. **Docs read path escape (CLI and actual MCP stdio):** a synthetic `project/Docs` plus `../../outside.md` was passed as the `file` argument to `query_slice`. CLI and MCP `tools/call query_slice` both exited 0 and returned `synthetic-outside-docs-marker: redacted`; stderr empty. `mcp_server.py` joins the caller-supplied `file` to the configured Docs path without a containment check.
+2. **Ledger write path escape (CLI and actual MCP stdio):** synthetic `.context/config.toml` set `docs_dir="Docs"` and `ledger_file="../../outside-target.txt"`. MCP `append_ledger_entry` exited 0, returned `Appended [unverified] to /private/tmp/nm-ctxmanager-followup215-poc/mcp-write/project/Docs/../../outside-ledger.md`, stderr empty, and appended a synthetic line to the outside sentinel. The CLI path did the same. The config value is project-controlled and not canonicalized/contained before writing.
+3. **CLI/MCP phase disagreement:** with an explicit ledger tag `[Phase: 4]` and summary text not containing “Phase N”, CLI `ctx build --auto-phase` exited 0, stderr `Auto-selected: Phase_file.md > Phase 5`, stdout `Five.`. MCP `get_current_phase` reported `Unknown (no completed phase entries found in ledger)`: its regex expects prose `Phase N` rather than the structured tag. MCP `append_ledger_entry` schema also lacks the CLI `--phase` field.
+4. **“Verified” prefix is only a changed-file count:** a clean synthetic Git baseline was followed by one unrelated dirty file; an unrelated synthetic Phase 9 “completed” claim was appended with exit 0 and `[Verified: 1 files changed]`. This records a nonempty worktree count, not semantic correspondence between the ledger assertion and the diff.
+5. **Forced concurrent-write loss:** 12 threads were synchronized after reading the same ledger and then invoked the actual `append_ledger_entry` implementation. All used the fixed sibling `Memory_Ledger.md.tmp` and `os.replace`; 11 calls raised `FileNotFoundError` when another thread consumed the temp file, one succeeded, and the final ledger contained one entry. This is an intentionally forced race, not a claim that every ordinary single-user run fails; the project PRD itself leaves simultaneous-session locking unaddressed.
+
+## PyPI artifact is stale relative to pinned source
+
+PyPI `ctx-manager==0.2.0` was uploaded 2026-08-20; GitHub main has a later 2026-08-27 fix but still declares version 0.2.0. `uvx --from ctx-manager ctx` resolves the PyPI release, not an untagged main checkout. Downloaded PyPI artifact hashes: wheel `fa1bebb182c3004c706f292bfbe2ee0cad9d57d25a73c0758181137efa62c2b0`; sdist `4ad00f427eaaea031f27ebc84c6b2d31a9371a89c6019db76b3bb281b85d8efe`. The wheel's `ledger.py`/`cli.py` differ from pinned main and lack its phase-tag fix; `mcp_server.py` is still identical and retains the phase-regex mismatch. A synthetic false-positive case returns phase 9 on the published wheel while current main returns explicit phase 4. PyPI did not show build provenance. The upstream [fix commit](https://github.com/saturnarians/ctx-manager/commit/0112b8c94cd5020fd64a8bc638499f66f4fddc28) records the regression and 3 new tests.
+
+## Nexus disposition and boundaries
+
+Use only as an adjacent context-window/phase ledger concept, after redesigning safe relative paths, atomic multi-writer semantics, semantic verification labels, and matching MCP/CLI schemas. Not a SessionGraph, project/section migrator, attachment/token/tool-history importer, or Claude Desktop mode adapter. User scope remains local/self-hosted Claude Code plus Claude Desktop via third-party provider/API gateway in **all three modes (Chat, Cowork, Code)**; that confirmed target scope does not make this candidate compatible. Anthropic-hosted Claude Code Cloud remains a distinct, unconfirmed destination. No real migration or Desktop store read occurred.

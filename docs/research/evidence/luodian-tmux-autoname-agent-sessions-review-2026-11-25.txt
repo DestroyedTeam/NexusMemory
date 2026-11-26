@@ -1,0 +1,33 @@
+NEXUS MEMORY CANDIDATE REVIEW #287 — Luodian/tmux-autoname-agent-sessions
+Date: 2026-11-25 (Asia/Shanghai)
+Pinned checkout: 13c13a880b3630b0e6d7644173692ba2d25fbb48 (2026-05-29, "feat: full-scan rename on window switch").
+Repository: https://github.com/Luodian/tmux-autoname-agent-sessions
+
+SUMMARY / DISPOSITION
+This is a tmux UI plugin that recognizes interactive Claude Code and Codex processes, reads only the first user prompt from their native local session files, and renames the terminal window to a short task title. It does not import, export, restore, move, or rewrite any conversation/session data. It is an adjacent Harness-awareness/metadata UX reference, not a migration product and not a source/target adapter.
+
+REPOSITORY / SCOPE
+- GitHub API on 2026-11-25: public MIT, main, 0 stars/forks, 0 open issues, not archived; pushed_at 2026-05-29T08:17:02Z. Pinned checkout HEAD matches 13c13a880b3630b0e6d7644173692ba2d25fbb48 (2026-05-29T16:13:50+08:00). GitHub reports six commits. gh run list and gh release list each exit 0 with empty stdout; no releases or recent workflow runs observed.
+- README/code support tmux >=3.2, Claude Code and Codex process panes only. Hooks run on window/pane/session changes and a 30-second watcher. It reads the first user prompt (up to 400 characters) from Claude Code session JSONL or the Codex rollout file currently open by the process; it then renames the tmux window as cc|<title> or codex|<title>. It restores tmux automatic-rename when the agent exits. It does not read full conversations, parent/child tasks, Projects/Sections, attachments, tool-result graphs, token usage or model routing state.
+- Claude Desktop helper processes using --output-format stream-json are explicitly excluded. There are no Chat, Cowork, Desktop Code, ChatGPT Project/Section, Codex App restore, DSH, Cursor, Gemini or other Harness adapters. The plugin records no source/target identities or migration outcome.
+- GitHub About metadata says "history search and status-bar summaries," but the pinned README/source tree implements tmux window renaming from the first prompt; no history-search or status-bar feature is present in the checked-out files. Treat the source as authoritative and the About text as an overbroad description.
+- All source/test inventory is a small shell/tmux plugin (two shell files plus README, Makefile, LICENSE); no test/spec files exist. Makefile lint runs only bash -n on the two scripts. rtk make lint exited 0 with stdout bash -n scripts/agent-rename.sh\nbash -n tmux-autoname-agent-sessions.tmux\n; independent syntax checks also exited 0, stderr empty. No CI runs or releases. The CodeGraph initializer found no indexable source files (0 files/nodes/edges); its ignored index directory was cleaned of the self-preserving exception and is ignored.
+- Isolated synthetic behavior probe used a disposable HOME and fake tmux/ps/curl executables (no actual tmux server, Claude/Codex process, user prompt, API key, or network). A fake running Claude process and synthetic native session JSON/JSONL caused an exit-0 window rename cc|FIRST_USER_PRO, with the first prompt's initial 14 characters cached under ~/.cache/tmux-ai-rename/claude-synthetic-session-id. The second synthetic user turn was not included, and the fake curl log remained absent. Temporary files were removed.
+
+DATA / PRIVACY
+- Claude lookup reads ~/.claude/sessions/<pid>.json for sessionId/cwd, then the matching ~/.claude/projects/.../<session_id>.jsonl; Codex lookup uses lsof on the running process to find its open rollout JSONL. Codex parser skips auto-injected environment/user-instruction/AGENTS.md preamble entries. Both extract only the first user prompt, truncate it to 400 characters, and do no secret redaction before handing it to the summarizer.
+- If OPENROUTER_API_KEY or the tmux @autoname_api_key option is set, the raw prompt excerpt is sent to OpenRouter's chat-completions endpoint for a 3–6 word English title. The key is for title generation only; it is not a session migration or provider-restore key. If no key exists, the plugin uses a 14-character prompt prefix and does not call curl. The source code confirms the API request is plain HTTPS with the excerpt in its user-message body and no redaction stage.
+- Only generated titles are cached per session in ~/.cache/tmux-ai-rename; no transcript copy, file hashes, attachments, tool graph or rollback archive is created. The cache is local plaintext and the normal cleanup is --clear. There is no session-data encryption/retention framework.
+- A tmux option can hold the OpenRouter API key. No credential was supplied or read during review; avoid embedding actual keys in shared tmux config.
+
+COMPATIBILITY / DESIGN VALUE
+- Useful adjacent design ideas: inspect pane process trees; identify a source session through a running process; cache a derived label per source session; use hooks plus a periodic refresh for new-session placeholders; restore the terminal's automatic naming after process exit.
+- Required gaps for Nexus: no conversation transfer; no full transcript/event parser, project/group/task/branch hierarchy, target writer, attachments/tools/skills/MCP/plugin/memory/schedule plane, fidelity report, import verification or rollback. Because it only extracts the first prompt, the generated title is intentionally lossy and cannot represent a multi-turn session.
+- Keep as a small process-detection/window-label UX reference. Do not call it a session migrator or reuse its external prompt-sending behavior as the default Nexus path.
+
+PRIMARY SOURCES
+- GitHub README: https://github.com/Luodian/tmux-autoname-agent-sessions
+- Pinned plugin entrypoint: https://github.com/Luodian/tmux-autoname-agent-sessions/blob/13c13a880b3630b0e6d7644173692ba2d25fbb48/tmux-autoname-agent-sessions.tmux
+- Pinned native-store reader and OpenRouter client: https://github.com/Luodian/tmux-autoname-agent-sessions/blob/13c13a880b3630b0e6d7644173692ba2d25fbb48/scripts/agent-rename.sh
+
+Next primary-corpus candidate after #287: lweiss01/holistic. Review is source-level/lint/synthetic-probe evidence only; no live tmux or real Harness session was used.

@@ -1,0 +1,44 @@
+
+> opencode-monitor@1.0.0 test
+> node --test test/*.test.js
+
+▶ EventLogger
+  ✔ cria diretorio de dados (2.058708ms)
+  ✔ gera sessionId unico (0.329375ms)
+  ✔ log salva evento em JSONL (1.089208ms)
+  ✔ multiplos logs acumulam no arquivo (0.520834ms)
+  ✔ retorna caminho do arquivo de eventos (0.348792ms)
+✔ EventLogger (5.028916ms)
+Monitor rodando em http://127.0.0.1:8765
+▶ Integracao Completa
+  ✔ GET / retorna HTML do dashboard (12.02475ms)
+  ✔ GET /events retorna SSE stream (1.215083ms)
+  ✔ GET /api/events retorna JSON (1.887334ms)
+  ✔ CORS headers presentes (0.6785ms)
+  ✔ GET /rota-inexistente retorna 404 (0.711042ms)
+✔ Integracao Completa (19.133708ms)
+▶ MonitorServer
+  ✔ instancia com porta e host (0.514125ms)
+  ✔ inicia e para sem erros (1.52725ms)
+  ✔ broadcast envia para clientes conectados (0.422917ms)
+  ✔ setDataDir define diretorio (0.098917ms)
+✔ MonitorServer (3.341833ms)
+▶ SessionTracker
+  ✔ initialize with default state (1.351042ms)
+  ✔ track message.updated with tokens and cost (0.186792ms)
+  ✔ track tool.execute.before (0.117875ms)
+  ✔ track tool.execute.after removes from active (0.123ms)
+  ✔ compute tokens per second (0.212167ms)
+  ✔ track context limit from model info (0.108875ms)
+  ✔ track session.status events (0.098125ms)
+  ✔ updateFromAPISession sets tokens and model from API data (0.167917ms)
+  ✔ track chat.message event (0.133542ms)
+✔ SessionTracker (3.183417ms)
+ℹ tests 23
+ℹ suites 4
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3087.383416

@@ -1,0 +1,30 @@
+# Candidate #195 — `LMPrado-DZ23/awesome-agent-plugins`: strong resource discovery catalog, not a session migrator
+
+Review date: 2026-11-23. Pinned default branch `main` and `refs/remotes/origin/main` at `163484b3aa54d0c048868e499310b49719dbafae`, commit time `2026-11-16T15:46:57Z`. Repo: <https://github.com/LMPrado-DZ23/awesome-agent-plugins/tree/163484b3aa54d0c048868e499310b49719dbafae>. GitHub Releases page says there are no releases. Package `awesome-agent-plugins@0.1.0`; license split: code/skills/instructions MIT, catalog data CC0-1.0. CodeGraph: 619 files (mostly YAML catalog), 304 nodes, 745 edges; current. Checkout clean after tests/build.
+
+## Disposition
+
+**Useful as a structured secondary *discovery source* for ResourcesPlane components and harness installation metadata; not a session/project migration engine.** The README describes 589 catalog entries/945 projects across 13 client/harness IDs, generated install snippets, 22 categories, source importers, schema validation and deduplication/alternatives. Its `Sessions & Messages` page has 10 entries + 7 folded alternatives, mostly DeepSeek Harness plugins; it includes cross-tool import/export leads (including Nwflower/dsh-chat-import, previously reviewed in this corpus) and a session-reader lead. It lists tools and install metadata; its own app does not read/write user session history.
+
+The catalog is valuable for expanding candidate coverage. **Do not add all 589 catalogue rows to Nexus's unique-repository counts without URL-level deduplication and source provenance.** It intentionally combines original projects, alternatives, standards, tool packages and native DSH plugins and overlaps the current primary/manual corpus. The catalog's own README explicitly says listing is not a security audit.
+
+## Compatibility boundaries
+
+- Catalog clients: Claude Code, Codex CLI, Gemini CLI, Cursor, VS Code/Copilot, OpenCode, Cline, Windsurf, Zed, Goose, Kiro, Roo Code and DeepSeek Harness. It does not identify Claude Desktop on 3P Chat/Cowork/Code as a client target; it has no ChatGPT session importer or provider-gateway setup.
+- Generated MCP and Skills install instructions are resource setup; not Projects/Sections/group/thread hierarchy or conversation import. “Sessions & Messages” is a category of third-party tools, not a session schema.
+- The `vshulcz/deja-vu` entry claims a read-only local BM25 session reader for Claude Code/Codex/Cursor/VS Code/OpenCode, no export; its repository is already present in the primary candidate queue and remains to be reviewed there. `Nwflower/dsh-chat-import` is also in the catalog and has already been independently reviewed here as DSH-specific. These catalog descriptions are discovery leads, not source-level validation.
+- As a Nexus reference, reuse the idea of typed entry records (MCP/skill/native-plugin/marketplace/standard/tool), per-client renderer adapters, source URL/version/license fields, deduplication/alternatives, safe placeholder validation, and a separate end-to-end harness test matrix. Keep actual session adapters and SessionGraph as separate components.
+
+## Source quality and guardrails
+
+- YAML source of truth, JSON Schema validator, generated bilingual README/category pages, collections, MCP Registry/GitHub/DeepSeek import scripts and weekly repository health workflow. README counts are validated locally (589 entries, five collections); 150 package references checked, zero missing/unknown.
+- CLI `aap search/show/install/list/collection` renders install commands/config. `--run` only allows a narrow command-prefix allowlist (`claude/codex/gemini/kiro-cli mcp add`, `npx skills add`, `dsh plugin`, `gemini extensions install`), rejects multiline/shell metacharacters/placeholders, then runs known commands. Unit tests cover these gates. The catalog itself can still point at third-party code, so treat installs as untrusted until source-reviewed.
+- README marks only Claude Code, Codex CLI and Gemini CLI MCP install plus Claude Code/DeepSeek Skills as E2E-tested; the other clients rely on official documentation. This is not validation of 13 live harnesses or their session stores.
+
+## Isolated verification
+
+Host Node `v26.7.0`, npm `11.19.0`; `npm ci` under fake HOME/cache installed two packages and reported zero vulnerabilities. Repository tests: 19 pass, 0 fail. `npm run validate`: `589 entries and 5 collections valid`. `npm run generate -- --check`: generated files up to date. `npm run check:packages`: 150 packages, 0 missing, 0 unknown. `npm run build`: validates and generates 52 files, zero changed. `npm pack --dry-run --json`: exit 0, 14 packaged files (182,093 packed / 755,264 unpacked bytes); this is a GitHub-source CLI, not evidence of a published npm release.
+
+`npm run e2e` first exited 1 because an installed Gemini CLI requires an auth method, even for the local MCP add command; stderr: it requested one of `GEMINI_API_KEY`, `GOOGLE_GENAI_USE_VERTEXAI`, or `GOOGLE_GENAI_USE_GCA`. Rerun with fake `GEMINI_API_KEY=NM_TEST_NOT_A_REAL_KEY` and isolated HOME/cache exited 0: Claude Code stdio+HTTP MCP registration passed; Codex stdio+HTTP passed; Gemini stdio+HTTP passed; Claude Code and DSH Skills installs passed. No model inference was invoked, no real credential was used, temp directories were cleaned and the candidate checkout remained clean. This exercises only the specific install flows, not Chat/Cowork/Code 3P session migration.
+
+**Recommendation:** keep as a high-value inventory/discovery source and resource-renderer reference. Reject as a migration product. It does not move session/project/group structure, messages, attachments, tool-event trees, memory or token usage. No migration-fidelity percentage is claimed. Officially linked harness install docs are tracked in `docs/clients.md`; full review: `docs/research/evidence/LMPrado-DZ23-awesome-agent-plugins-review-2026-11-23.txt`.

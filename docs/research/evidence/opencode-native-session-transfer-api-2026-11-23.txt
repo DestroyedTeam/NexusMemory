@@ -1,0 +1,18 @@
+# OpenCode native session transfer API cross-check — 2026-11-23
+
+Primary source: https://opencode.ai/docs/api (reviewed 2026-11-23). The API reference labels the HTTP surface experimental and lists 178 operations / 527 schemas. This is documentation evidence only; no live OpenCode server or user session was queried.
+
+## Transfer and hierarchy
+- `GET /api/session` lists sessions with `parentID`, project, directory, subpath and cursor filters. `POST /api/session` can create a linked child by `parentID`.
+- `POST /api/session/{id}/fork` creates a child from projected history before a selected message, or copies full history when the boundary is omitted. Deleting a session removes its child sessions.
+- `GET /api/experimental/session/{id}/export` exports a complete projected transcript and accepts `sanitize`. `POST /api/experimental/session/import` accepts an OpenCode projected transcript; the parent must exist first, so a migration must import parent before child.
+
+## Payload coverage evidenced by schemas
+- `Session.Info`: id, parentID, fork, projectID, agent, model, cost, tokens, outcome, time, title, subpath, metadata, permissions, revert and location.
+- Message listing is cursor/paginated and typed (user, synthetic, system, skill, shell, assistant, compaction, idle, plus agent/model/location switches).
+- User message files include base64 `data`, MIME, source, optional name/description and mention; messages can also include agent and skill attachments.
+- Assistant messages include text/reasoning/tool content, finish/error/retry and optional cost/token usage. Tool states include input, returned content and metadata. Compaction can carry summary, reason, model, cost and tokens.
+- API docs distinguish durable `session.usage.recorded` from a live event subscription. The `/api/event` stream is volatile: slow consumers can overflow and events while disconnected are missed. Use export snapshots for reconciliation; event streams are incremental hints, not the record of truth.
+
+## Nexus implication
+OpenCode is a high-value native source/target adapter opportunity, with parent-child/fork, project, attachments and usage data available through official schemas. However, HTTP transfer routes are experimental and version-sensitive; test against pinned installed builds. Native import consumes OpenCode projected transcripts only. Nexus still needs source-specific transformations and explicit loss reports for every other Harness. The separately reviewed Heverton OpenCode Monitor does not call these export/import routes and is not a migration tool.

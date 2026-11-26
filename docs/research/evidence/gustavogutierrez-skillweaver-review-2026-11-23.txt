@@ -1,0 +1,43 @@
+# Candidate #174 — GustavoGutierrez/skillweaver
+
+Review date: 2026-11-23. Pinned main HEAD 630ca593dda8cf118f0d108b475c19bfcd97e926 (manifest 0.0.4, MIT). GitHub latest public release v0.0.4 was 2026-05-12; review-time repo page showed 47 commits, 0 stars/forks. Actions run #9 for that commit succeeded, but its check set is the repo workflow (check/test/fmt/clippy) and the workflow does not use --locked. The repository-local AGENTS.md says source code is absent; the actual commit contains Cargo.toml, src/, tests/, and .github/workflows/ci.yml. This internal documentation conflict was resolved by following the actual pinned tree and running the commands.
+
+## Product scope versus Nexus Memory
+
+SkillWeaver is an actual Rust/Ratatui TUI + CLI for local profiles containing Skill names and Markdown rules. Its profile JSON can be imported/exported and local repositories scanned; installation downloads individual ZIPs to .agents/skills and conditionally creates symlink/copy entries under .claude/skills when a target already appears to be a Claude Code project. It manages a generated skills-lock.json and a marked AGENTS.md/CLAUDE.md rules block. This is a narrow Skills/rules asset-plane tool, not a cross-Harness Project/Session migrator. It has no ChatGPT/Codex Project or Section Group mapping, conversational session/fork/parent-child graph, transcript, attachments/images/links, token/usage capture, schedules, memory store, MCP/plugin migration or Claude Desktop third-party-gateway Chat/Cowork/Code target. It is not a local Claude Code history/session importer either.
+
+Reusable idea: an installable profile separates a set of skill IDs and rules from individual project paths, and local discovery looks under skills/, .agents/skills/, .claude/skills/. Actual scope is limited to names/rules/config, not a portable full-project/session archive; profiles import names/source roots, not snapshots of the skill files.
+
+## Source audit and implementation findings
+
+- ProfileStore saves a JSON file directly with fs::write (not atomic), validates only schema and non-empty profile ID/name, and import merges by profile ID/source name without replacing conflicts. It is not a reliable transactional migration store.
+- SourceRegistration has Git/Zip/Local variants, but execute_install ignores source_type and forms every download URL as root + /<skill>.zip; the actual install path does not use Git or copy a registered local directory.
+- Profile.install_mode is persisted and documented as auto/symlink/copy, but execute_install does not read it. It always places downloaded content under .agents/skills and, if CLAUDE.md or .claude exists, calls symlink_or_copy into .claude/skills.
+- The function named build_preview is called only inside execute_install and two tests; it does not produce a UI preview. InstallPlan.skills is empty; the plan only rejects empty profile name or skill names containing path separators/.. and renders rules. Thus the PRP's source/metadata/write-impact preview acceptance criteria are not implemented.
+- Remote install has no hash verification or SKILL.md validation. New skills are recorded with source=skillweaver, sourceType=zip and computedHash=pending. A direct SHA-256 check of the nine bundled local SKILL.md files against skills-lock.json found 0/9 matches at this snapshot; the lock manager never computes hashes.
+- A mock loopback install with a valid ZIP and install_mode=copy returned success but created .claude/skills/alpha as a symlink. The successful lockfile recorded computedHash=pending.
+- A two-skill fixture downloaded alpha, then got a 404 for missing.zip. CLI exited 1 but alpha's .agents/skills/alpha/SKILL.md remained; no rollback removed the partial installation and lockfile/rules were not written. This contradicts requirements around preserving/handling partial installs.
+- A malformed but valid ZIP with only README.txt (no expected skills/<name>/SKILL.md structure) was accepted, copied as .agents/skills/bad/README.txt, reported success, and wrote a lock row with computedHash=pending.
+- A synthetic archive path through a pre-existing symlink made extract_zip_safely return Blocked and did not create the outside payload file, but safe_join runs create_dir_all before canonical-parent containment; the POC observed an outside parent directory created. Traversal rejection is present but this creates an external filesystem side-effect.
+- A text-entry modal treats KeyCode::Char('q') as global quit before routing typed characters. With TMPDIR containing q (/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/), app::tests::add_source_flow_validates_and_registers_local_source failed at line 666 (0 sources instead of 1). A targeted test with a q-containing TMPDIR reproduced it. This can discard a legitimate local path/name containing q; a q-free TMPDIR let all tests pass.
+
+## Test/build results
+
+- cargo check: exit 0.
+- cargo fmt --check: exit 0.
+- cargo clippy -- -D warnings: exit 0.
+- First full cargo test under the host's default q-containing TMPDIR: exit 101, 5 passed / 1 failed (the modal q issue above). Under the isolated q-free TMPDIR /Users/vincentadamnemessis/Library/Caches/NexusMemory/skillweaver-test-tmp-20261123: **20 passed, 0 failed**.
+- cargo test --locked exits 101 because Cargo.toml is 0.0.4 while Cargo.lock pins root package 0.0.3. A normal cargo test rewrote the root version in Cargo.lock; it was restored and final checkout status is clean. CI currently runs cargo test without --locked, so CI green does not verify a reproducible locked build.
+- All network POCs used only a temporary loopback HTTP server and synthetic ZIPs; no GitHub, credentials, API keys, or real user projects were contacted/modified.
+
+## Disposition
+
+Classify as a low-adoption, early-stage **Skills/Rules profile manager only**. Keep its profile JSON and local skill-root discovery as comparative design notes; do not shortlist its installer as a safe migration writer until it has verified content hashes and structure, honored install mode/source types, user-visible preview, atomic/staged apply with rollback, and fixed the q-key modal bug. It is not a session/project migration tool and does not meet the requested all-Harness state fidelity.
+
+## Primary references
+
+- Repository/current tree: https://github.com/GustavoGutierrez/skillweaver
+- Latest release v0.0.4: https://github.com/GustavoGutierrez/skillweaver/releases/tag/v0.0.4
+- Exact-commit CI run #9: https://github.com/GustavoGutierrez/skillweaver/actions/runs/25742666504
+- Pinned install implementation: https://github.com/GustavoGutierrez/skillweaver/blob/630ca593dda8cf118f0d108b475c19bfcd97e926/src/services/install.rs
+- Pinned archive extraction: https://github.com/GustavoGutierrez/skillweaver/blob/630ca593dda8cf118f0d108b475c19bfcd97e926/src/infra/archive.rs

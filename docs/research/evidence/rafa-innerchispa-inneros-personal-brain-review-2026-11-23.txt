@@ -1,0 +1,41 @@
+# Candidate #209 — Rafa-Innerchispa/inneros-personal-brain
+
+Review date: 2026-11-23. Repository: https://github.com/Rafa-Innerchispa/inneros-personal-brain. Pinned checkout: `main` / `origin/main` at `c0f899bdde77eb25b555878a44f1764861199308` (commit dated 2026-10-14; subject `docs: track Mergetober Cognigy-Cognee proposal and assignment gate on main`). Isolated checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-rafa-innerchispa-inneros-personal-brain-20261123-followup209`. The checkout was clean after removing CodeGraph's `.gitignore` self-preserving exception; CodeGraph indexed 56 files / 613 nodes / 1,423 edges and reported up-to-date. No ChatGPT/Codex export, user session, account, real credential, or live Cognee service was used.
+
+## Scope and disposition
+
+`inneros-personal-brain` is a long-term shared-memory / personal-brain backend (Cognee graph memory, Bright Data retrieval, AWS Strands orchestration, optional local Qwen/vLLM, and a bounded Docker artifact path). It is **not** a ChatGPT/Codex Projects, Section Groups, transcript, session-tree, or cross-Harness migration/import/export program. Keep only the high-level shared durable-memory sidecar as an adjacent MemoryPlane research reference; do not reuse it as Nexus Memory's SessionGraph or target writer. This is a **memory-only, not a migrator** disposition.
+
+## Pinned source and data-model review
+
+- GitHub page reports 0 stars / 0 forks; the repository has no detected SPDX or license file, no Releases, and one open PR (#5). No rights to reuse code are inferred from public visibility.
+- `app/main.py` exposes 12 FastAPI routes including `/api/brain`, `/api/brain/stream`, health/proof modes, VoiceOps, and internal shared-memory operations. There are no session import/export/history or project/section hierarchy endpoints.
+- `app/models.py` contains only `Evidence(source, summary, metadata)`, `BrainRequest(prompt, act, route_mode)`, and `BrainResponse(answer, memory_hits, web_hits, actions, trace, route)`. No conversation/session/message IDs, branch/fork/parent edges, project or section identifiers, attachment manifest, or token/cost ledger is represented.
+- `app/brain.py` looks up shared memory, runs Bright Data and Strands/local Qwen reasoning, optionally produces a bounded local Markdown artifact, and may store a curated prompt/answer as a durable outcome. This is curated recall/reasoning state, not replayable history. `route_mode=local_only` skips Cognee writes. `app/sandbox.py`'s optional artifact path is a local `PERSONAL_BRAIN_ACTION.md`, not an arbitrary external action migration.
+- `app/adapters.py` exposes Cognee MCP/cloud/local adapters plus Bright Data and private-memory integration. Provider credentials remain configuration/server inputs; these adapters do not import source-harness sessions.
+- `docs/COGNEE_AGENT_MEMORY_FABRIC.md` describes a shared memory surface for multiple agents/harnesses, but it does not define source transcript ingestion, Project/Section mapping, or a full-fidelity session interchange schema.
+
+## Security and synthetic data probes
+
+`app/memory_curator.py` redacts several labeled secret patterns, bearer strings, `sk-...`, long hex strings, private IPv4 ranges, and some home-directory paths. A synthetic offline probe showed it did not redact the test email `person@example.test`, test AWS-like access-key string `AKIAIOSFODNN7EXAMPLE`, or macOS path `/Users/alice/Library/Application Support/app/config.json`; it did redact the synthetic password/API key and `127.0.0.1`.
+
+More importantly, `app/cognee_agent_tools.py` exposes `cognee_remember(data)` that truncates and forwards supplied text to Cognee without calling the curator. `CogneeMemoryStore.add()` likewise serializes text/metadata without curator enforcement. A direct-tool POC used a fake HTTP client and synthetic-only values; the request body preserved both a synthetic secret and private path:
+
+```json
+{"tool_result":{"ok":true,"provider":"cognee","dataset":"inneros-personal-brain","stored":true},"request_body_contains_synthetic_secret":true,"request_body_contains_private_path":true,"synthetic_auth_used":true,"request_body":"Verified fact api_key=SYNTHETIC_SECRET_TOKEN and /Users/alice/private/session.jsonl"}
+```
+
+The model-facing system prompt is not a security boundary. A migration product must run a deterministic, comprehensive redactor immediately before every shared-memory writer, preserve provenance/consent, and keep raw transcript content local by default.
+
+## Test and quality results
+
+- Isolated virtual environment: `pytest -q` — **23 passed**, exit 0. Two deprecation warnings: pytest-asyncio loop-scope default and FastAPI `on_event` deprecation.
+- System Python `python -m pytest --version` initially exited 1 (`No module named pytest`); corrected by using an isolated environment, where tests passed.
+- No live cloud, Cognee, Anthropic, API key, user export, or production write was exercised. The offline fake-client probes establish the code path behavior only.
+- GitHub Actions showed historical runs, with the latest visible run earlier than the pinned main commit; do not claim pinned-HEAD CI green. Releases page has none.
+
+## Open PR #5 is separate and unmerged
+
+GitHub currently shows PR #5, “Expand safe curated Cognee memory for Personal Brain,” as **open**, with two commits and changes to `app/demo_memory_seed.json` and `app/seed_curated_memory_mcp.py`; no reviews are listed. The author comment claims 48 curated facts, local Cognee MCP seeding, and a separate isolated 5/5 test plus live Cognee recall. Those are author-reported PR results, not tests of the pinned `main` checkout. The web diff view did not load, so the PR's source code was not independently audited here. It does not change the conclusion that the main-branch application has no session/project migrator.
+
+Primary sources: repository and pinned commit links above; PR: https://github.com/Rafa-Innerchispa/inneros-personal-brain/pull/5; PR file list: https://github.com/Rafa-Innerchispa/inneros-personal-brain/pull/5/files.

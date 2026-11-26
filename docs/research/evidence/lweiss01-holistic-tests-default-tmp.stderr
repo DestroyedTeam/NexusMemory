@@ -1,0 +1,16 @@
+Holistic: refusing to send session data to non-loopback host evil.example. Set ANDON_ALLOW_REMOTE=1 to override.
+Holistic: refusing to send session data to non-loopback host collector.example.com. Set ANDON_ALLOW_REMOTE=1 to override.
+Holistic: refusing to send session data to non-loopback host 10.0.0.5. Set ANDON_ALLOW_REMOTE=1 to override.
+Holistic: ignoring malformed ANDON_API_BASE_URL (not a url).
+Preparing worktree (detached HEAD fc3963d)
+FAIL enumerateGitWorktrees returns additional worktree paths, excluding main
+AssertionError [ERR_ASSERTION]: expected worktree path /var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/holistic-wt-hook-test-lh1qrV but got /private/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/holistic-wt-hook-test-lh1qrV
+    at Object.run (file:///Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-lweiss01-holistic-20261125-followup288/tests/worktree-hook-propagation.test.ts:53:16)
+    at file:///Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-lweiss01-holistic-20261125-followup288/tests/run-tests.ts:1954:20
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Preparing worktree (detached HEAD fc3963d)
+Preparing worktree (detached HEAD fc3963d)
+Preparing worktree (detached HEAD ee15fab)
+Preparing worktree (detached HEAD ee15fab)
+
+1 test(s) failed.

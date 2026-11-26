@@ -1,0 +1,37 @@
+# Candidate #177 — Hitesh-Sisara/agentic-keyvault
+
+Review date: 2026-11-23. Source checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-Hitesh-Sisara-agentic-keyvault-20261123. `git rev-parse HEAD` and `git ls-remote origin refs/heads/main` both returned `f39c1cf859e79a30b684291f1a2a599cc8527a96`; source checkout `git status --short` was empty. CodeGraph initialized and current: 88 files, 801 nodes, 2,112 edges.
+
+## Disposition
+
+**Reject as a Project/Section/Session migration product. Retain as a separate SecretPlane architecture reference only.** The repo is a self-hosted Cloudflare Workers + D1 store for API keys, tokens, and environment variables, with a CLI and stdio MCP server. Its “Project” is a credential namespace with optional GitHub repo binding, not a ChatGPT/Codex Project or Section, and there is no conversation/session/transcript/branch/media/schedule import/export schema. It does not migrate Skills, MCP server definitions, plugins, user memory, or any Claude Desktop Chat/Cowork/Code or local/self-hosted Claude Code conversation data. A credential store or MCP API is not evidence of Harness configuration migration.
+
+For Nexus, keep secret values outside the portable session bundle. At most transport an opaque credential locator plus required scope/provider metadata and a `reauthorization_required` state; resolve or relink secrets at the destination only after explicit user action. This separation applies to the confirmed Claude Desktop third-party-gateway Chat, Cowork, and Code tracks and local/self-hosted Claude Code as well as other Harnesses.
+
+## Source and implementation review
+
+- README describes Projects as groups of secrets, optional repo-origin binding, versioned writes, and rotation. The API/MCP can deliberately retrieve plaintext secret values. CLI supports pulling values into local `.env`; this does not preserve conversation context.
+- `docs/ARCHITECTURE.md` specifies D1 plus AES-256-GCM envelope encryption: fresh random 256-bit DEK per version, wrapped with a 256-bit KEK stored as a Worker secret. The design explicitly is server-decryptable, not zero-knowledge: MCP/CLI need plaintext; a Worker runtime compromise exposes the active key material. Tokens are opaque, peppered HMAC hashes; project-scoped read-only/read-write tokens and expiry/revocation are supported. KEK backup is mandatory for recovery.
+- Source reviewed: `packages/worker/src/secret-service.ts`, `src/crypto.ts`, `src/auth.ts`, `src/routes/secrets.ts`, `src/routes/tokens.ts`, D1 migrations, `packages/mcp/src/index.ts`, tests, `cli-go`, and package manifests. Secret history is append-only and audit events record operations; MCP `get_secret` returns plaintext to an authorized caller. Least-privilege, project-scoped read-only tokens are the safer default for agents.
+- The worker validates the writer's token against `body.projectId`, but `resolveRepoId()` returns a supplied `repoId` unchanged (or resolves an origin globally) without checking that the repo belongs to that same project. The schema has separate foreign keys from `secrets.project_id` to `projects.id` and `secrets.repo_id` to `repos.id`, but no composite project/repo constraint.
+
+## Synthetic scope-consistency probe
+
+In a disposable copy under `/tmp/nm-keyvault-worker-20261123-review`, an additional Vitest test created synthetic projects A and B, created a repo under B, minted a project-A write token, then PUT a secret with `projectId=A` and `repoId=B_repo`. The request returned HTTP 201 and the persisted response retained `project_id=A` and `repo_id=B_repo`; the additional test passed. The value was the literal synthetic string `not-a-real-secret`. This confirms cross-project repo association is accepted (an integrity/misbinding validation gap); it **does not demonstrate** that a B-scoped token can read A's secret or that this is a cross-project confidentiality bypass. Read/export handlers also filter by the secret's project.
+
+## Verification and environment limits
+
+- Worker's original tests in a disposable package copy: `rtk proxy npm test --prefix /tmp/nm-keyvault-worker-20261123-review` — exit 0; 4 files, 28 passed, 0 failed.
+- Same suite plus the synthetic scope-consistency probe — exit 0; 4 files, 29 passed, 0 failed.
+- `rtk proxy npm run typecheck --prefix /tmp/nm-keyvault-worker-20261123-review` — exit 0.
+- `rtk proxy npm run build --prefix /tmp/nm-keyvault-worker-20261123-review` — exit 0; Wrangler `--dry-run`, reported “--dry-run: exiting now.” No deploy or Cloudflare account request.
+- Temporary dependency installation initially hit npm `ERESOLVE` because the current Wrangler peer range selected `@cloudflare/workers-types` 5.x against the package's pinned 4.x; install succeeded in the disposable temp copy using `--legacy-peer-deps --ignore-scripts`. No repository lockfile or source was edited.
+- `rtk proxy go version` exited 1 (`go: No such file or directory`) and `rtk proxy bun --version` exited 1 (`bun: No such file or directory`), so the Go CLI and original Bun workspace were not run. `packages/mcp` declares its test command as `echo "no tests" && exit 0`; this is not test coverage.
+- No live Cloudflare deployment/database, user API key, real secret, provider, MCP account, user config, or conversation/session data was accessed. Candidate checkout remained unchanged.
+
+## Sources
+
+- Repository README: https://github.com/Hitesh-Sisara/agentic-keyvault/blob/f39c1cf859e79a30b684291f1a2a599cc8527a96/README.md
+- Architecture and threat model: https://github.com/Hitesh-Sisara/agentic-keyvault/blob/f39c1cf859e79a30b684291f1a2a599cc8527a96/docs/ARCHITECTURE.md
+- Security policy: https://github.com/Hitesh-Sisara/agentic-keyvault/blob/f39c1cf859e79a30b684291f1a2a599cc8527a96/SECURITY.md
+- Relevant implementation: https://github.com/Hitesh-Sisara/agentic-keyvault/tree/f39c1cf859e79a30b684291f1a2a599cc8527a96/packages/worker/src and https://github.com/Hitesh-Sisara/agentic-keyvault/tree/f39c1cf859e79a30b684291f1a2a599cc8527a96/packages/mcp

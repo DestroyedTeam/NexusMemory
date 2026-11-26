@@ -1,0 +1,52 @@
+# DaveGerson/aiskills — pinned source, packaging validation, and isolated path probes (2026-11-22)
+
+## Identity and provenance
+
+- Repository: https://github.com/DaveGerson/aiskills
+- Isolated shallow clone: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-DaveGerson-aiskills-20261122`
+- Captured `master` HEAD: `7e238306d47507bf6e63032d76b862a54d05a06d`, commit date 2026-11-11; MIT. GitHub currently shows 2 commits, 0 stars/forks, no releases and no Actions workflows/runs.
+- CodeGraph: initialized and current; 64 files, 100 nodes, 54 edges. Most repository content is docs/templates/skills; no `package.json`, `tests/`, `.github/`, or build/test pipeline. Retained `.codegraph/.gitignore`, removed only `!.gitignore`; final `git status --short` clean.
+- It is a small content/config repository, not a packaged application. The few scripts build/validate a Claude ArtifactData status page; no session ingest/export codec or storage adapter exists.
+
+## What it implements / relevance
+
+There are two original skills and static setup templates for Claude Code, Google Antigravity, and Codex:
+
+1. `program-docs`: asks an agent to create a dated Markdown program folder with brief, architecture map, append-only owner decisions/defaults, status, track seams and handoffs. Useful as a **human-readable continuity sidecar** and project governance process; it does not parse/import/export Harness sessions, chats, parent-child conversations, attachments, or tokens, and depends on an AI/agent following the instructions.
+2. `build-status-artifact`: turns project documents into a Claude `Artifact`/`ArtifactData`-backed interactive status page with JSON documents, update batches, and owner question/answer loop. Its runtime is `window.claude` plus Claude Artifact/ArtifactData, not a generic API adapter, portable canonical memory store, or ChatGPT/Codex session writer. Example Orchard seed validates as 59 writes in two batches (50 + 9).
+
+Setup snippets provide Claude Code instructions/settings/statusline hook, Antigravity instructions/skills.json/MCP config, and Codex AGENTS/config. Installation is manual/plugin/skills.sh/symlink guidance. This can seed a **resource/config plane**; it is not automation that discovers, translates, verifies, or rollback-transacts a Harness installation. Dependencies (Agent Baton, other Skill suites, MCP) are linked, not vendored.
+
+The statusline hook reads Claude Code's current statusline JSON (model, cwd, session id, context usage, cache, cost, rate limits, task/todo metadata), executes local `git status`, and writes only a compact context-usage bridge JSON in the OS temp directory. It does not load transcripts or preserve Session events/branches; source has no network call. This is at most a live session telemetry surface.
+
+The confirmed destination remains Claude Desktop third-party-gateway **Chat, Cowork, Code—all three separately**, plus local/self-hosted Claude Code. No content in this repository validates any of those Desktop modes, API-Key gateway session stores, or Anthropic-hosted Cloud. Do not infer ChatGPT Project/Section import from the phrase “multi-session” in the README.
+
+## Observed packaging/validation behavior
+
+- `python3 -I skills/build-status-artifact/scripts/make_batches.py skills/build-status-artifact/templates/seed --check` — exit 0, literal stdout `59 writes (set 59) in 2 batch(es); all valid`.
+- Same script with `--out /tmp/nm-aiskills-batches-20261122` — exit 0, emitted `batch-01.json` with 50 writes and `batch-02.json` with 9. Reopened both; all 59 `file_path` values resolve to files inside the sample seed. Python in-memory compile of `make_batches.py` and `make_harness.py` passed; `node --check` passed for `shoot.cjs` and `setup/claude/hooks/statusline.cjs`.
+- Claude Code CLI v2.1.76: `claude plugin validate .` — exit 1. Literal validator output says `.claude-plugin/marketplace.json` root has an unrecognized `description` key. Thus the README's Claude marketplace installation path fails this tested current CLI's validator at the root marketplace manifest. This finding is scoped to the installed CLI version, not a claim about every release.
+- Codex CLI v0.154.0 exposes plugin/marketplace commands. With a disposable `CODEX_HOME`, `codex plugin marketplace add <local checkout> --json` exited 0 and registered a `davegerson` marketplace. A subsequent plugin list showed the local `davegerson-skills` entry as not installed. The CLI also enumerated a host-level `personal` marketplace despite the temp CODEX_HOME; to avoid changing the host, no plugin installation was attempted and no host marketplace files were inspected. This proves only local-marketplace registration, not full plugin activation.
+- Root README also advertises Gemini CLI and skills.sh/Cursor/Windsurf/Amp/OpenCode install routes; none was installed or runtime-tested here. No API key, provider call, Claude Desktop session, user skills directory, or private project data was used.
+
+## Isolated runtime probes — synthetic temp files only
+
+`skills/build-status-artifact/scripts/make_batches.py` reads `file` from each seed `manifest.json` row as `seed / row.file`, then places the resolved path in an ArtifactData batch. It checks JSON size/depth/collection/doc id but does not constrain the file path to the seed directory. In a TemporaryDirectory, the manifest row `{collection:"meta", doc_id:"now", file:"../outside.json"}` referenced a sibling synthetic JSON file. The actual script returned exit 0, stdout `1 writes (set 1) in 1 batch(es); all valid`, and wrote `file_path` pointing outside the seed. Reopening that referenced file yielded only the synthetic marker `NEXUS_OUTSIDE_SEED_SENTINEL`. No ArtifactData request was sent. If a user/agent submits that generated batch, a crafted manifest can direct a local file read/upload outside the reviewed seed; validate resolved paths before creating ArtifactData batches.
+
+`make_harness.py` uses the same unvalidated manifest-relative join when embedding seed JSON into a generated HTML test page. A second disposable manifest referencing `../outside.json` caused the generated `h-light.html` to contain the sibling synthetic marker; command exited 0. No private files or network were involved.
+
+## Disposition
+
+Keep as a useful **process/governance sidecar** reference: append-only decision log, verified code map, per-track ownership/seams, status snapshots, and a user-visible decision loop. It is not a deterministic cross-Harness memory/session transfer engine, not a substitute for the user's own source session graph, and not a source for native Claude Desktop mode compatibility. Harden both script path checks before using seed data that is not locally trusted; repair the tested Claude marketplace manifest validator mismatch and re-run current CLI validation. For Nexus, represent this kind of authored program context separately from original Session/Event history so a README/decision log is never misrepresented as a restored transcript.
+
+## Primary source links
+
+- Repository: https://github.com/DaveGerson/aiskills
+- Pinned README: https://github.com/DaveGerson/aiskills/blob/7e238306d47507bf6e63032d76b862a54d05a06d/README.md
+- Program-docs skill: https://github.com/DaveGerson/aiskills/blob/7e238306d47507bf6e63032d76b862a54d05a06d/skills/program-docs/SKILL.md
+- Build-status skill: https://github.com/DaveGerson/aiskills/blob/7e238306d47507bf6e63032d76b862a54d05a06d/skills/build-status-artifact/SKILL.md
+- Batch writer: https://github.com/DaveGerson/aiskills/blob/7e238306d47507bf6e63032d76b862a54d05a06d/skills/build-status-artifact/scripts/make_batches.py
+- Harness builder: https://github.com/DaveGerson/aiskills/blob/7e238306d47507bf6e63032d76b862a54d05a06d/skills/build-status-artifact/scripts/make_harness.py
+- Plugin marketplace manifest: https://github.com/DaveGerson/aiskills/blob/7e238306d47507bf6e63032d76b862a54d05a06d/.claude-plugin/marketplace.json
+- Releases: https://github.com/DaveGerson/aiskills/releases
+- Actions: https://github.com/DaveGerson/aiskills/actions

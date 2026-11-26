@@ -1,0 +1,13 @@
+..........F...........
+======================================================================
+FAIL: test_incremental_export_and_invalid_source_preserve_transcript (test_regressions.RegressionTests.test_incremental_export_and_invalid_source_preserve_transcript)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-oreid-zd-pi-search-20261125-followup291/tests/test_regressions.py", line 144, in test_incremental_export_and_invalid_source_preserve_transcript
+    self.assertEqual(output.stat().st_mtime_ns, before)
+AssertionError: 1795586765681044645 != 1795586765648888191
+
+----------------------------------------------------------------------
+Ran 22 tests in 4.844s
+
+FAILED (failures=1)

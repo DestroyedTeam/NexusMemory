@@ -1,0 +1,35 @@
+# DeepSeek Harness: official Session, Workspace, Skill, Schedule profile
+
+Review date: 2026-11-24. Public official documentation and current repository source contract reviewed; no live target/session test. Official repository `HEAD`/`master` was observed at `4b399c39a6d1479cd84ca591b4d7c88e24d38a96` by `rtk git ls-remote`.
+
+## Official sources
+
+- Sessions: [docs](https://deepseek-harness.github.io/deepseek-harness/en/reference/subsystems/session), [pinned source](https://github.com/deepseek-ai/deepseek-harness/blob/4b399c39a6d1479cd84ca591b4d7c88e24d38a96/docs/subsystems/session.md)
+- Persistence: [docs](https://deepseek-harness.github.io/deepseek-harness/en/reference/subsystems/persistence), [pinned source](https://github.com/deepseek-ai/deepseek-harness/blob/4b399c39a6d1479cd84ca591b4d7c88e24d38a96/docs/subsystems/persistence.md)
+- Workspaces: [docs](https://deepseek-harness.github.io/deepseek-harness/en/reference/subsystems/workspace), [pinned source](https://github.com/deepseek-ai/deepseek-harness/blob/4b399c39a6d1479cd84ca591b4d7c88e24d38a96/docs/subsystems/workspace.md)
+- Skills: [docs](https://deepseek-harness.github.io/deepseek-harness/en/reference/subsystems/skills), [pinned source](https://github.com/deepseek-ai/deepseek-harness/blob/4b399c39a6d1479cd84ca591b4d7c88e24d38a96/docs/subsystems/skills.md)
+- [Schedule](https://deepseek-harness.github.io/deepseek-harness/en/reference/subsystems/schedule), [non-session Storage](https://deepseek-harness.github.io/deepseek-harness/en/reference/subsystems/storage), [Session Query/lineage](https://deepseek-harness.github.io/deepseek-harness/en/reference/subsystems/session-query).
+
+## Model observations
+
+**Workspace/project is a separate host-side grouping plane.** A Workspace is a stable ID over a canonical directory path, title/timestamps, and ordered Session membership. The optional registry is not part of the agent loop or Session event log. Membership is checked against `SessionHeader.cwd`. The documented entity is a flat path-bound group, not an arbitrary nested Project/Section tree. Archive/hide from a grouping surface is distinct from deleting a Workspace; deleting a registration removes grouping/account data, not the project directory or Session transcript. Thus Workspace lists, archived/hidden records, active sessions, and persisted logs are different state views.
+
+**Session is an append-only typed event log.** It is the source of truth; model-visible message history is derived by replay/projection. The vocabulary preserves turn/step boundaries, system/developer/user and assistant messages, compact timed assistant streams, optional usage and explicit interruption; failed/retried/cancelled/stream-error attempts; tool calls/arguments/results/errors/private metadata; request headers/context; and plugin-owned log-only events such as compaction/hooks. A rendered transcript loses ordering and lifecycle facts.
+
+**Header, fork and subagent lineage are distinct.** `SessionHeader` stores format version, id, creation time, cwd, optional `parentSession`, `isSeeded`, optional `origin`, delegation depth and agent preset; exact inherited-event count is paired with the log body. Forks carry an exact inherited prefix/marker; ordinary forks need not set `parentSession`. That field is the direct creator of a subagent Session, while `origin: 'subagent'` is separate metadata. Do not conflate `fork-of`, `subagent-parent`, same Workspace, and chronological/user follow-up edges. Native resume/fork is an explicit operation; copying metadata does not prove continuability.
+
+**Persistence is per Session and versioned.** Shipped JSONL persistence stores one logical append-only log per Session, using checksummed concatenated Zstandard frames by default or raw lines by configuration. Header is separate from replayable events; per-session handles enforce write ownership; append is best-effort until `flush` is the durability barrier. Crash recovery preserves committed records and repairs open trailing turns; torn physical tails have separate handling. Historical versions use explicit migrations and unsupported formats fail closed.
+
+**Skills, schedules and other state are separate planes.** DSH local Skills roots include project `.dsh/skills` and `.agents/skills`, custom roots, user `$DSH_HOME/skills` (default `~/.dsh/skills`) and user `.agents/skills`, plus optional bundled roots. Catalog summaries are listed and bodies loaded on demand; they are not transcript events. Host-owned schedules persist independently with seven timing kinds (`after`, `at`, `every`, `daily`, `weekly`, `cron`, `rrule`) and explicit delivery targets. A saved delivery receipt proves inbox persistence, not model completion; old schedule-like Session events do not re-create active tasks. Non-session Storage is its own typed service. Attachment/media, working files, plugin/MCP/config/credentials and outputs need separate inventory and provenance; Session history alone is not a complete export.
+
+## Nexus mapping implications
+
+1. Map DSH Workspaces as flat path-bound groups; preserve source Section nesting/order in a Nexus sidecar when the destination lacks native fields. Never silently flatten nested groups into Skills or transcript labels.
+2. Import header and typed event ledger separately; preserve source bytes, event order/times, usage, tool args/results, attempt/error/interruption, request/provider context and plugin versions. Derive target messages and record all transformations/unrepresentable fields.
+3. Keep typed edges (`fork-prefix`, `subagent-parent`, `workspace-membership`, `follow-up`, `user-edit/continuation`). If native APIs cannot author an edge, preserve it as non-native Nexus metadata.
+4. Keep Skills, MCP/plugins, schedules, media/attachments, outputs, credentials and memory as independent resources with dependency links and per-target validation. A Skill/Workspace copy is not session fidelity.
+5. Test sequence continuity/hashes/references, reconstructed message views, ancestry/cwd/Workspace membership, interruption/tool-error dialogues, target discovery/resume, and field-level loss. Do not report a single aggregate accuracy number without a defined fixture and denominator.
+
+## Evidence limits
+
+A repository-tree search was robot-blocked and a direct persistence Markdown fetch previously returned HTTP 503; the successful official documentation-site pages and pinned source references were used. Exact DSH attachment/plugin/config layouts and real native restore remain open; no DSH install, API key, provider, private profile, or session was touched. The user reconfirmed in this turn that the Claude Desktop third-party-provider/gateway target includes **Chat, Cowork and Code**, plus local/self-hosted Claude Code; all three Desktop mode adapters remain distinct.

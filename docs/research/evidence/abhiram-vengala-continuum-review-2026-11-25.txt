@@ -1,0 +1,39 @@
+Candidate #266 — Abhiram-Vengala/Continuum
+Reviewed: 2026-11-25
+
+Identity / provenance
+- Repository: https://github.com/Abhiram-Vengala/Continuum
+- Shallow checkout `main` HEAD: d1762a3ac5b57f4cc9e80e7e8217b647cc2ed5ec; commit date 2026-02-13; five commits total in GitHub view, zero stars/forks, no tags/releases or tests directory. `git ls-remote` exposed only main.
+- No LICENSE file is tracked and the registry/GitHub metadata has no SPDX license. Treat all reuse rights as unverified; do not copy code without permission/license resolution.
+- Repository tracks compiled `.pyc` files and `backend/episodic_memory.db`; `.gitignore` contains only `.env`. The DB has one `episodic_events` row (40-character content); raw content was deliberately not opened or copied. Treat the checked-in DB as potentially sensitive/unprovenance data.
+
+What the code actually implements
+- A FastAPI backend plus Chrome extension that scrapes visible DOM text from ChatGPT, Claude.ai and Gemini web pages. The content scripts yield role/content arrays and a session ID/URL/timestamp; the extension does not use vendor export APIs or parse archive formats.
+- `ConversationInput` accepts `session_id`, optional `project_id`, `user_message`, `conversation_history`, and `intent`. The optional project_id has no consumer outside the schema. The extractor prompt uses only the last five history entries plus the current message, asks Groq (`llama-3.3-70b`) to turn them into typed summaries, and persists `MemoryUnit` objects—not a transcript/event log.
+- Memory units are typed decision/fact/constraint/question/assumption plus scope/confidence/source_session. There is no Project/SectionGroup record, project key on memory units, session parent/fork/subtask edge, attachment/media object, message ID/order/branch, source model/token usage, schedule, Skills/MCP/plugin or credential model.
+- Working memory is an in-process dictionary, episodic memory is SQLite, and semantic memory constructs `QdrantClient(":memory:")`; its configured remote host/port is not used. This contradicts README's implication of durable Qdrant-backed semantic storage.
+- Retrieval is not session-isolated: the `process_conversation` path calls `EpisodicMemoryStore.get_recent`, whose SQL selects the latest rows globally without a `source_session` predicate. Semantic search also defaults to no scope/session filter. `get_all_memories` returns session-scoped semantic entries without matching the requested session. This is static source evidence of cross-session/multi-user context-mixing risk, not a live exploit test.
+- The UI displays “copy context” / “open new chat”; it does not create or resume a target chat. The popup sets `target_provider` to the *source* `conversation.provider`, so it does not offer a destination selector in the implemented path.
+
+Implemented gaps and safety/quality findings
+- No archive importer/exporter, native target writer, or cross-Harness session transfer. The mechanism is explicitly human-mediated prompt-context copying; all transcript topology/metadata beyond extracted summary statements is irrecoverable.
+- Text-only DOM extraction; no typed attachment/image/file/tool-call/timing/branch preservation. Claude content script calls `generateSessionId()` but does not define it in the file; the manifest injects only that script on Claude.ai. This appears to make Claude extraction fail at runtime; not browser-tested.
+- `popup.js` POSTs to `http://localhost:8000`, but `manifest.json` has no localhost host permission. Chrome's official docs require host permissions for cross-origin fetches from extension pages. This is a likely integration blocker, inferred from the manifest plus Chrome docs; not browser-tested.
+- FastAPI CORS is `allow_origins=["*"]`, `allow_credentials=True`, all methods/headers; there is no authentication on API routes. Running `backend/app.py` directly binds `0.0.0.0`; endpoints include memory read/search, deprecate and reinforce. No network security probe was run.
+- Source prints conversation/payload/response and memory excerpts to browser/server logs. Source messages are sent to Groq for extraction; no transcript redaction/secret scan or per-data-category consent is implemented.
+- README documents `POST /process_conversation`, but actual route is `POST /api/process`; its request example (`provider`, `messages`) does not match the Pydantic schema requiring `user_message`/`conversation_history`.
+- No automated tests or test directory. `python3 -m unittest discover -s . -p 'test*.py' -v` returned exit 5, “Ran 0 tests / NO TESTS RAN.” The attempted `backend/tests` start path does not exist.
+
+Observed checks (no dependencies installed and no app/browser/account launched)
+- CodeGraph initialized and status verified: 12 files, 160 nodes, 357 edges, index current. No tracked source changes; only local `.codegraph/` is untracked.
+- Python `ast.parse` syntax check: 7 `.py` files passed. `node --check` passed for background.js, popup.js, and all three content scripts. Manifest JSON parsed as MV3.
+- `backend/requirements.txt` is UTF-16LE CRLF and contains 65 pinned requirement lines. A no-index pip dry-run stopped at the expected unavailable first package; this was not a dependency-install or runtime test. No full dependency install was attempted (includes heavyweight model/embedding stack).
+- Actual browser flow, Groq API use, FastAPI runtime, outbound/CORS behavior, semantic persistence, target imports and cross-session isolation were not tested.
+
+Disposition
+- Useful only as adjacent early structured-memory taxonomy / extraction flow reference. Not session/project migration, not a native Skills/MCP/resource transfer system, and not eligible for direct backend reuse until license, data safety, session isolation, persistence and functional gaps are resolved. Do not claim migration accuracy.
+
+Sources
+- Repository/README and repository activity: https://github.com/Abhiram-Vengala/Continuum
+- Chrome cross-origin request requirements: https://developer.chrome.com/docs/extensions/develop/concepts/network-requests
+- Chrome permission scopes: https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions

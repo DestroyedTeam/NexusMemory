@@ -1,0 +1,53 @@
+# Candidate #245 — rore/Pallium review (2026-11-24)
+
+## Provenance and review boundary
+
+- Repository: https://github.com/rore/Pallium (MIT; public GitHub page at review: 2 stars, 1 fork).
+- Shallow-cloned `main`, HEAD `e2b55fbc8f5ed8f23ac242d1a29be2aa173e7efd`, commit date 2026-11-23 (`Merge pull request #416 ... fix/relay-reply-lifecycle-failures`). `pyproject.toml` says Pallium 0.1.0, Python >=3.12. Working tree was clean; CodeGraph index status was up to date (869 files, 28,482 nodes, 94,554 edges).
+- This was source/docs/tests review only. No Pallium service was started, no Relay message was sent, and no personal/local sessions, user DB, API key, or provider were accessed. Test state and dependencies were isolated under `/tmp`.
+
+## What it actually does
+
+Pallium is a local single-user coordination/history layer around already running coding agents, not an agent runtime or session manager. README says supported integrations are Claude Code, Codex, OpenCode, and Hermes Desktop/TUI. Relay stores bounded plain-text messages before delivery and may wake a recipient on qualified hosts. It does not coordinate tasks or build a durable task graph. Session History captures selected user/assistant turns from supported integrations and offers broad topic search, exact work-reference search, and bounded nearby-message expansion; optional derived memory is off by default and does not require an LLM for source-only retrieval.
+
+The inspected `storage.sqlite_schema.SourceItemRecord` is a turn/source-item row with source type/id, content type/text, optional metadata/time/role, container/thread/source refs, artifact kind, visibility, agent/use-case, thread position, source-turn ID, relay attribution, processing/forgetting fields. `RelayMessageRecord` stores a sender runtime/session, recipient selector, container, plaintext payload, optional `in_reply_to`, and expiry. Neither is a canonical Project/Section/Conversation/Session/Message/Fork graph. There are no first-class project/section IDs, parent/branch/fork edges, attachment blobs, token usage, user interruption/continuation events, or model/tool execution trace in the History contract. Its `metadata_json` can carry caller-defined opaque values, but there is no ChatGPT importer/mapper or Claude Desktop writer that would populate/reconstruct those values. The docs explicitly say History is not every tool event, a full audit log, proof of live state, or cross-user authorization.
+
+## Fit to Nexus Memory
+
+**Disposition: high-value prior art for local selected-turn retrieval, visibility, provenance and forgetting; not a migration adapter and not a dependency recommendation.** It could inform a separate searchable-memory plane after a canonical archive exists, provided Nexus keeps raw evidence and source identity and does not treat search as fidelity.
+
+No ChatGPT export reader, Codex/ChatGPT Project or sidebar Section Group importer, complete session lineage serializer, resource/attachment transfer, or target writer for Claude Desktop third-party-inference Chat, Cowork, or Code is present. It also does not write local/self-hosted Claude Code transcripts or configure `ANTHROPIC_BASE_URL`/gateway credentials. “Hermes Desktop/TUI” integration does not mean Claude Desktop modes. All three Claude Desktop modes remain in the user's scope, but Pallium cannot migrate any of them.
+
+## Relevant current Claude target evidence checked alongside this candidate
+
+Anthropic's current Claude Desktop on 3P documentation describes a deployment where all model inference is routed through the configured provider and the full Chat/Cowork/Code experience is provided with conversations stored locally (except Code sessions over SSH, which also store on the remote host). The feature matrix says 3P conversation history is on-device, with no Anthropic-cloud sessions or mobile/web access. This is distinct from local Claude Code CLI/API-key use and from Anthropic-hosted Cloud sessions.
+
+The official Claude Desktop import wizard documented here accepts claude.ai conversation/project exports plus local Cowork/Code sessions (and Claude Desktop exports/folders), not a generic ChatGPT/Codex archive. Import is a copy; project instructions may require acceptance; artifacts can be reduced to final outputs; member exports omit project-knowledge file contents and conversation-attachment contents. The 3P local data docs distinguish storage: Chat/Cowork JSON session records and `audit.jsonl` under `local-agent-mode-sessions/`, with uploaded/output files in working dirs; Code session records under `claude-code-sessions/` with transcripts in Claude Code's `~/.claude/projects/`; UI state is elsewhere. Therefore adapter tests must be mode-specific even though inference uses one configured gateway.
+
+## Checks and exact outcomes
+
+Environment: Python 3.12.10 on macOS arm64; temporary venv `/tmp/pallium-review245-venv`. Installed from the project's declared `.[dev,mcp]` and `.[vector]` extras (pip-resolved compatible versions; not a claim that the lockfile was tested). The focused command was:
+
+```sh
+rtk proxy /tmp/pallium-review245-venv/bin/python -m pytest -q tests/test_decouple_session_history_e2e.py tests/test_search_history_tool.py tests/test_visibility_scope.py tests/test_history_diagnostics_e2e.py tests/test_history_presentation.py tests/test_agent_relay_e2e.py tests/test_cross_container_relay_e2e.py tests/test_managed_relay_expiry_e2e.py
+```
+
+- Initial run before installing the optional vector extra: exit 1, 257 passed, 1 skipped, 1 failed. Failure was `test_gate_b_explicit_package_restores_derived_lifecycle`: its test expects a vector hit, while setup logged `usearch not installed. Vector index disabled.` This was a review-environment setup omission.
+- After installing the declared `vector` extra in the disposable venv, the same command exited 0: **258 passed, 1 skipped** in 16.25 seconds. This is a focused Session History/visibility/Relay test selection, not the complete test suite or cross-platform validation.
+- `rtk git status --short` in the candidate checkout was clean. An earlier `rtk git status` from the NexusMemory workspace root exited 128 (`fatal: not a git repository`); corrected to the bound Pallium checkout. No Pallium code was changed.
+
+## Sources
+
+- Repository and README: https://github.com/rore/Pallium
+- Session History contract: https://github.com/rore/Pallium/blob/main/docs/session-history.md
+- Relay contract: https://github.com/rore/Pallium/blob/main/docs/agent-relay.md
+- Privacy/visibility contract: https://github.com/rore/Pallium/blob/main/docs/privacy-and-visibility.md
+- Claude Code integration: https://github.com/rore/Pallium/blob/main/docs/claude-code-integration.md
+- Anthropic, Claude Desktop on 3P architecture: https://claude.com/docs/third-party/claude-desktop/overview
+- Anthropic, 3P feature matrix: https://claude.com/docs/third-party/claude-desktop/feature-matrix
+- Anthropic, import history from claude.ai: https://claude.com/docs/third-party/claude-desktop/import
+- Anthropic, 3P local storage: https://claude.com/docs/third-party/claude-desktop/data-storage
+- Anthropic, 3P Chat: https://claude.com/docs/third-party/claude-desktop/chat
+- Anthropic, 3P Code: https://claude.com/docs/third-party/claude-desktop/code
+- Anthropic, 3P scheduled tasks: https://claude.com/docs/third-party/claude-desktop/scheduled-tasks
+- Anthropic, Code/LLM gateway surfaces: https://code.claude.com/docs/en/llm-gateway-connect

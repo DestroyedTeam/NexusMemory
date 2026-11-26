@@ -1,0 +1,46 @@
+NEXUS MEMORY — candidate review evidence
+Candidate: jacopobonomi/venv_manager
+Review date: 2026-11-20 (Asia/Shanghai)
+Disposition: DEPENDENCY_ENVIRONMENT_MCP_REFERENCE_ONLY_NOT_SESSION_MIGRATOR
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/jacopobonomi/venv_manager
+- Local source checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-jacopobonomi-venv-manager-20261120
+- Reviewed commit: fd561c3501cf031aba0b589bde05dd147fe22f30 (2026-08-24, docs: add official website domain).
+- `rtk git -C <checkout> status --short` exited 0 with empty stdout (clean checkout).
+- `rtk git -C <checkout> ls-remote origin HEAD` returned fd561c3501cf031aba0b589bde05dd147fe22f30; local HEAD matches current remote HEAD.
+- License: MIT (`LICENSE` in checkout and README license section).
+- go.mod declares `go 1.24.2`.
+- GitHub Actions page reported CI #22 for fd561c3 completed successfully Aug. 24, 2026. This is upstream CI evidence, not a local test.
+
+LOCAL TOOL AVAILABILITY / TEST STATUS
+- `rtk proxy go version` exited 1. Literal stdout/stderr as returned by the command wrapper: `rtk: Failed to execute command: go: No such file or directory (os error 2)`.
+- No `go test`, package install, venv creation, package installation, or external program execution was run. Do not record local tests as passing or failing; they were unavailable because the Go binary is absent.
+
+PRODUCT AND DATA MODEL REVIEW
+- Pinned README describes a shared Python environment manager distributed as a Go binary with CLI, TUI, and MCP server.
+- The README's MCP tool table enumerates operations for list/create/remove/describe venvs; package install and command execution; ephemeral run; package snapshots/list/diff/rollback; import scanning; registry list/update; and diagnosis. The CLI also exports/imports dependency manifests and can watch scripts to install missing Python packages.
+- Durable registry data describes venv creation and last use, with optional project filesystem path and tags. Source `Manager.SetRegistryMetadata` resolves a non-empty project path to an absolute path and persists it with normalized tags.
+- This is environment/package state, not an agent-conversation model. No ChatGPT/Codex export reader, cloud session writer, Project/SectionGroup containment, session/message/turn/subtask/fork graph, image/file/link payload history, token accounting, tool-result history, Skills/Plugins/MCP-config importer, or schedule schema was found in the reviewed project surface.
+- The service is an MCP server offered to clients; it does not import/migrate a user's MCP-server configuration. Project here is only a filesystem path attached to a Python venv.
+
+POLICY / EXECUTION REVIEW (CodeGraph initialized and current: 41 files, 588 nodes, 1,782 edges)
+- `internal/mcp/server.go:NewServer` constructs a `safe` policy by default.
+- `internal/mcp/policy.go:readOnlyTools` permits inspection tools. `confirmationRequiredTools` includes remove_venv, install_packages, run_in_venv, exec_ephemeral, rollback_venv, set_registry_metadata. Safe policy checks for caller-supplied boolean `confirm: true`; `create_venv` is allowed without that field. `PolicyFull` bypasses the policy checks after the optional explicit-tool allowlist. Read-only blocks mutating/execution tools.
+- The `confirm` field is a server-side argument gate, not an independent consent interface or proof the human approved the operation.
+- `authorize("exec_ephemeral", {sandbox:true})` returns success, but `internal/mcp/exec.go:execEphemeral` rejects `sandbox == true` with `sandbox mode over MCP not yet supported; use CLI ...`. Without `sandbox:true`, it creates a temporary environment, optionally installs packages, runs arbitrary argv through the venv command handler, then removes the environment. Thus the CLI's documented OS sandbox does not exist on this MCP handler at the pinned revision.
+- `runInVenv` executes a resolved command via `exec.Command`; safe mode requires `confirm:true` before dispatch. No executable was actually run in this review.
+
+RELEVANCE TO NEXUS MEMORY
+- Low-but-real adjacent value: could be a separate optional dependency-environment resource linked from a local project, with package hashes/snapshots and recovery operations.
+- Not a basis for Project/Section/Session migration and no evidence it can transfer the user's corrected target, **Destruction Era**, to Claude/Cloud under API-Key authentication.
+- Recommendation: leave out of the core migration engine; consider only a future, opt-in, allowlisted, read-only dependency-state adapter if project environments are in scope. Keep conversation identity, branch graph, resources, and loss ledger separate.
+
+PRIMARY SOURCES (pinned where possible)
+- README: https://github.com/jacopobonomi/venv_manager/blob/fd561c3501cf031aba0b589bde05dd147fe22f30/README.md
+- MCP policy: https://github.com/jacopobonomi/venv_manager/blob/fd561c3501cf031aba0b589bde05dd147fe22f30/internal/mcp/policy.go
+- MCP execution: https://github.com/jacopobonomi/venv_manager/blob/fd561c3501cf031aba0b589bde05dd147fe22f30/internal/mcp/exec.go
+- Registry association: https://github.com/jacopobonomi/venv_manager/blob/fd561c3501cf031aba0b589bde05dd147fe22f30/internal/manager/registry.go
+- Module/toolchain: https://github.com/jacopobonomi/venv_manager/blob/fd561c3501cf031aba0b589bde05dd147fe22f30/go.mod
+- Actions/CI: https://github.com/jacopobonomi/venv_manager/actions
+- Releases: https://github.com/jacopobonomi/venv_manager/releases

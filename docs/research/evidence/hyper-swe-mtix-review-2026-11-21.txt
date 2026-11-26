@@ -1,0 +1,50 @@
+# MTIX candidate review — hierarchical agent task context, not native conversation migration
+
+Date: 2026-11-21. Repository: hyper-swe/mtix. The disposable shallow checkout pinned main to 12c6a41582f3639f0438f92bf74ba0749429dfeb (author time 2026-11-20T23:37:03+05:30); git ls-remote origin refs/heads/main matched that exact commit. GitHub listed 7 stars / 1 fork at review time. The latest release shown is v0.5.4-beta (2026-10-04); main had newer commits. Star/fork totals are a dated adoption signal, not a quality score.
+
+## Verdict
+
+MTIX is a mature, unusually deep task/context plane for parallel coding agents: hierarchical issue decomposition, parent-to-child prompts, agent assignment, task/session tracking, project grouping, MCP tools, CLI, REST/gRPC, JSON import/export, backups, checksums, and optional team sync. It is not a ChatGPT/Claude/Codex conversation archive or native-session transplant tool. Keep it as an adjacent product/work-memory reference and possibly a future integration destination for task metadata only; do not count it as session migration support or use its task session IDs as conversation IDs.
+
+## Source-level findings (CodeGraph + targeted source inspection)
+
+### Data model and hierarchy
+
+- Project is a string scope on nodes/agents/sessions; nodes form a parent-child dot-ID tree. Depth derives types: root epic, depth 1 story, depth 2 issue, depth 3+ micro. No SectionGroup/section-group entity or storage field was found in internal/model or internal/store/sqlite.
+- Nodes contain title, description, prompt, acceptance, state, assignee/creator, annotations/activity, code/commit refs, metadata, and optional session_id, among other task fields. They are not arbitrary provider message records.
+- ContextService assembles ancestor chain, unresolved annotations, siblings, and blocking dependencies. The structured chain carries IDs/depth/tier/title/status and recent descriptions (descriptions more than two levels above target are omitted); prompts/creator/unresolved annotations are present in the chain and assembled prompt. This is a task briefing, not the sequence of user/assistant turns. The structured context type does not model image/audio/video blocks, tool-call/result pairs, token/cost ledgers, message edits, branch forks, or conversation parent/child threads.
+- MCP mtix_context exposes an optional max_tokens limit and chain=true. It deliberately slims duplicate fields by default. It does not import native transcript turns.
+
+### What “session” means here
+
+- SQLite sessions contain only id, agent_id, project, started_at, ended_at, status, and summary. SessionStart auto-ends an existing active session for that agent; SessionEnd produces a summary from nodes created/completed/deferred; SessionSummary returns those counts and summary text. Node session_id associates work items with that agent run.
+- Agent registration can identify Claude, Codex, and pi using harness-owned process/session handles (including CODEX_THREAD_ID and Claude messaging socket); identity supports task claiming, agent liveness, inbox routing and attribution. It is not a transcript export/restore interface.
+- The full JSON export includes nodes, dependencies, agents, sessions and optional task history under a schema/checksum. The exported session shape is metadata (ID, agent ID, project, start/end, status, summary), not messages. Import/replace/merge operates on MTIX board state. No native ChatGPT/Claude/Codex transcript importer, media extractor, tool-call serializer, or target-native conversation writer was found in focused code/docs.
+- No ChatGPT Project/Section hierarchy, arbitrary Section Group, user-turn interruption/continuation graph, scheduled ChatGPT task, image payload, message token accounting, or conversation fork graph appears in the reviewed storage/export model.
+
+### Harness integration and transfer ceiling
+
+- First-party MCP setup documents Claude Desktop, Claude Code, Codex, Cursor, Windsurf, and pi integrations; README also describes a Claude Code plugin and Codex plugin installer. This is portable task tooling/configuration and context prompting, not platform-to-platform session transfer. Cowork is not documented as a supported native session target in this guide, and no Chat/Cowork/Code session fidelity was tested against a live Claude Desktop app or API-key gateway.
+- Apache-2.0. The repository has 7 stars / 1 fork at this observation; despite low public adoption, the codebase and integration/test surface are substantial. Treat adoption and implementation depth separately.
+
+## Source/build/test evidence
+
+- CodeGraph initialized for the disposable checkout and verified current after removing only its .gitignore exception: 3,297 files, 51,586 nodes, 182,572 edges. No MTIX source file was changed.
+- Host PATH initially lacked Go. Downloaded official go1.26.11 darwin-arm64 archive into /tmp, verified official SHA-256 e3a42e67a7a8acf450ebada2b074c7ca863000ca514907b7185b45e8f5cdff57, then used a temporary Go cache/GOPATH/HOME. Repo go.mod pins toolchain go1.26.11; .tool-versions separately says golang 1.25.0.
+- Targeted final local tests: internal/service passed with exit 0 (294.525s); internal/mcp passed from cache; internal/store/sqlite passed (234.839s). These are targeted packages, not a complete local release gate. Main-branch CI run #1356 at this exact commit succeeded in 40m08s; its visible matrix included Go command/service/SQLite/Postgres jobs, web tests, lint, fault injection, and build.
+- Correction ledger: (1) First CodeGraph explore invocation treated the candidate path as query text and showed the current workspace's Python files; help revealed the required -p/--path option. Re-ran with -p and got the Go MTIX symbols/source. (2) Initial ZIP/source-review helper assumed a candidates JSON key and exited with KeyError; corrected to the repositories key. (3) A shallow clone lacked historical release tags required by compatibility tests. The first targeted go test exited 1 because v0.5.4-beta was absent; after fetching it, the next combined run exited 1 because v0.5.3-beta and v0.3.0-beta were absent (SQLite passed, MCP was cached). Fetched all tags from the tests and reran service with Go on PATH and a temporary HOME; service then passed. An intermediate service process was intentionally interrupted with exit 130 to correct PATH/HOME before completing the final run. These environment/setup errors are not MTIX product failures.
+- No personal ChatGPT/Claude data, native app stores, user API key, cloud account, or external provider session was opened or written.
+
+## First-party links and reviewed source paths
+
+- Repository/README/license: https://github.com/hyper-swe/mtix
+- Latest release: https://github.com/hyper-swe/mtix/releases
+- MCP setup guide: https://github.com/hyper-swe/mtix/blob/main/docs/MCP-SETUP.md
+- Successful current-main CI run #1356: https://github.com/hyper-swe/mtix/actions/runs/44789723930
+- Node/task model: https://github.com/hyper-swe/mtix/blob/12c6a41582f3639f0438f92bf74ba0749429dfeb/internal/model/node.go
+- Context assembly/MCP tool: https://github.com/hyper-swe/mtix/blob/12c6a41582f3639f0438f92bf74ba0749429dfeb/internal/service/context_service.go and https://github.com/hyper-swe/mtix/blob/12c6a41582f3639f0438f92bf74ba0749429dfeb/internal/mcp/tools_context.go
+- Session lifecycle/model/export: https://github.com/hyper-swe/mtix/blob/12c6a41582f3639f0438f92bf74ba0749429dfeb/internal/service/session_service.go and https://github.com/hyper-swe/mtix/blob/12c6a41582f3639f0438f92bf74ba0749429dfeb/internal/store/sqlite/export.go
+
+## Disposition
+
+Retain MTIX as a strong adjacent example for hierarchical task decomposition, agent work/session metadata, MCP cross-harness task access, checksummed board export/import, and audit/history of task changes. Exclude it from the core fidelity set for Projects/Sections/conversation sessions. For Nexus Memory, preserve the semantic distinction: project/task/work-briefing graph, harness agent-run/session ID, and provider conversation-thread graph are separate types. Evidence does not establish that any current Claude Desktop mode can resume a ChatGPT transcript through MTIX.

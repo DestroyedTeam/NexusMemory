@@ -1,0 +1,12 @@
+AGENTSKILLSMANAGER REVIEW EVIDENCE — 2026-11-20
+Repository: https://github.com/lasoons/AgentSkillsManager
+Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-lasoons-AgentSkillsManager-20261120
+Commit: f603f685e46d53bbf538f0c3014545255ee50e4c; commit date: 2026-01-17; remote main matched this SHA when checked.
+Package: agent-skills-manager 0.6.0, publisher whyuds, MIT, VS Code engine ^1.96.0.
+GitHub counters observed: 91 stars, 9 forks. GitHub releases page showed no releases at review.
+CodeGraph: current 12 files, 219 nodes, 604 edges.
+README claims a cloud skills catalog of about 58K from claude-plugins.dev. It is a VS Code extension supporting VS Code/Cursor/Trae/Antigravity/Qoder/Windsurf/CodeBuddy; it installs skills into IDE-specific workspace skill folders and scans selected Claude/Codex local skill dirs.
+Source facts: RemoteSkill fields are id/name/namespace/sourceUrl/description/author/installs/stars (no digest/version). fetchRemoteSkills calls claude-plugins.dev/api/skills. installRemoteSkillFromZip calls github-zip-api.val.run, buffers a response via https.get, follows up to 3 redirects, then uses AdmZip and copies selected SKILL.md tree. No response size/time cap, allowlisted redirect host, or digest check exists in this app path. Existing target directory is deleted before copy. Local scanner validates SKILL.md frontmatter/name/description; no behavior scanner or tests found.
+Package-lock pins adm-zip 0.5.16 as a direct production dependency. npm audit with registry=https://registry.npmjs.org exited 1; summary: critical=1, high=3, moderate=1, low=0, total=5 vulnerable package entries. adm-zip itself is direct/high; affected advisories include GHSA-xcpc-8h2w-3j85 (crafted ZIP declares huge uncompressed size; affected <0.6.0) and GHSA-7q85-xj36-vmfc (uncontrolled allocation; affected <0.6.1). npm audit reports the available fix as a semver-major update to 0.6.1. Other vulnerable package entries are in the dev/transitive tree. No ZIP PoC or untrusted skill was run.
+There is no package.json test script or test folder in this 12-file checkout. No test/build was claimed as passing.
+No ChatGPT/Codex account data, API credentials or user session exports were accessed.

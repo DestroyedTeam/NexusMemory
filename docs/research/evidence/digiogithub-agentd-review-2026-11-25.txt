@@ -1,0 +1,46 @@
+# Candidate #279 source review: digiogithub/agentd
+
+- Review date: 2026-11-25 (Asia/Shanghai)
+- Repository: https://github.com/digiogithub/agentd
+- Pinned `main` HEAD: `0ad5e5f64d5be56f97c82e7e7baf2d97505bd58a` (2026-11-24)
+- Local CodeGraph: 441 files, 9,177 nodes, 32,418 edges, index current.
+- License: MIT; GitHub page snapshot 0 stars / 0 forks. `go.mod` requires Go 1.27.3.
+- No user session, account, API key, private transcript, or production daemon was accessed. The Go runtime/test fixtures were isolated under `/tmp`; no application install was performed.
+
+## Product/data boundary
+
+- agentd keeps CLI coding agents alive in PTYs and provides detach/reattach, live screen/chat-like view, mailbox, task assignment, project path aliases, and MCP tools for peer coordination. `agentd run <alias|path> --harness codex|claude|...` names a running process (usually `<harness>@<project-label>`); that is not native historical session import.
+- `internal/daemon/server.go` holds live session entries in an in-memory `map[string]*entry`; `Shutdown()` closes all PTYs; README explicitly says a daemon restart kills running agents and persistence across restarts is still a later item. There is no import/export operation or reader for ChatGPT/Codex/Claude native session stores.
+- Session turns are only status-bound metadata (`turn`, outcome, origin, status/message label, timestamps), capped at 100 records per entry and held in memory. The screen chat is heuristically built from `proto.View.Lines`; it is a live UI view, not a structured message archive. Work-task lists are also entry state; SQLite backlog notes and mailbox messages are durable but are not a conversation tree.
+- Persistent raw PTY output is a caveat: the daemon always derives `SessionLogPath(name) = <state>/logs/<name>.log` on run; `session.Start` appends PTY output, creates log dir/file with 0700/0600 modes, and `run.LogMaxBytes()` defaults to 50 MB with a single `.1` rollover. Raw output can retain terminal text locally but is not a typed, complete, provenance-preserving turn transcript and has no import/replay API. Logs have no separately documented retention schedule.
+- `~/.config/agentd/aliases.toml` is a flat alias→directory map; `session.Name` encodes harness and project label. No nested Project, Section Group, task-parent, branch, or Codex Project semantics were found. Cross-harness support means launching arbitrary CLI binaries and messaging peers through a mailbox, not translating their archives.
+- The agentd MCP server exposes peers, send/inbox/read/reply/queue/claim only; README says no run/kill/type/attach over MCP. It is not a Claude Desktop Chat/Cowork/Code importer. Local/self-hosted Claude Code can be launched as a CLI child but no original Code transcript/project importer exists. The project also has a versioned `docs.json` store (human-owned JSON documents; agents may read) and persisted backlog tasks; these are useful MemoryPlane/OrchestrationPlane references, not session migration.
+
+## Build, static checks, and test results
+
+- Current web `go.mod`: Go 1.27.3. The review shell had no `go` executable. Downloaded official `go1.27.4.darwin-arm64.tar.gz` to `/tmp/nexusmemory-agentd-review/`; verified SHA-256 `91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4` against official Go downloads; ran it from the temporary directory (no global installation).
+- `rtk proxy env GOTOOLCHAIN=local GOMODCACHE=/tmp/nexusmemory-agentd-review/gomodcache GOCACHE=/tmp/nexusmemory-agentd-review/gocache GOPATH=/tmp/nexusmemory-agentd-review/gopath /tmp/nexusmemory-agentd-review/go/bin/go build ./...`: exit 0, stdout/stderr empty.
+- Same env + `go vet ./...`: exit 0, stdout/stderr empty.
+- Same env + `go test ./...`: exit 1 on the macOS 27.3 arm64 host. Targeted reruns (all exit 1) reproduced:
+  1. `./cmd/agentd -run '^TestShimConflicts$'`: `linkShim` rejects its own existing shim because source compares `filepath.EvalSymlinks(link)` with `exe` as raw strings. Inference: macOS `/var` vs `/private/var` canonical path alias is the cause, supported by the failing temp paths and source. The `os.Readlink` comparison does not canonicalize the executable either.
+  2. `./internal/daemon -run '^TestReviewPromptBeforeSubmitRecheck$'`: expected `proto.CodeConflict` if a confirmation menu appears between paste and submit; observed `err = <nil>` (input-side effect after the assertion is skipped by this test's failure path, so actual submission is not independently established).
+  3. `./internal/desktopui/core -run '^TestLaunchFirstPrompt$'`: first prompt never ran on this host. Captured screen contained `bash-3.2$ 00~echo first-$((2+3))01~` and `bash: 00~echo: command not found`.
+  4. `./internal/desktopui/provision -run '^TestDetectFindsUserLevelBinDirs$'`: expected `gemini` absent, but it is detected because `DetectScript` appends compiled `SystemBinDirs` including `/opt/homebrew/bin` even though the test sets a temporary HOME and PATH.
+  5. `./internal/desktopui/provision -run '^TestDetectScriptInSandbox$'`: `timeout` and `watchdog` subtests fail because the “sandbox” still appends global `/opt/homebrew/bin`, causing host `codex`, `npm`, and `tmux` to appear. These are test-isolation issues rather than evidence of wrong production discovery; they make Mac tests non-hermetic.
+- Remote first-party GitHub evidence: latest release v0.9.0 was published 2026-11-24 from abbreviated commit `0ad5e5f`, the same full SHA as this review; CI run #37 for that commit succeeded. Local `.github/workflows/ci.yml` runs `go vet` and `go test -race ./...` on Linux, but the macOS job only builds/vets and runs `agentd --help`, so the reproduced macOS test failures are not covered by CI.
+- Docs discrepancy: the latest release page says v0.9.0 while the checked-out README still says “prototype (v0.1, pre-release).”
+
+## Disposition
+
+Not a cross-Harness migration project. Preserve only the runtime orchestration/alias/mailbox patterns as adjacent prior art. The primary compatibility matrix must distinguish **live process continuity** from **native chat/session history portability**. Keep Claude Desktop Chat/Cowork/Code and local Claude Code gateway acceptance separate; agentd has not tested these providers/modes.
+
+## Pinned/authoritative links
+
+- [README at pinned SHA](https://github.com/digiogithub/agentd/blob/0ad5e5f64d5be56f97c82e7e7baf2d97505bd58a/README.md)
+- [PTY session implementation](https://github.com/digiogithub/agentd/blob/0ad5e5f64d5be56f97c82e7e7baf2d97505bd58a/internal/session/session.go)
+- [daemon lifecycle/registry](https://github.com/digiogithub/agentd/blob/0ad5e5f64d5be56f97c82e7e7baf2d97505bd58a/internal/daemon/server.go)
+- [in-memory turn metadata](https://github.com/digiogithub/agentd/blob/0ad5e5f64d5be56f97c82e7e7baf2d97505bd58a/internal/daemon/turns.go)
+- [desktop live Chat view](https://github.com/digiogithub/agentd/blob/0ad5e5f64d5be56f97c82e7e7baf2d97505bd58a/internal/desktopui/app/session/chat.go)
+- [latest release](https://github.com/digiogithub/agentd/releases)
+- [CI runs](https://github.com/digiogithub/agentd/actions/workflows/ci.yml)
+- [official Go 1.27.4 downloads/checksum](https://go.dev/dl/)

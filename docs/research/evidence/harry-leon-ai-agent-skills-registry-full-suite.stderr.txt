@@ -1,0 +1,190 @@
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/by-handle.test.js > By-Handle Route Caching and Headers
+ FAIL  tests/integration/favorites.test.js > Milestone M1.8: Favorites & Community Interactions
+ FAIL  tests/integration/fork-import.test.js > Milestone M1.6: Fork and GitHub Import Integration Tests
+ FAIL  tests/integration/search.test.js > Milestone M1.7: Search & Library Integration Tests
+ FAIL  tests/integration/security-matrix.test.js > Milestone M1.8: Security Hardening & Authorization Matrix Tests
+ FAIL  tests/integration/skills-crud.test.js > Milestone M1.4: Skills CRUD, Visibility & Authorization Matrix
+ FAIL  tests/integration/viewer-editor.test.js > Milestone M1.5: Viewer, Editor, Download & Versions Tests
+PrismaClientInitializationError: 
+Invalid `prisma.user.findFirst()` invocation:
+
+
+Can't reach database server at `127.0.0.1:5432`
+
+Please make sure your database server is running at `127.0.0.1:5432`.
+ ❯ ei.handleRequestError node_modules/@prisma/client/src/runtime/RequestHandler.ts:242:13
+ ❯ ei.handleAndLogRequestError node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ Object.findOne node_modules/@better-auth/prisma-adapter/dist/index.mjs:231:20
+ ❯ Object.findOne node_modules/@better-auth/core/dist/db/adapter/factory.mjs:578:16
+ ❯ Object.findUserByEmail node_modules/better-auth/dist/db/internal-adapter.mjs:569:19
+ ❯ node_modules/better-auth/dist/api/routes/sign-up.mjs:192:18
+ ❯ node_modules/@better-auth/core/dist/context/transaction.mjs:66:13
+ ❯ node_modules/@better-auth/core/dist/api/index.mjs:56:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/20]⎯
+
+ FAIL  tests/integration/favorites.test.js > Milestone M1.8: Favorites & Community Interactions
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/favorites.test.js:100:37
+     98|   afterAll(async () => {
+     99|     await db.favoriteSkill.deleteMany({
+    100|       where: { userId: { in: [userA.id, userB.id] } },
+       |                                     ^
+    101|     });
+    102|     await db.skill.deleteMany({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/20]⎯
+
+ FAIL  tests/integration/fork-import.test.js > Milestone M1.6: Fork and GitHub Import Integration Tests
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/fork-import.test.js:122:38
+    120|   afterAll(async () => {
+    121|     await db.skill.deleteMany({
+    122|       where: { ownerId: { in: [userA.id, userB.id] } },
+       |                                      ^
+    123|     });
+    124|     await db.session.deleteMany({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/20]⎯
+
+ FAIL  tests/integration/skills-crud.test.js > Milestone M1.4: Skills CRUD, Visibility & Authorization Matrix
+TypeError: Cannot read properties of undefined (reading 'id')
+ ❯ tests/integration/skills-crud.test.js:53:38
+     51|   afterAll(async () => {
+     52|     await db.skill.deleteMany({
+     53|       where: { ownerId: { in: [userA.id, userB.id] } },
+       |                                      ^
+     54|     });
+     55|     await db.session.deleteMany({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/20]⎯
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/auth.test.js > Milestone M1.2: Authentication & Account Security Tests > 1. Wrong password returns generic error message
+ FAIL  tests/integration/auth.test.js > Milestone M1.2: Authentication & Account Security Tests > 2. The 11th login attempt within 15 minutes returns HTTP 429 with Retry-After
+ FAIL  tests/integration/auth.test.js > Milestone M1.2: Authentication & Account Security Tests > 3. Forgot-password returns identical response for existing and unknown emails
+ FAIL  tests/integration/auth.test.js > Milestone M1.2: Authentication & Account Security Tests > 4. A DISABLED user is rejected on every request even with a valid session
+ FAIL  tests/integration/auth.test.js > Milestone M1.2: Authentication & Account Security Tests > 5. Account deletion cascades skills, versions, sessions and logs audit row
+ FAIL  tests/integration/auth.test.js > Milestone M1.2: Authentication & Account Security Tests > 6. User can update their profile name and handle
+PrismaClientInitializationError: 
+Invalid `db.rateLimitBucket.deleteMany()` invocation in
+/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-harry-leon-ai-agent-skills-registry-20261123/tests/integration/auth.test.js:16:30
+
+  13 
+  14 beforeEach(async () => {
+  15   // Clear test rate limits before tests
+→ 16   await db.rateLimitBucket.deleteMany(
+Can't reach database server at `127.0.0.1:5432`
+
+Please make sure your database server is running at `127.0.0.1:5432`.
+ ❯ ei.handleRequestError node_modules/@prisma/client/src/runtime/RequestHandler.ts:242:13
+ ❯ ei.handleAndLogRequestError node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ tests/integration/auth.test.js:16:5
+     14|   beforeEach(async () => {
+     15|     // Clear test rate limits before tests
+     16|     await db.rateLimitBucket.deleteMany();
+       |     ^
+     17|   });
+     18|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/20]⎯
+
+ FAIL  tests/integration/cron-cleanup.test.js > Cron Cleanup Endpoint > GET /api/cron/cleanup cleans up expired rate limit buckets
+PrismaClientInitializationError: 
+Invalid `db.rateLimitBucket.create()` invocation in
+/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-harry-leon-ai-agent-skills-registry-20261123/tests/integration/cron-cleanup.test.js:11:30
+
+   8 describe('Cron Cleanup Endpoint', () => {
+   9   it('GET /api/cron/cleanup cleans up expired rate limit buckets', async () => {
+  10     const expiredDate = new Date(Date.now() - 7200 * 1000); // 2 hours ago
+→ 11     await db.rateLimitBucket.create(
+Can't reach database server at `127.0.0.1:5432`
+
+Please make sure your database server is running at `127.0.0.1:5432`.
+ ❯ ei.handleRequestError node_modules/@prisma/client/src/runtime/RequestHandler.ts:242:13
+ ❯ ei.handleAndLogRequestError node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ tests/integration/cron-cleanup.test.js:11:5
+      9|   it('GET /api/cron/cleanup cleans up expired rate limit buckets', asy…
+     10|     const expiredDate = new Date(Date.now() - 7200 * 1000); // 2 hours…
+     11|     await db.rateLimitBucket.create({
+       |     ^
+     12|       data: {
+     13|         key: 'cron-test-expired',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/20]⎯
+
+ FAIL  tests/integration/cron-cleanup.test.js > Cron Cleanup Endpoint > POST /api/cron/cleanup also cleans up expired rate limit buckets
+PrismaClientInitializationError: 
+Invalid `db.rateLimitBucket.create()` invocation in
+/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-harry-leon-ai-agent-skills-registry-20261123/tests/integration/cron-cleanup.test.js:65:30
+
+  62 
+  63 it('POST /api/cron/cleanup also cleans up expired rate limit buckets', async () => {
+  64   const expiredDate = new Date(Date.now() - 7200 * 1000);
+→ 65   await db.rateLimitBucket.create(
+Can't reach database server at `127.0.0.1:5432`
+
+Please make sure your database server is running at `127.0.0.1:5432`.
+ ❯ ei.handleRequestError node_modules/@prisma/client/src/runtime/RequestHandler.ts:242:13
+ ❯ ei.handleAndLogRequestError node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:12
+ ❯ ei.request node_modules/@prisma/client/src/runtime/RequestHandler.ts:143:12
+ ❯ a node_modules/@prisma/client/src/runtime/getPrismaClient.ts:833:24
+ ❯ tests/integration/cron-cleanup.test.js:65:5
+     63|   it('POST /api/cron/cleanup also cleans up expired rate limit buckets…
+     64|     const expiredDate = new Date(Date.now() - 7200 * 1000);
+     65|     await db.rateLimitBucket.create({
+       |     ^
+     66|       data: {
+     67|         key: 'cron-test-post-expired',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/20]⎯
+
+ FAIL  tests/integration/cron-cleanup.test.js > Cron Cleanup Endpoint > rejects unauthorized requests when CRON_SECRET is set
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ tests/integration/cron-cleanup.test.js:110:31
+    108|       });
+    109|       const resValid = await cleanupGetHandler(reqValid);
+    110|       expect(resValid.status).toBe(200);
+       |                               ^
+    111|     } finally {
+    112|       env.CRON_SECRET = undefined;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/20]⎯
+
+ FAIL  tests/integration/cron-cleanup.test.js > Cron Cleanup Endpoint > handles negative or invalid retention gracefully without crashing
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ tests/integration/cron-cleanup.test.js:121:24
+    119|     });
+    120|     const res = await cleanupGetHandler(req);
+    121|     expect(res.status).toBe(200);
+       |                        ^
+    122|   });
+    123| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/20]⎯
+

@@ -1,0 +1,740 @@
+CONTROL ROUTE: CONTINUE
+ACTIVE_OBJECT: /private/tmp/nm-next-agent-sessions-review-20261120/candidate/project
+LAST_CONFIRMED_RESULT: FOLLOW-UP TRANSACTION — user correction: Destruction Era (2026-11-20)
+NEXT_EXECUTABLE_ACTION: Inspect current Rolecraft MCP/setup/install/profile/CI source paths with CodeGraph and persist evidence
+INPUT_PATHS: ["/private/tmp/nm-next-agent-sessions-review-20261120/candidate/project/docs/research/github-candidates.json", "/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-rolecraft-sh-rolecraft-20261120"]
+ACCEPTANCE_EVENT: CodeGraph command event plus persisted source-evidence file
+REGISTRY_STATUS: unknown
+CODEGRAPH_STATUS_EXIT: 0
+CODEGRAPH_STATUS_STDOUT:
+
+CodeGraph Status
+
+Project: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-rolecraft-sh-rolecraft-20261120
+
+Index Statistics:
+  Files:     173
+  Nodes:     1,918
+  Edges:     5,646
+  DB Size:   8.71 MB
+  Backend:   node:sqlite — built-in (full WAL)
+  Journal:   wal
+
+Nodes by Kind:
+  import          769
+  function        576
+  constant        219
+  variable        188
+  file            164
+  class           1
+  method          1
+
+Files by Language:
+  javascript      164
+  yaml            9
+
+✓ Index is up to date
+
+
+CODEGRAPH_EXPLORE_EXIT: 0
+CODEGRAPH_EXPLORE_STDERR:
+
+CODEGRAPH_EXPLORE_OUTPUT:
+**Exploration: Rolecraft exact source paths and call flows for skill manifest support levels; MCP setup parsing and security scanning vs install; profile import/export serialization and secret redaction; CI source pinning and content drift.**
+
+Found 61 symbols across 5 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `profilePath` (src/utils/profile.js:87) — 5 callers in `src/utils/profile.js`; tests: `src/commands/profile.test.js`, `src/utils/profile.test.js`
+- `installSkill` (src/utils/installer.js:186) — 16 callers in `src/api/ci.js`, `src/api/install.js`, `src/api/setup.js`, `src/api/update.js` +3 more; tests: `benchmark/install-speed.js`
+- `profileImportCommand` (src/commands/profile.js:366) — 1 caller in `src/commands/profile.js`; no tests found within 3 caller hops
+- `profileExportCommand` (src/commands/profile.js:340) — 1 caller in `src/commands/profile.js`; no tests found within 3 caller hops
+- `apiProfileImport` (src/api/profile.js:241) — 5 callers in `src/commands/profile.js`, `src/index.js`; tests: `src/api/profile.test.js`
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/utils/profile.js`** — getProfilesDir(calls), isValidProfileName(calls), profilePath(calls), UserError(instantiates), ensureProfileDir(calls), readProfile(calls), +19 more
+
+```javascript
+76	  },
+77	}
+78	
+79	export function getProfilesDir() {
+80	  return join(homedir(), PROFILES_DIR)
+81	}
+82	
+83	export async function ensureProfileDir() {
+84	  await mkdir(getProfilesDir(), { recursive: true })
+85	}
+86	
+87	export function profilePath(name) {
+88	  if (!isValidProfileName(name)) {
+89	    throw new UserError(
+90	      `Invalid profile name: "${name}". Use only letters, digits, hyphens, underscores, or dots.`,
+91	      {
+92	        suggestion: 'Rename the profile, or check the name you typed.',
+93	        code: 'PROFILE_INVALID_NAME',
+94	      },
+95	    )
+96	  }
+97	  return join(getProfilesDir(), `${name}.json`)
+98	}
+99	
+100	export function isValidProfileName(name) {
+101	  return (
+102	    typeof name === 'string' &&
+103	    name.length >= 1 &&
+104	    name.length <= 64 &&
+105	    PROFILE_NAME_RE.test(name)
+106	  )
+107	}
+108	
+109	export function validateProfile(data) {
+110	  const errors = []
+
+... (gap) ...
+
+115	
+116	  if (!data.name || typeof data.name !== 'string') {
+117	    errors.push('Missing or invalid "name": must be a non-empty string')
+118	  } else if (!isValidProfileName(data.name)) {
+119	    errors.push(
+120	      `Invalid profile name "${data.name}": use only letters, digits, hyphens, underscores, or dots`,
+121	    )
+
+... (gap) ...
+
+191	  return { valid: errors.length === 0, errors }
+192	}
+193	
+194	export async function readProfile(name) {
+195	  const path = profilePath(name)
+196	  try {
+197	    const raw = await readFile(path, 'utf-8')
+198	    return JSON.parse(raw)
+199	  } catch (err) {
+200	    if (err.code === 'ENOENT') return null
+201	    throw err
+202	  }
+203	}
+204	
+205	export async function writeProfile(data) {
+206	  const validation = validateProfile(data)
+207	  if (!validation.valid) {
+208	    throw new UserError(
+209	      `Invalid profile data:\n  ${validation.errors.join('\n  ')}`,
+210	      {
+211	        suggestion:
+212	          'Fix the listed fields, or check the profile file for a typo in a key name.',
+213	        code: 'PROFILE_INVALID',
+214	      },
+215	    )
+216	  }
+217	
+218	  const enriched = {
+219	    name: data.name,
+220	    version: data.version ?? PROFILE_SCHEMA_VERSION,
+221	    updatedAt: new Date().toISOString(),
+222	    createdAt: data.createdAt ?? new Date().toISOString(),
+223	    agents: data.agents || {},
+224	  }
+225	  if (data.description) enriched.description = data.description
+226	
+227	  await ensureProfileDir()
+228	  await writeJsonAtomic(profilePath(data.name), enriched, { mode: 0o600 })
+229	  return enriched
+230	}
+231	
+232	export async function deleteProfile(name) {
+233	  const path = profilePath(name)
+234	
+235	  const exists = await readProfile(name)
+236	  if (!exists) return false
+237	
+238	  await rm(path)
+239	  return true
+240	}
+241	
+242	export async function listProfiles() {
+243	  await ensureProfileDir()
+244	  const dir = getProfilesDir()
+245	
+246	  let entries
+247	  try {
+
+... (gap) ...
+
+255	    if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+256	
+257	    const name = entry.name.slice(0, -5)
+258	    if (!isValidProfileName(name)) continue
+259	
+260	    const data = await readProfile(name)
+261	    if (!data) continue
+262	
+263	    results.push({
+
+... (gap) ...
+
+727	  return results
+728	}
+729	
+730	export async function ensureSkillsInstalled(skills, targetFlags, options = {}) {
+731	  if (!skills || !Array.isArray(skills) || skills.length === 0) return []
+732	
+733	  const [globalLock, projectLock] = await Promise.all([
+734	    readLock(getGlobalLockPath()),
+735	    readLock(getProjectLockPath(process.cwd())).catch(() => ({ skills: {} })),
+736	  ])
+737	
+738	  const installedSlugs = new Set([
+739	    ...Object.keys(globalLock.skills),
+740	    ...Object.keys(projectLock.skills),
+741	  ])
+742	
+743	  const results = []
+744	  for (const slug of skills) {
+745	    if (installedSlugs.has(slug)) {
+746	      results.push({ slug, action: 'skipped', reason: 'already_installed' })
+747	      continue
+748	    }
+749	
+750	    try {
+751	      const resolved = await resolveSource(slug)
+752	
+753	      // Security scan before install
+754	      const security = scanSkill(resolved)
+755	      const level = classifyScore(security.score, security.issues)
+756	      if ((level === 'danger' || level === 'review') && !options.yes) {
+757	        const issues = security.issues
+758	          .filter((i) => i.severity !== 'low')
+759	          .map(
+760	            (i) =>
+761	              `  [${i.severity}] ${i.description}${i.file ? ` (${i.file})` : ''}`,
+762	          )
+763	          .join('\n')
+764	        results.push({
+765	          slug,
+766	          action: 'failed',
+767	          reason: `security scan blocked (score: ${security.score}/100): ${issues}`,
+768	        })
+769	        continue
+770	      }
+771	
+772	      const installTargets = targetFlags || ['agents']
+773	      const installResults = await installSkill(resolved, installTargets)
+774	      results.push({
+775	        slug,
+776	        action: 'installed',
+777	        targets: installResults.map((r) => r.target),
+778	      })
+779	    } catch (err) {
+780	      results.push({ slug, action: 'failed', reason: err.message })
+781	    }
+782	  }
+783	
+784	  return results
+785	}
+786	
+787	export async function applyInstructions(agentFlag, instructions) {
+788	  if (
+```
+
+**`src/commands/profile.js`** — readProfile(calls), apiProfileSave(calls), calls(calls), apiProfileApply(calls), profileSaveCommand(function), profileApplyCommand(function), +13 more
+
+```javascript
+160	  return parts.join(', ')
+161	}
+162	
+163	export async function profileSaveCommand(name, options) {
+164	  if (!name) {
+165	    console.error(
+166	      'Usage: rolecraft profile save <name> [--agents --cursor ...]',
+167	    )
+168	    throw new Error('Missing profile name.')
+169	  }
+170	
+171	  if (options.dryRun) {
+172	    const result = await apiProfileSave(name, { ...options, dryRun: true })
+173	    console.log(`\n📋 [dry-run] Would save profile "${name}" with:\n`)
+174	    for (const [flag, entry] of Object.entries(result.agents)) {
+175	      console.log(`   ${flag}: ${formatAgentSummary(entry)}`)
+176	    }
+177	    console.log()
+178	    return
+179	  }
+180	
+181	  try {
+182	    const result = await apiProfileSave(name, options)
+183	    console.log(`\n✅ Profile "${name}" saved (${result.agents} agent(s))`)
+184	  } catch (err) {
+185	    console.log(err.message)
+186	  }
+187	}
+188	
+189	export async function profileApplyCommand(name, options) {
+190	  if (!name) {
+
+... (gap) ...
+
+195	  }
+196	
+197	  if (options.dryRun) {
+198	    const result = await apiProfileApply(name, { ...options, dryRun: true })
+199	    console.log(`\n📋 [dry-run] Would apply profile "${name}":\n`)
+200	    for (const [flag, entry] of Object.entries(result.agents)) {
+201	      console.log(`   ${flag}: ${formatAgentSummary(entry)}`)
+202	    }
+203	    console.log()
+204	    return
+205	  }
+206	
+207	  const result = await apiProfileApply(name, {
+208	    ...options,
+209	    resolveConflicts: promptConflictResolutions,
+210	  })
+211	
+212	  const formattedLines = []
+
+... (gap) ...
+
+239	    throw new Error('Missing profile name.')
+240	  }
+241	
+242	  const data = await readProfile(name)
+243	  if (!data) throw new Error(`Profile "${name}" not found.`)
+244	
+245	  if (!data.agents || Object.keys(data.agents).length === 0) {
+246	    console.log(`Profile "${name}" has no agent data.`)
+247	    return
+248	  }
+249	
+250	  const result = await apiProfileDiff(name)
+251	
+252	  console.log(`\n📊 Diff for profile "${name}" vs current configuration:\n`)
+253	
+
+... (gap) ...
+
+283	    throw new Error('Missing profile name.')
+284	  }
+285	
+286	  const data = await readProfile(name)
+287	  if (!data) throw new Error(`Profile "${name}" not found.`)
+288	
+289	  const editor = process.env.EDITOR || 'vi'
+
+... (gap) ...
+
+303	      )
+304	    const edited = JSON.parse(readFileSync(tmpFile, 'utf-8'))
+305	    edited.name = name
+306	    await writeProfile(edited)
+307	    console.log(`\n✅ Profile "${name}" updated.`)
+308	  } catch (err) {
+309	    if (err instanceof SyntaxError)
+
+... (gap) ...
+
+317	  }
+318	}
+319	
+320	function cleanProfileForExport(data) {
+321	  const cleaned = { ...data }
+322	  delete cleaned.createdAt
+323	  delete cleaned.updatedAt
+324	  delete cleaned.version
+325	  return cleaned
+326	}
+327	
+328	function relativizePaths(data, cwd) {
+329	  const result = JSON.parse(JSON.stringify(data))
+330	  for (const entry of Object.values(result.agents)) {
+331	    if (entry.instructions) {
+332	      for (const instr of entry.instructions) {
+333	        if (instr.file) instr.file = relative(cwd, resolve(instr.file))
+334	      }
+335	    }
+336	  }
+337	  return result
+338	}
+339	
+340	export async function profileExportCommand(name, options) {
+341	  if (!name) {
+342	    console.error(
+343	      'Usage: rolecraft profile export <name> [--file <path>] [--relative]',
+344	    )
+345	    throw new Error('Missing profile name.')
+346	  }
+347	
+348	  const data = await readProfile(name)
+349	  if (!data) throw new Error(`Profile "${name}" not found.`)
+350	
+351	  let output = cleanProfileForExport(data)
+352	  if (options.relative) output = relativizePaths(output, process.cwd())
+353	
+354	  const json = `${JSON.stringify(output, null, 2)}\n`
+355	
+356	  if (options.filePath) {
+357	    const targetPath = resolve(options.filePath)
+358	    await mkdir(dirname(targetPath), { recursive: true })
+359	    await writeFile(targetPath, json, 'utf-8')
+360	    console.log(`\n✅ Profile "${name}" exported to ${targetPath}`)
+361	  } else {
+362	    console.log(json)
+363	  }
+364	}
+365	
+366	export async function profileImportCommand(path) {
+367	  if (!path) {
+368	    console.error('Usage: rolecraft profile import <file-or-url>')
+369	    throw new Error('Missing source path.')
+370	  }
+371	
+372	  const result = await apiProfileImport(path)
+373	  console.log(
+374	    `\n✅ Profile "${result.name}" imported (${result.agents} agent(s)).`,
+375	  )
+376	
+377	  const current = await captureAllAgents()
+378	  if (Object.keys(current).length > 0) {
+379	    console.log(
+380	      `\n📊 Run \`rolecraft profile diff ${result.name}\` to see differences from current config.`,
+381	    )
+382	  }
+383	}
+384	
+385	function getLinkPath(dir) {
+386	  return join(dir, LINK_FILE)
+```
+
+**`src/api/profile.js`** — UserError(instantiates), parseProfileJSON(calls), readBoundedText(function), fetchProfileBody(function), fetchFollowingRedirects(calls), assertAllowedProfileHost(references), +6 more
+
+```javascript
+211	async function readBoundedText(response, url) {
+212	  const text = await response.text()
+213	  if (Buffer.byteLength(text, 'utf-8') > MAX_PROFILE_BYTES) {
+214	    throw new UserError(`Profile at ${url} is larger than expected.`, {
+215	      code: 'PROFILE_TOO_LARGE',
+216	      suggestion:
+217	        'The profile was not imported. Check the link points at a profile JSON file.',
+
+... (gap) ...
+
+220	  return text
+221	}
+222	
+223	async function fetchProfileBody(url) {
+224	  const { response, url: finalUrl } = await fetchFollowingRedirects(url, {
+225	    assertAllowed: assertAllowedProfileHost,
+226	    maxRedirects: MAX_PROFILE_REDIRECTS,
+227	    subject: `importing profile from ${url}`,
+228	    codeBase: 'PROFILE_REDIRECT',
+229	    suggestion: 'Use a direct link to the raw profile file.',
+230	  })
+231	
+232	  if (!response.ok) {
+233	    throw new UserError(`Failed to fetch ${finalUrl}: ${response.status}`, {
+234	      code: 'PROFILE_FETCH_FAILED',
+235	    })
+236	  }
+237	
+238	  return readBoundedText(response, finalUrl)
+239	}
+240	
+241	export async function apiProfileImport(path) {
+242	  const { readFile } = await import('node:fs/promises')
+243	  const { resolve } = await import('node:path')
+244	
+245	  function parseProfileJSON(raw) {
+246	    try {
+247	      return JSON.parse(raw)
+248	    } catch {
+249	      throw new UserError('Invalid JSON in profile.', {
+250	        suggestion:
+251	          'Fix the JSON by hand, or delete the profile file to start over.',
+252	        code: 'PROFILE_INVALID_JSON',
+253	      })
+254	    }
+255	  }
+256	
+257	  let data
+258	  const isUrl = path.startsWith('http://') || path.startsWith('https://')
+259	  if (isUrl) {
+260	    data = parseProfileJSON(await fetchProfileBody(path))
+261	  } else {
+262	    data = parseProfileJSON(await readFile(resolve(path), 'utf-8'))
+263	  }
+264	
+265	  if (!data.name) {
+266	    const nameFromFile =
+267	      path
+268	        .split('/')
+269	        .pop()
+270	        ?.replace(/\.json$/i, '') || 'imported'
+271	    data.name = nameFromFile
+272	  }
+273	  data.agents = data.agents || {}
+274	
+275	  const validation = validateProfile(data)
+276	  if (!validation.valid)
+277	    throw new UserError(
+278	      `Invalid profile data:\n  ${validation.errors.join('\n  ')}`,
+279	      {
+280	        suggestion:
+281	          'Fix the listed fields, or check the profile file for a typo in a key name.',
+282	        code: 'PROFILE_INVALID',
+283	      },
+284	    )
+285	
+286	  const enriched = await writeProfile(data)
+287	
+288	  return {
+289	    name: enriched.name,
+290	    agents: Object.keys(enriched.agents || {}).length,
+291	    profile: enriched,
+292	  }
+293	}
+294	
+```
+
+**`src/utils/installer.js`** — normalizeSlug(calls), getTargetSkillDir(calls), targetLockPath(calls), resolveAgent(calls), getTargetSkillDir(function), calls(calls), +11 more
+
+```javascript
+183	  }
+184	}
+185	
+186	export async function installSkill(
+187	  resolved,
+188	  targets,
+189	  mode = 'copy',
+190	  cwd = process.cwd(),
+191	) {
+192	  const slug = resolved.slug
+193	  await assertNoSlugCollision(slug, targets, cwd)
+194	
+195	  const agentNames = targets.map((target) => {
+196	    const agent = resolveAgent(target)
+197	
+198	    return agent ? agent.name : target
+199	  })
+200	
+201	  /**
+202	   * Install to a single target (agent or project).
+203	   * Extracted so multiple targets can run in parallel.
+204	   */
+205	  async function installToTarget(target) {
+206	    let baseDir
+207	    let label
+208	
+209	    if (target === 'project') {
+210	      baseDir = join(cwd, '.agents', 'skills')
+211	
+212	      label = './.agents/skills/'
+213	    } else {
+214	      const agent = resolveAgent(target)
+215	
+216	      if (!agent) {
+217	        return null
+218	      }
+219	
+220	      baseDir = agent.getDir(cwd)
+221	      label = agent.label
+222	    }
+223	
+224	    const slugDir = join(baseDir, normalizeSlug(slug))
+225	
+226	    assertSafeSlug(slug, baseDir, slugDir)
+227	
+228	    if (mode === 'symlink' && resolved.skillDir) {
+229	      const relPath = relative(dirname(slugDir), resolved.skillDir)
+230	
+231	      await rm(slugDir, {
+232	        recursive: true,
+233	        force: true,
+234	      })
+235	
+236	      await mkdir(dirname(slugDir), {
+237	        recursive: true,
+238	      })
+239	
+240	      await symlink(relPath, slugDir)
+241	    } else {
+242	      try {
+243	        await stat(slugDir)
+244	
+245	        const oldFiles = {}
+246	
+247	        const oldEntries = await readdir(slugDir, {
+248	          withFileTypes: true,
+249	        }).catch(() => [])
+250	
+251	        for (const entry of oldEntries) {
+252	          if (entry.isFile()) {
+253	            try {
+254	              oldFiles[entry.name] = await readFile(
+255	                join(slugDir, entry.name),
+256	                'utf-8',
+257	              )
+258	            } catch {}
+259	          }
+260	        }
+261	
+262	        if (Object.keys(oldFiles).length > 0) {
+263	          await backupSkill(slug, oldFiles).catch(() => {})
+264	        }
+265	      } catch {
+266	        // Directory does not exist yet.
+267	      }
+268	
+269	      await rm(slugDir, {
+270	        recursive: true,
+271	        force: true,
+272	      })
+273	
+274	      await mkdir(slugDir, {
+275	        recursive: true,
+276	      })
+277	
+278	      for (const file of resolved.files) {
+279	        const destination = join(slugDir, file)
+280	
+281	        if (Object.hasOwn(resolved.fileContents || {}, file)) {
+282	          // Files are keyed by their path relative to the skill root, so a
+283	          // nested one names a directory that does not exist yet. Without this
+284	          // the write fails ENOENT and `Promise.allSettled` below reports the
+285	          // target as failed with no reason (#325).
+286	          await mkdir(dirname(destination), { recursive: true })
+287	          await writeFile(destination, resolved.fileContents[file])
+288	        } else if (resolved.skillDir) {
+289	          const source = join(resolved.skillDir, file)
+290	
+291	          try {
+292	            await stat(source)
+293	
+294	            await cp(source, destination, {
+295	              recursive: true,
+296	              force: true,
+297	            })
+298	          } catch {
+299	            // Skip files that do not exist.
+300	          }
+301	        }
+302	      }
+303	    }
+304	
+305	    const lockPath = targetLockPath(target, cwd)
+306	
+307	    await addSkillToLock(
+308	      slug,
+309	      {
+310	        slug,
+311	        contentSha: resolved.contentSha,
+312	        fileHashes: resolved.fileContents
+313	          ? computeFileHashes(resolved.fileContents)
+314	          : undefined,
+315	        installedAt: new Date().toISOString(),
+```
+
+**`src/utils/mcp.js`** — calls(calls), references(references), AGENT_MCP_PATHS(constant), getSupportedMcpAgents(function), updateMcpConfig(function), addMcpServer(function), +3 more
+
+```javascript
+29	  runSpawnSync = fn
+30	}
+31	
+32	const AGENT_MCP_PATHS = Object.fromEntries(
+33	  agents.filter((a) => a.mcp).map((a) => [a.flag, a.mcp.getPath]),
+34	)
+35	
+36	function getMcpConfigPath(agent) {
+37	  const fn = AGENT_MCP_PATHS[agent]
+38	  return fn ? fn() : null
+39	}
+40	
+41	export function getSupportedMcpAgents() {
+42	  return Object.keys(AGENT_MCP_PATHS)
+43	}
+44	
+45	export async function readMcpConfig(agent) {
+46	  const configPath = getMcpConfigPath(agent)
+
+... (gap) ...
+
+192	// write would silently discard the first server. The lock is held across the
+193	// whole cycle, and the write itself is atomic, so a reader never sees a
+194	// half-written config.
+195	async function updateMcpConfig(agent, mutate) {
+196	  const configPath = getMcpConfigPath(agent)
+197	  if (!configPath) return null
+198	
+199	  return updateLockFile(configPath, {
+200	    read: readMcpConfigAt,
+201	    write: writeMcpConfig,
+202	    mutate,
+203	  })
+204	}
+205	
+206	export async function addMcpServer(agent, name, serverConfig, source = null) {
+207	  const updated = await updateMcpConfig(agent, (data) => {
+208	    setMcpServerEntry(data, agent, name, serverConfig)
+209	    return data
+210	  })
+211	  if (updated === null) return false
+212	
+213	  await addServerToMcpLock(name, {
+214	    source: source || reconstructMcpSource(serverConfig, name),
+215	    sourceType: serverConfig.sourceType,
+216	    agents: [agent],
+217	  })
+218	
+219	  return true
+220	}
+221	
+222	export async function removeMcpServer(agent, name) {
+223	  let removed = false
+
+... (gap) ...
+
+252	  return listMcpServerEntries(result.data, agent)
+253	}
+254	
+255	export function parseMcpServersFromSkill(content) {
+256	  const { attrs } = parseFrontmatter(content)
+257	  if (!Array.isArray(attrs.mcp_servers)) return []
+258	  return attrs.mcp_servers
+259	    .filter((s) => s && (s.name || s.source))
+260	    .map((s) => ({ name: s.name || '', source: s.source || '' }))
+261	}
+262	
+263	const MCP_SOURCE_PATTERNS = [
+264	  { prefix: 'npm:', label: 'npm registry', type: 'npm' },
+```
+
+**Not shown above — explore these names for their source**
+
+- src/api/install.js: apiInstallSkills:53, selectSkills:18, resolveTargets:31, install.js:1
+- src/utils/lockfile.js: normalizeSlug:18, targetLockPath:67, addSkillToLock:307, computeFileHashes:442, readLock:162, getProjectLockPath:44, +4 more
+- src/api/mcp.js: apiMcpInstall:28, apiMcpUpdate:106, apiMcpList:82, apiMcpRemove:137
+- src/utils/security.js: scanMcpServer:544, requiresMcpApproval:537, classifyScore:525, scanSkill:430
+- src/api/watch.js: reinstallSkill:42, installTargetsFor:12, outputDirsFor:20, watchApi:67, watch.js:1
+- src/utils/scan-gate.js: assertMcpScanAllowed:78, assertSkillScanAllowed:34
+- src/utils/resolver.js: resolveSource:843, resolveSkills:848
+- src/commands/mcp.js: mcpInstallCommand:45, mcpUpdateCommand:123, mcp.js:1
+- src/utils/errors.js: UserError:15, constructor:23
+- src/agents.js: resolveAgent:1091, getAgentByFlag:1078
+- ... and 23 more files
+
+> Some file sections were trimmed for size. For a specific symbol you still need, run another `codegraph_explore` (or `codegraph_node`) with its exact name — line-numbered source, cheaper and more complete than Read.
+
+
+SUPPLEMENTAL SOURCE/TEST/AUDIT EVIDENCE (2026-11-20)
+Repository: rolecraft-sh/rolecraft; source SHA: edfd87eed27288fa9e29521eb90e946130075842; `git ls-remote origin refs/heads/main` returned the same SHA.
+Manifest computation via `node --input-type=module` using `src/agents/manifest.js`: total=90; verified=65; community=4; legacy=5; experimental=16; MCP=9.
+CodeGraph file status: 173 indexed files, 1,918 nodes, 5,646 edges, up to date. Reviewed source paths: `src/api/install.js` (installMCP path resolves/scan/approval/addMcpServer), `src/api/setup.js` (skill scanner, MCP declaration only returned), `src/api/ci.js` (contentSha mismatch and MCP approval fail closed), `src/utils/mcp.js` (MCP source resolution), `src/utils/security.js` (`unscanned_source`, classification, approval), `src/utils/profile.js` (profile validation/write/apply security), `src/commands/profile.js` (export removes metadata only).
+Synthetic MCP probe (no network, no real credentials): `uvx:synthetic-probe` -> score=90, issues=[unscanned_source:high], level=review, requiresApproval=true; `npm:synthetic-probe` -> score=89, issues=[unscanned_source:high, source_type:low], level=review, requiresApproval=true.
+Synthetic profile round trip: invoked `apiProfileImport` then `profileExportCommand` using disposable HOME. Fake sentinel `ROLECRAFT_SYNTHETIC_SECRET_DO_NOT_USE_20261120B` remained in stored JSON and exported JSON. `projectOverrides` and `localOverrides` were not preserved. No real key/credential was used. First attempt (exit 1) guessed the profile path as `~/.rolecraft/profiles`; the implementation uses `profilePath()` and the corrected probe used that API, succeeded.
+Focused test command under isolated HOME: `node --test src/utils/security.test.js src/api/install.test.js src/api/setup.test.js src/api/ci.test.js src/api/profile.test.js`; exit=0, tests=195, pass=195, fail=0. It includes explicit assertions that uvx/pipx/go/deno/cargo/local are unscanned rather than SAFE and unscanned npm requires approval.
+Audit attempt with configured default registry `npm audit --json`: exit=1; registry mirror `https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk` returned 404 `[NOT_IMPLEMENTED]`. Corrected with explicit public registry: `npm audit --json --registry=https://registry.npmjs.org`; exit=1 due to 2 dev-tree advisories (high transitive vite range `<=6.4.3`, low direct devDependency vitepress range `<=1.6.4`; both `fixAvailable=false`). This is build/dev tooling, not runtime dependencies.

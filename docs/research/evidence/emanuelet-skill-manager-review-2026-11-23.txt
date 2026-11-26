@@ -1,0 +1,45 @@
+# emanuelet/skill-manager review — 2026-11-23
+
+## Identity and public release state
+
+- Repository: <https://github.com/emanuelet/skill-manager>
+- Shallow clone at `5fbf417e9ae30cbcbcf20515f83239dde1c142d4` on `master`; commit date 2026-10-07, subject `feat: add bifrost setup command and secure configuration`. MIT; GitHub snapshot 0 stars/0 forks, 125 commits; no GitHub Releases and the Actions page lists zero workflow runs.
+- Local package says `skill-manager-plus` v1.3.7, `engines.node >=24`, `packageManager: pnpm@12.9.0`, and has a `pnpm-lock.yaml` but no `package-lock.json`. `npm view skill-manager-plus ...` returned E404. `package.json` also points to `https://github.com/emanuele/skill-manager.git`, which is 404; the checked-out repository is `emanuelet/skill-manager`.
+- Docs conflict on runtime: README says Node 20+, package requires Node >=24, CI matrix is Node 20/22. The CI workflow uses `npm ci`, although there is no npm lockfile, so the first upstream workflow step fails. The actual GitHub Actions page shows no run history; do not label its checks green.
+
+## Capability boundary against Nexus Memory
+
+This is a fairly feature-rich **Skills manager**, not a cross-Harness memory/session migrator. It has a canonical local Skill store, source repositories, dependency/profile/project `.skills.json` declarations, Claude Code `SessionStart` activation hooks, search/usage analytics, Codex/OpenCode shared Skill deployment, and an MCP server that exposes this manager's Skill operations. `sm mcp setup` registers the manager's own server in Claude Code and Codex CLI; it does not transfer arbitrary existing MCP configurations. Bifrost support synchronizes Skills, not conversations or memory.
+
+No ChatGPT/Codex Project or Section/Section Group model, Session events/forks/parent-child graph, transcript/turn chronology, attachment or token/cost transfer, plugin transfer, scheduled-task transfer, or native Claude Desktop third-party-gateway Chat/Cowork/Code or local Claude Code conversation importer/exporter was found. `.skills.json` is a list of project resources, not native Harness Projects or session trees; `SessionStart` is a trigger for Skill activation, not SessionGraph migration. The README targets Claude Code, Codex CLI, and OpenCode; it documents macOS/Linux (elsewhere says Linux only), not Windows.
+
+Keep only as adjacent resource-plane design reference: canonical Skill storage, dependency/profile manifests, atomic symlink replacement that refuses real-file collisions, version history, MCP-backed Skill discovery, and Bifrost Skill sync. The automatic importer must not be used against real user state until its loss/boundary issues below are fixed and tested.
+
+## Source and test review
+
+CodeGraph initialized at 230 files, 2,128 nodes, 7,812 edges and reported current. Reviewed `src/core/adopt.ts`, `src/fs/links.ts`, `src/fs/paths.ts`, `src/core/sources.ts`, `src/sources/git.ts`, source/install/import helpers, MCP setup and tool wrappers, Bifrost integration, project manifests, CI, README, and adoption/import tests. `createLink()` uses a temporary symlink then rename, refuses to overwrite a non-symlink, and replaces only existing symlinks. Remote git sources are explicitly untrusted and their SKILL.md content receives heuristic injection-pattern checks; repositories are cloned without a sandbox, as the README warns.
+
+Observed package/test commands on macOS ARM64, Node `v26.7.0`:
+
+- Upstream CI's `npm ci`: exit 1, `EUSAGE`; npm reports that `npm ci` requires `package-lock.json` or `npm-shrinkwrap.json`. Only `pnpm-lock.yaml` exists.
+- Host `corepack --version`: exit 1, `corepack: No such file or directory`. Corrected using npm's versioned runner: `npx --yes pnpm@12.9.0 --version` → `12.9.0`.
+- `npx --yes pnpm@12.9.0 install --frozen-lockfile --ignore-scripts`: exit 0; lockfile passed supply-chain policy checks (293 entries), 182 packages installed. One `registry.npmmirror.com` Vitest tarball request timed out and retried once; installation then completed in 1m12.2s.
+- `npx --yes pnpm@12.9.0 lint`: exit 0 (`tsc --noEmit`). `lint:oxlint`: exit 0. `build`: exit 0; tsup target `node24`, build success.
+- First full suite: exit 1, 94/95 files passed, 869/870 tests passed. Sole failure is `tests/fs/analytics-snapshot.test.ts`: expected lexical `/var/folders/...` but actual project root was canonical `/private/var/folders/...` on macOS. This is an environment-sensitive path assertion, not an observed implementation failure. Corrected by setting `TMPDIR` to its observed real path `/private/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T`; rerun passed **95/95 files, 870/870 tests**.
+- `npm view skill-manager-plus name version license repository.url dist-tags engines --json`: exit 1, literal registry result `E404 Not Found`; no published package under the declared name was discoverable.
+
+## Synthetic-only data-loss and read-boundary probes
+
+All fixtures used disposable `/tmp` homes, not the host's real `~/.claude`, `~/.agents`, Codex, or MCP state.
+
+1. **Duplicate content drops distinct Skill resources.** Created same-slug `shared-skill` directories in synthetic `.claude/skills` and `.agents/skills`, with byte-identical `SKILL.md` but distinct `references/CLAUDE_ONLY_REFERENCE.md` and `references/AGENTS_ONLY_REFERENCE.md`. Invoked the built actual CLI: `SM_TEST_HOME=/tmp/nm-sm165-poc/home node dist/bin/sm.js list`; exit 0, stdout began `ℹ Auto-adopted 2 skill(s): shared-skill, shared-skill`. Both source directories were deleted. The canonical store contained the Claude reference only; `AGENTS_ONLY_REFERENCE.md` was absent, with no backup. In `autoAdopt()`, the duplicate path compares only SKILL.md content hashes and removes the original directory on a match, before the extra-file copy used for a newly imported skill. Existing tests check one directory's references but do not test merging distinct assets across duplicate copies.
+2. **Nested SKILL.md symlink reads outside the tool root.** Created synthetic `.claude/skills/symlink-skill/SKILL.md` as a symlink to `/tmp/nm-sm165-symlink/outside-sentinel.md`. The actual CLI exited 0 and printed `ℹ Auto-adopted 1 skill(s): symlink-skill`; observed `source_directory_exists False`, `external_target_exists True`, `external_sentinel_imported_to_canonical True`. `detectUnmanaged()` skips a symlink only at the direct tool-directory entry; `findSkillFileInDir()` follows a nested SKILL.md symlink via `pathExists`/`readFile`, then auto-adoption imports its external contents and removes the containing directory/link.
+3. **Implicit mutation on read/tool calls.** The CLI pre-action hook auto-adopts before normal commands (except completion/MCP/TUI/dry-run); MCP `withToolHandler()` silently calls `autoAdopt()` before every MCP tool invocation. `autoAdopt` is enabled by default. The README documents scanning on each CLI/MCP operation and removal of original files/directories, but the synthetic duplicate-assets case demonstrates that the documented background action can discard non-SKILL resources. A read/list/search call can therefore mutate source directories.
+
+These are reproducible code/data-loss and local read-boundary defects, not claims about remote execution. Do not use auto-adopt on user state as a migration transaction until it is opt-in/previewed, merges or backs up all assets, and does not follow nested symlinks.
+
+## Disposition and sources
+
+`RESOURCE_PLANE_REFERENCE_ONLY; NOT_A_PROJECT_SESSION_MIGRATOR; AUTO_ADOPT_NEEDS_FIXES`. It can inspire project-local Skill dependency declarations, session-start resource activation, MCP discovery, and safer symlink writes. It does not satisfy the user's Projects/Sections/SessionGraph/resource migration goal and is not safe as-is for unattended adoption. No real account, API key, repository token, live Harness state, or user Skill directory was used.
+
+Pinned upstream sources: <https://github.com/emanuelet/skill-manager/tree/5fbf417e9ae30cbcbcf20515f83239dde1c142d4>, <https://github.com/emanuelet/skill-manager/blob/5fbf417e9ae30cbcbcf20515f83239dde1c142d4/src/core/adopt.ts>, <https://github.com/emanuelet/skill-manager/blob/5fbf417e9ae30cbcbcf20515f83239dde1c142d4/src/mcp/tools/helpers.ts>, <https://github.com/emanuelet/skill-manager/blob/5fbf417e9ae30cbcbcf20515f83239dde1c142d4/.github/workflows/ci.yml>, <https://github.com/emanuelet/skill-manager/actions>, <https://github.com/emanuelet/skill-manager/releases>.

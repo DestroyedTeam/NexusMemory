@@ -1,0 +1,58 @@
+# Norte candidate review — governed file-manager/MCP audit plane, not session migration
+
+Date: 2026-11-21. Repository: `compilando/norte`; source pinned to exact current `main` `52256ccb816999705fb681a5336d39839497d099` (merge commit 2026-11-02; `git ls-remote origin refs/heads/main` matched). Latest first-party release observed: `v0.3.0-alpha.16` (2026-10-16). GitHub About showed 5 stars / 0 forks at review time; the search-corpus snapshot had 7 stars, so adoption counts are a changing metadata signal, not a quality grade.
+
+## Verdict
+
+A high-safety, local file-manager/agent-control application with MCP, file-operation undo/audit, an OpenAI/Anthropic/Ollama model provider abstraction, and an optional in-app text assistant. It is not a ChatGPT/Codex conversation importer, Projects/Sections migrator, or portable transcript format. Keep only as an adjacent reference for agent permission boundaries, reversible file-operation ledgers, and careful naming of unrelated “session” concepts. Do not adopt `norte-core`, `norte-mcp` or `norte-ai` without an explicit AGPL-3.0-only review: those core crates are AGPL-only; selected crates such as `norte-proto` and `norte-frontend` are MIT OR Apache-2.0.
+
+## Source-level findings (CodeGraph + focused source inspection)
+
+### Four meanings that must not be confused
+
+1. **Persistent UI session.** Core stores `<state_dir>/session.json`, versioned by `version`/`revision` with an opaque JSON `body`; the core does not interpret the body. The frontend body stores active profile, layouts, per-slot directory path/cursor/back-forward/jump/sort/marks/search, recent commands, popular directories, open panels and docks. This is app screen/resume state, not a chat transcript.
+2. **Built-in AI assistant conversation.** The in-memory `norte_frontend::assistant::Assistant` has `Reader`, `Order`, `Answer`, and `Failed` turns, caps its local display at 200 turns, and sends only the newest `AI_CHAT_MAX_MESSAGES`; failures are not sent back as model history. The UI-host controller constructs `Assistant::default()` at boot. `SessionBody` and `SlotState` have no assistant-turn field, so this conversation is not part of the persisted `session.json` body. A turn/order has text, not generic content blocks, attachments, tool call/result IDs, forks, token usage/cost or parent-child session links.
+3. **MCP agent identity.** `norte mcp serve --session <label>` uses an operator-supplied string to identify the MCP `Actor::Agent`; the daemon records that identity in policy, approvals and undo. The ID names an agent’s file-operation authorization/journal scope. It is not the provider’s conversation ID and the bridge does not save the agent’s prompt/response transcript.
+4. **Operation journal.** `journal.db` is a hash-chained SQLite ledger of file mutations: sequence/time, actor kind and actor ID, operation, path/path-to bytes, reversal metadata, undo target and optional batch ID. `norte audit` verifies/exports this ledger. It records what Norte itself changed and supports undo; it is not the message/event history that caused an agent to ask for the change.
+
+No ChatGPT Project/Section or project-membership graph was found. `Profile`/layout and a `VPath` workspace are different objects and must not be relabeled as a conversation Project/Section. Focused source/document scan found no external conversation-session import/export adapter; the README’s `norte theme import` and the operation-journal export are unrelated operations.
+
+### Capability, security and platform boundaries
+
+- Project describes an agent-facing local file interface through MCP with scopes and human `ask` policies; policy is first-match and default-deny. Mutating file operations are journalled and undoable where supported. This is valuable as a separate *tool-action/audit* plane, not a way to restore external session ancestry.
+- `norte-ai` implements streaming Anthropic, Ollama and OpenAI-compatible chat providers. That endpoint/provider setting is model routing, not a session store. No ChatGPT or Claude Desktop session reader/writer was found.
+- Release notes call v0.3.0-alpha.16 pre-release; Linux packages are available and Windows x64 is unsigned preview; README says macOS builds from source. GitHub Actions currently expose Nightly remote integration, while ordinary CI/GUI/Release workflows are explicitly disabled. Nightly #62 on 2026-11-20 passed, but it covers SFTP/OpenSSH, FTP/pure-ftpd and S3/MinIO remote integration—not Mac local tests or session migration.
+- Multi-license repository: GitHub identifies AGPL-3.0 plus two other licenses; crate manifests confirm AGPL-3.0-only for `norte-core`, `norte-ai`, `norte-mcp` and `norte-cli`, and MIT OR Apache-2.0 for `norte-proto` and `norte-frontend`. Review component-level licensing before any reuse.
+
+## Local source/build/test evidence on macOS
+
+- Pinned clean checkout HEAD: `52256ccb816999705fb681a5336d39839497d099`; `rtk git ls-remote origin refs/heads/main` matched it.
+- CodeGraph initialized (installed CLI has no `--yes` option; see correction log): 957 files, 31,214 nodes, 154,718 edges; `.codegraph/.gitignore` retained with only the `*` rule, and `rtk codegraph status` reported current.
+- Repository's documented `just test` recipe was reproduced manually because `just` is not installed in this host: `CARGO_INCREMENTAL=0 cargo nextest run --workspace --exclude norte-gui-tauri --features norte-tui/schema --features norte-config/watch --features norte-proto/schema --features norte-core/testing --no-tests=pass --no-fail-fast`. It exited 101 before tests because `norte-vfs-local/src/confined.rs` uses `libc::O_PATH` on macOS and assumes `st_dev` converts from `i32`; rustc 1.96.1 reported three missing `O_PATH` references and two `u64: From<i32>` errors. The same file's comments state that macOS should use a component-walk fallback, and the README says macOS builds from source; this review therefore records an observed macOS portability/build blocker at this commit, not a full-suite result.
+- Focused `norte-ai`, `norte-frontend`, `norte-proto` nextest run: 2,058 passed, 3 failed, 0 skipped, exit 100 (2,061 tests). Isolated failures: `layout::config::tests::a_non_utf8_name_is_neither_lost_nor_confused` and `openers::tests::a_program_with_a_non_utf8_name_resolves` failed when the host filesystem returned OS error 92 “Illegal byte sequence” creating a synthetic non-UTF-8 name; `navigation::watch::tests::a_change_names_the_pane_whose_dir_changed` expected `[false,true]` but got `[true,true]`. Source `panes_touched` deliberately returns both panes on unknown/unmatched notify paths, so the last failure is consistent with a non-specific platform notification path; neither it nor the filesystem-specific failures were claimed as passes.
+- Focused doctests: 484 passed, 0 failed (4 `norte-ai`, 302 `norte-frontend`, 178 `norte-proto`), exit 0. `rtk cargo fmt --all -- --check` exit 0. Focused `cargo clippy` for these three packages, all targets, `-D warnings`, exit 0. This does not replace the red workspace test gate.
+- No real model provider, account, user file, ChatGPT export, app configuration, or actual MCP connection was used.
+
+## First-party source links
+
+- Repository / README / component license: https://github.com/compilando/norte
+- Latest release page: https://github.com/compilando/norte/releases
+- Actions/workflow state: https://github.com/compilando/norte/actions
+- Latest scheduled remote integration run #62 (commit `52256cc`): https://github.com/compilando/norte/actions/runs/44740234973
+- Session body and slot state: https://github.com/compilando/norte/blob/52256ccb816999705fb681a5336d39839497d099/crates/norte-frontend/src/session.rs
+- In-memory assistant turns: https://github.com/compilando/norte/blob/52256ccb816999705fb681a5336d39839497d099/crates/norte-frontend/src/assistant.rs
+- UI session persistence: https://github.com/compilando/norte/blob/52256ccb816999705fb681a5336d39839497d099/crates/norte-core/src/ui_session/disk.rs
+- Actor and mutation journal fields: https://github.com/compilando/norte/blob/52256ccb816999705fb681a5336d39839497d099/crates/norte-core/src/journal.rs
+- MCP actor connection bridge: https://github.com/compilando/norte/blob/52256ccb816999705fb681a5336d39839497d099/crates/norte-mcp/src/bridge.rs
+- macOS confinement compile failures: https://github.com/compilando/norte/blob/52256ccb816999705fb681a5336d39839497d099/crates/norte-vfs-local/src/confined.rs
+
+## Corrections / non-success ledger
+
+- `rtk codegraph init --yes <repo>` exited 1 (`unknown option '--yes'`) because this installed CodeGraph CLI version exposes no `--yes` flag. Inspected `rtk codegraph init --help`, reran `rtk codegraph init <repo>` (exit 0), then removed only `.codegraph/.gitignore`'s `!.gitignore` exception and verified `rtk codegraph status` (current).
+- `AssistantState` was not a symbol in this tree; corrected the lookup to the actual `Assistant` struct and `SessionBody` schema.
+- `rtk proxy just --version` could not start because `just` is not installed. The equivalent exact nextest/doctest/fmt recipe was run manually as described above; full `just ci` (coverage, deny, docs and all other gates) remains unverified.
+- Full workspace test gate exited 101 at compilation; the three host-specific subset test failures are separately listed above. No results were hidden or rerun as passes.
+
+## Disposition
+
+Keep `compilando/norte` as an adjacent reference for permission-gated agent file access, undo, provenance and hash-chained operation audit. Exclude it from the core session-migration engine and any fidelity score: it neither preserves externally authored prompts/responses nor maps Project/Section/thread/fork/task topology or attachments into a target session. Do not claim the separate UI session or MCP actor label as a portable agent conversation.

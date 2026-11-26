@@ -1,0 +1,23 @@
+# Candidate #226 — toshon-jennings/agent-advisor
+
+Review date: 2026-11-24. Pinned checkout: main / origin/HEAD commit 02d8c757f04e00a3d8f9da51507ba9a23b9b350f (2026-09-15), clean tracked tree. GitHub reports 0 stars, 0 forks, 20 commits; latest visible validate workflow run #16 succeeded for this same commit/date. Root LICENSE is MIT and explicitly attributes the original Sol Advisor selective-routing concept to Daniel McAteer under MIT; do not describe every downstream implementation as wholly original. Full sources: [repository](https://github.com/toshon-jennings/agent-advisor), [workflow history](https://github.com/toshon-jennings/agent-advisor/actions), [LICENSE](https://github.com/toshon-jennings/agent-advisor/blob/main/LICENSE), [ORIGIN](https://github.com/toshon-jennings/agent-advisor/blob/main/ORIGIN.md).
+
+## What it actually implements
+
+This is a canonical hub for a selective agent-routing workflow, not a session/project exporter. The hub retains architecture, decomposition, verification and acceptance, and routes implementation among solo, delegate, audit, and full; platform-specific prompt/spec trees are exported one-way to separate Codex, Claude Code and Antigravity repositories. The platform concept is the workflow/harness. Its specs directory holds agent-role contracts, not source Project/Section records. There is no ChatGPT/Codex Project, Section Group, conversation event graph, session transcript, attachment/media archive, user-edit/interrupt lineage, or target-native resume writer.
+
+The valuable part is scripts/sync-spokes.sh (780 lines): manifests declare a small allowlisted set of configuration/plugin paths; the source is the hub and the destination is each spoke. The script validates expected origin and repository root, relative paths/type/symlink containment, declared validators, clean destinations, and ignored files that could be deleted; it preflights all selected spokes and revalidates paths immediately before the first mutation. Its --push mode copies with content checks, runs each native validator, recomputes exact drift, and attempts a scoped rollback if a spoke fails. This is high-quality ResourcePlane/config-export safety prior art for Nexus, not cross-harness session migration.
+
+Important transaction caveats are explicitly documented in source: the second path pass narrows but does not close the TOCTOU window. Preflight is all-selected-spokes-before-writing, but once application begins a failure can leave earlier spokes kept while later spokes roll back/refuse; the output reports the mixed state. It is therefore not an atomic multi-destination commit. Do not overstate rollback guarantees or port the code without re-auditing.
+
+## Verification and observed limits
+
+The hub has no tests/ tree. .github/workflows/validate.yml runs each platform's own structural/native validators, shell syntax checks, generated-file consistency and managed-path existence; the latest visible hosted run #16 passed on 2026-09-15. In the disposable checkout, bash -n scripts/sync-spokes.sh scripts/gen-spoke-checks.sh exited 0 with empty stdout/stderr. sync-spokes.sh --help exited 0 and printed its one-way hub-to-spoke contract and exit codes. I did not run --check or --push, because the manifests refer to real home-directory spoke checkouts; no live spoke is necessary to classify a candidate with no migration reader/writer, and no repository was mutated.
+
+CodeGraph initialization/status succeeded for the disposable source checkout (5 indexed files, zero code nodes/edges because the hub's tracked declarative source is YAML). The tracked checkout remained clean at pinned HEAD. No real user session, credential, app profile or source data was accessed.
+
+## Nexus Memory disposition
+
+Reject as a session migrator. Keep only selected design patterns for routing policy/profile mapping and ResourcePlane export safety: explicit destination identity, path containment, preflight-before-write, target-native validation, post-write equality, clear partial-success reporting, and compensation/rollback evidence. Nexus must still build native source readers and destination adapters for ChatGPT/Codex Projects, Section Groups, sessions/events and separately versioned Claude Desktop 3P Chat/Cowork/Code plus Claude Code CLI profiles. A plugin/config mirror is not a portable SessionGraph.
+
+Local checks were syntax/help only; no full local --check, push or behavioral suite claim. Sources are cited above. Scope remains research-first, and this candidate adds no evidence of chat/session fidelity.

@@ -1,0 +1,30 @@
+Nexus Memory candidate evidence — skills-compat-manager
+Review date: 2026-11-20
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/hnaymyh123-henry/skills-compat-manager
+- Local clean checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-hnaymyh123-henry-skills-compat-manager-20261120
+- HEAD and remote HEAD: 8be1357e06a350cf13eb670b4d7ff24e4fc54bae; last commit 2026-05-29, “perf(mcp_server): lazy-init runtime context to fix MCP startup timeout”. GitHub page snapshot: 84 stars, 0 forks, 45 commits; no GitHub releases were listed and local tag list was empty. These counts may change and are not quality metrics.
+- pyproject: MIT, `skills-compat` 0.1.0, alpha, Python >=3.11; dependencies include `fastmcp>=2.0` without upper bound or MCP SDK compatibility pin.
+- CodeGraph status: 21 files / 365 nodes / 842 edges, current.
+
+SCOPE FROM README AND IMPLEMENTATION
+- Discovers directories containing SKILL.md. `COMPAT.yaml` declares code dependencies, system tools, external services (including environment variable presence), and runtime/platform capabilities. Central state uses `<data_dir>/compat/<basename>.yaml` with legacy in-skill fallback. MCP tool names in source: list_skills, get_skill, scan_skills, get_skill_info, search_skills, refresh_runtime, suggest_fix, apply_fix.
+- `_detect_env_vars` returns Boolean presence only; values are not read. `scan_skill` computes an advisory compatibility Delta. README explicitly says it does not enforce package versions unless declared, validate API key validity/activity/quota, runtime-test claimed capabilities, or stop a non-compliant agent from ignoring the protocol.
+- No session/project/section graph reader or writer, native ChatGPT/Codex transcript adapter, attachments, branches/subtasks, tool replay/usage/token capture, or scheduler migration entrypoint found in this reviewed implementation. Value classification: resource compatibility layer, not migration core.
+
+REPRODUCED MCP DEPENDENCY FAILURE (NO SOURCE CHANGES)
+- Isolated environment: Python 3.12; resolved `fastmcp=4.2.3`, `mcp=2.3.0`. The repository imports `from mcp.server.fastmcp import FastMCP` (app/mcp_server.py:33) while pyproject leaves fastmcp unbounded.
+- Direct import command: `rtk proxy env HOME=/private/tmp/skills-compat-test-home-20261120 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-hnaymyh123-henry-skills-compat-manager-20261120 /private/tmp/skills-compat-review-venv-20261120/bin/python -c "import importlib.metadata as m; print('fastmcp='+m.version('fastmcp')); print('mcp='+m.version('mcp')); from app.mcp_server import mcp; print('server_import=ok')"`
+- Exit 1. Literal stdout: `fastmcp=4.2.3` then `mcp=2.3.0`. Literal stderr ends: `ModuleNotFoundError: No module named 'mcp.server.fastmcp'. This is mcp 2.x, where FastMCP was renamed to MCPServer (from mcp.server.mcpserver import MCPServer) and other APIs changed ... pin 'mcp<2' to keep running v1 code.`
+- Full tests: `rtk proxy env HOME=/private/tmp/skills-compat-test-home-20261120 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-hnaymyh123-henry-skills-compat-manager-20261120 /private/tmp/skills-compat-review-venv-20261120/bin/pytest -q tests`; exit 2 in collection of `tests/test_mcp_server.py` at the same import; 1 pytest-asyncio deprecation warning. Excluding that file: same command plus `--ignore=tests/test_mcp_server.py`; exit 0, 39 passed in 0.27 s, same deprecation warning.
+- Official primary reference: MCP Python SDK v2 migration guide states `FastMCP` is renamed to `MCPServer`; old `mcp.server.fastmcp` imports raise ModuleNotFoundError and new import is `mcp.server.mcpserver`: https://py.sdk.modelcontextprotocol.io/v2/migration/#fastmcp-renamed-to-mcpserver.
+
+SECURITY / IDENTITY PROBES
+- Source `_is_auto_executable` uses string `startswith` over a small allowlist plus regex deny patterns; `apply_fix` requires `confirm=True` but executes accepted input with `subprocess.run(command, shell=True, timeout=180)`. AST-only source probe extracted and called the exact helper without importing the broken MCP module or executing its accepted strings. Outputs: `pip install requests` => (True, 'ok'); `pip install requests && python -c 'print(1)'` => (True, 'ok'); `pip install requests; touch /tmp/compat-probe` => (True, 'ok'); `COMMANDS_EXECUTED=0`. Existing tests reject `curl | sh` and `&& rm`, not arbitrary shell chaining. Do not treat the gate as a sandbox; fix with shell-free argv and explicit operation types.
+- Synthetic temp-only identity probe: two skill roots both contained `shared/SKILL.md`; `find_skills` returned 1 and only the first path, because `seen_names` and COMPAT location are keyed by basename. This silently collapses independent same-name skills. Use source-qualified identity.
+- No API key, provider request, real skill payload, destructive command, or live desktop state was used.
+
+FINAL DISPOSITION
+- Keep only as a design reference for declared preflight compatibility; do not select as migration dependency or trust its automatic repair. A future Nexus compatibility model must preserve both source and target semantics, use versioned capability evidence and source-qualified identities, explicitly report unknown/unsupported results, and verify round trips.
+- Manual inventory: 303 repository records; reviewed candidates 32 / unreviewed 271 after updating this record.

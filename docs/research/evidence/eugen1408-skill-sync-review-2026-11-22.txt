@@ -1,0 +1,35 @@
+# eugen1408/skill-sync — multi-agent Skill GUI review
+
+Date: 2026-11-22. Candidate #121 of the 303-name primary corpus. User scope remains the full ChatGPT Projects/Section Groups/Destruction Era Session hierarchy and transferable Skills/MCP/plugins/memory/context/schedules to local/self-hosted Claude Code and distinct Claude Desktop Chat, Cowork and Code modes. No user application, account, session, API key, real install path or global agent Skill directory was accessed; tests and one failure-path probe used temporary directories only.
+
+## Pinned source, maturity and distribution
+- Repository: https://github.com/eugen1408/skill-sync
+- Dispatcher clone command: `rtk git clone https://github.com/eugen1408/skill-sync.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-eugen1408-skill-sync-20261122`; exit 0.
+- Pinned `master` HEAD `fc78bf37f5531daef373031c732fe57f6a2f5abb`, commit date 2026-08-06, `chore: release v0.9.0`. GitHub shows 93 commits, 1 star, 0 forks. Latest release v0.9.0 (Aug 6) includes macOS arm64/x64 DMG/ZIP, Windows x64 installer/portable and Linux AppImage; README warns the macOS build is unsigned and Gatekeeper reports it damaged unless the user clears quarantine. Changelog still stops at v0.8.0 while package/release is v0.9.0. MIT. CodeGraph: 171 files, 1,965 nodes, 6,876 edges, up to date; `.codegraph/.gitignore` retained with only its self-preserving `!.gitignore` exception removed.
+
+## What it does and where it stops
+- Electron/Svelte desktop UI manages Skills from three source types: live skills.sh catalog, Git repositories, and local folders. It supports custom `installDir`, global/project scope and multi-select agent targets. Its file providers copy each Skill into a canonical `.agents/skills/<name>` store and create per-agent symlinks there (copy fallback on OSes where symlink creation fails); official source installation delegates to pinned `npx skills@1.5.14`.
+- The static `KNOWN_AGENTS` table declares 72 agent IDs, including Claude Code, Codex, Antigravity CLI/App, Cline, Roo, Gemini CLI, Cursor, Copilot, Kiro CLI, OpenCode, OpenClaw, Warp and Zed. The table contains `claude-code` only—no Claude Desktop Chat/Cowork/Code modes. These are per-target Skill path adapters, not semantic converters. Test coverage checks IDs/CLI flags are unique and installation works for a couple of paths; it does not E2E-test all 72 applications or every path/version.
+- No conversation/session import/export, Project or Section Group model, parent-child/task graph, transcript/media/tool-call transfer, token usage, memories, schedules, MCP-server or plugin/settings migration. It is a potentially useful Skill ResourcePlane UI/distribution reference only, not a Nexus Memory session migrator or complete auto-support solution.
+- Official security-audit data comes from skills.sh. The UI prompts when audit metadata reports medium/high risk; custom Git/local entries may have no skills.sh audit data, so this is not a complete trust policy for arbitrary sources.
+
+## Test/build/audit evidence
+- `rtk proxy env HOME=/tmp/nm-skill-sync-test-home npm ci --ignore-scripts --no-audit --no-fund` → exit 0; 527 packages added. `--ignore-scripts` kept Electron binary postinstall out of this review; it is not a packaged-app runtime test.
+- `rtk proxy env HOME=/tmp/nm-skill-sync-test-home npm run typecheck` → exit 0; node typecheck and Svelte check passed, 0 errors and 0 warnings.
+- `rtk proxy env HOME=/tmp/nm-skill-sync-test-home npm test` → exit 0; **41 test files, 274 tests passed**, 0 failed. Tests include source manager, installer, target path logic, canonical links and update engine, all in isolated test directories; there is no Session migration test.
+- `rtk proxy env HOME=/tmp/nm-skill-sync-test-home npm run lint` → exit 0; Prettier reports all matched files use project style.
+- `rtk proxy env HOME=/tmp/nm-skill-sync-test-home npm run build` → exit 0; Electron main, preload, and renderer bundles built. It warned that three devicon EOT/SVG font URL references did not resolve at build time and will be resolved at runtime. No macOS packaged app was launched; README says the release is unsigned.
+- `rtk proxy env HOME=/tmp/nm-skill-sync-test-home npm audit --omit=dev` → exit 1; **2 high-severity production dependency packages**. `undici@7.28.0` has advisories including response desync, cache/cross-user disclosure, TLS option handling and DoS; `js-yaml@4.3.0` has high CPU/merge-key advisories. NPM says a fix is available; the pinned release/lock has not been updated in this review. This is relevant because the application fetches remote skills/catalog data and updater metadata.
+
+## Reproduced failure behavior (temporary filesystem only)
+`installFromFolder()` calls `copyInto(source, canonical)`. `copyInto` first recursively removes the existing canonical destination and only then copies the replacement; it does not stage/rollback the old version. I added a transient Vitest regression probe (removed immediately afterward) with an existing canonical `SKILL.md` and a nonexistent source path. `installFromFolder()` rejected, but the old skill was gone. Exact probe observation: `{"old_skill_exists_after_failed_reinstall":false,"old_skill_contents_after_failed_reinstall":null}`; Vitest exit 0 because the test expected to observe the destructive behavior. All files were under a fresh temporary directory and the pinned Git checkout returned to clean status. This is a user-data preservation defect for Skill state, not a Session migration result.
+
+## Disposition
+Keep as a useful desktop UX/resource-plane reference for local/Git/skills.sh Skill discovery, a canonical `.agents/skills` library, per-agent paths and previewed symlink reconciliation. Do not treat it as “every Harness” verified: the support table is static and only lightly tested, lacks the three Claude Desktop modes, and has no Session/MCP/plugin migration. Before using its implementation for user-authored content, require transactional updates that preserve the old Skill on failed copy and resolve the two high-severity npm audit findings, then test each claimed target against actual host versions.
+
+## Primary sources
+- Repository, README, and current metadata: https://github.com/eugen1408/skill-sync ; https://github.com/eugen1408/skill-sync/blob/fc78bf37f5531daef373031c732fe57f6a2f5abb/README.md
+- v0.9.0 release/assets: https://github.com/eugen1408/skill-sync/releases/tag/v0.9.0
+- Pinned agent adapter table, install implementation, and file ops: https://github.com/eugen1408/skill-sync/blob/fc78bf37f5531daef373031c732fe57f6a2f5abb/src/shared/domain/agent.ts ; https://github.com/eugen1408/skill-sync/blob/fc78bf37f5531daef373031c732fe57f6a2f5abb/src/main/installer/fileInstall.ts ; https://github.com/eugen1408/skill-sync/blob/fc78bf37f5531daef373031c732fe57f6a2f5abb/src/main/installer/fsLink.ts
+- Test/CI workflow: https://github.com/eugen1408/skill-sync/blob/fc78bf37f5531daef373031c732fe57f6a2f5abb/.github/workflows/ci.yml
+- Relevant npm advisories: https://github.com/advisories/GHSA-8xcm-r25x-g524 ; https://github.com/advisories/GHSA-5p4m-2wfm-xmqj

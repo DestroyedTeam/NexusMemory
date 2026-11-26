@@ -1,0 +1,23 @@
+CLAUDE DESKTOP 3P — CURRENT STORAGE / IMPORT BASELINE (2026-11-25)
+
+User scope carried forward: Chat, Cowork, Code are separate acceptance lanes; local/self-hosted Claude Code CLI is a fourth runtime. Do not collapse third-party gateway inference, local device session storage, and Anthropic-hosted cloud sessions into one concept.
+
+Official docs now establish:
+- Third-party Desktop mode persists conversation/settings/credential data on-device in a separate app-data root: macOS `~/Library/Application Support/Claude-3p/`; Windows `%LOCALAPPDATA%\Claude-3p\` (with legacy/package-specific locations); Linux `~/.config/Claude-3p/`. Under MDM/local/bootstrap-managed 3P configuration, users have no Anthropic account and Anthropic holds no per-user state. The app uses a random `ant-did` device ID; session paths are scoped by device identity and organization, not the consumer Anthropic `accountUuid`.
+- Chat and Cowork local conversations share `local-agent-mode-sessions` state-file + working-directory form. The working directory includes transcript/audit log, uploads and outputs; `audit.jsonl` captures prompts, responses, tool inputs/results, returned thinking, permissions, model and token usage. Attachments may be copies or hardlinks. Cowork memory and project memory are separate Markdown trees; Projects, scheduled tasks, plugins/Skills and output artifacts are not interchangeable with a transcript.
+- Code has separate Desktop session records but the transcript history is in Claude Code's `~/.claude/projects/`; `~/.claude` and `~/.claude.json` settings/Skills/plugins/hooks/MCP data may be shared with the terminal CLI. Never assume Code's local resume ID restores the Desktop session-list metadata.
+- Current Unified Claude may combine Chat and Cowork in the home UI; devices able to run Cowork start Cowork, while devices without its VM start Chat. Code remains separate. Preserve semantic surfaces in the schema even when the UI selector disappears.
+- Native first-party import/export is a useful compatibility baseline: import wizard and Desktop export can bring claude.ai chat/project exports and local Cowork/Code sessions into the third-party local store. `claudeAiImport` is managed-config enabled and off by default; native cross-device transfer requires same OS and organization. The export is unencrypted. It carries many sessions, attached/output files, memory, project files (only in certain folders and with acceptance/relink steps), scheduled tasks, saved Skills/uploads and some preferences. It does not move saved API keys, sign-ins, connector credentials, tool permissions, Code attachment files, Code environment values, terminal Claude Code settings/plugins, or SSH/WSL live sessions. Imported sessions may need trust/resume approval and not all fields preserve.
+- The Compliance API is not a generic answer for this API-key gateway route: it is an Enterprise compliance feature and its docs exclude Claude Code sessions authenticated with a Claude Console API key or third-party cloud provider. It also reports no token usage in transcripts. Do not build a completeness claim on it.
+
+Official references checked:
+1. https://claude.com/docs/third-party/claude-desktop/data-storage
+2. https://claude.com/docs/third-party/claude-desktop/import
+3. https://claude.com/docs/third-party/claude-desktop/unified-claude
+4. https://claude.com/docs/third-party/claude-desktop/chat
+5. https://claude.com/docs/third-party/claude-desktop/code
+6. https://claude.com/docs/third-party/claude-desktop/gateway
+7. https://code.claude.com/docs/en/llm-gateway-connect
+8. https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+
+Nexus design consequence: first detect standard-vs-3P deployment and client version; then select native import/export if available and authorized, or a versioned local adapter. Store credential references only, never secret values. Keep Chat/Cowork/Code/session relationships/projects/groups/schedules/artifacts/MCP/plugin/Skill configs and Code worktrees as separate records with field-by-field fidelity statuses. Validate attachment hashes, identifiers, parent/child/subagent edges, resume workflow and rollback in a disposable target.

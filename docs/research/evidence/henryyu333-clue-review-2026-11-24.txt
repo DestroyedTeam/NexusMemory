@@ -1,0 +1,36 @@
+# Candidate #253 — henryyu333/CLUE review (2026-11-24)
+
+## Identity and provenance
+- Repository: https://github.com/henryyu333/CLUE
+- Frozen source: `main` / remote `HEAD` = `3b7a74533e4b1f455c38ced5dbe0cbf30f6eae80`; commit date 2026-11-23; release/tag declared by package and README: v0.7.0.
+- Captured primary-inventory metadata: 1 star, 0 forks, TypeScript, SPDX MIT. Root `LICENSE` contains the MIT grant.
+- Atomic shallow-clone command started from the controller and exited 0. `git ls-remote origin HEAD refs/heads/main` returned the same commit for both refs; `git status -sb` was `## main...origin/main` with no changed tracked files.
+- CodeGraph was available and already up to date: 25 TypeScript files, 437 nodes, 1,651 edges. Its self-preserving `!.gitignore` exception was removed per workspace instructions; the checkout remained clean. No product source, installer, real harness profile, credential, or user session was modified.
+
+## What it actually does
+CLUE is a local-first, Git-audited memory and text-recall CLI for seven **coding-agent local stores**: Antigravity, Claude Code, Codex, OMP, pi, OpenCode, and Hermes. The source inventory is explicit in `src/recall/parsers.ts:10,185-246,257-631`; it does **not** include a ChatGPT or ChatGPT Codex Projects/Section/Session reader.
+
+Its durable memory plane uses human-readable profile/project/intent/notes/decisions/pitfalls files and an approval-first draft/commit/receipt/undo lifecycle. Its `recall.db` is an incremental SQLite full-text cache, not the source of truth. `clue export` calls `buildWebExportBundle` (`src/core/export.ts:18-71`): it packages selected profile, intent, notes, decisions and pitfalls as a secret-scrubbed plain-text context snapshot for web chats. It is not a transcript importer/exporter or session writer.
+
+The session schema (`src/recall/parsers.ts:12-35`) retains local source/session identifiers, harness, inferred project/CWD, title, first/last user-message excerpts, timestamps, a `isNoise` bit, and ordered text messages. Parsing extracts only user/assistant text; multimodal blocks and non-text/tool events are discarded, message bodies are capped at 8,000 characters, and known secret patterns are redacted. No Project or Section Group entity, parent/child/fork edge, event/tool/approval graph, attachment bytes, token/cost record, schedule, or target mapping is represented. OpenCode and Hermes parent-session IDs and Claude sidechain status collapse to a noise boolean rather than a navigable relationship. This is useful recall, not a faithful session archive.
+
+`src/adapters/install.ts:6-7,145-224` installs a Skill/hook for the seven listed coding Harnesses. Its `claude` target edits `~/.claude/settings.json` for Claude Code hooks and may set `autoMemoryEnabled=false`; it does not configure the Claude Desktop third-party-provider deployment or create Chat, Cowork, or Code Desktop sessions. No ChatGPT source adapter, Project/Section writer, or generic import/export command exists. There is no fidelity/round-trip accuracy benchmark.
+
+## Validation and limits
+- `tests/recall.test.ts:26-183` contains synthetic coverage for secret redaction, retained rows on rebuild, Antigravity/Codex, and OpenCode SQLite; it does not exercise all seven readers. These tests were inspected, not executed.
+- `rtk bun test && rtk bun x tsc --noEmit` exited **127** with stderr `[rtk: No such file or directory (os error 2)]`; because of `&&`, the typecheck stage did not start. `rtk which bun` exited **1** (no Bun on PATH); the inspected conventional Bun paths were absent. A separate `rtk bun run typecheck` also exited **127** with the same missing-executable error. Therefore tests/typecheck are **not run**, not reported as failing or passing. No test data, app, or actual Harness was touched.
+- No deployment, install, web export, target resume, privacy, or cross-platform test was run. Source parsing and user-facing claims are bounded by the pinned source and local inspection only.
+
+## Destination compatibility learned from current first-party docs
+Anthropic's current *Move from Claude Enterprise to Claude Desktop on a cloud provider* guide explicitly supports Claude Desktop on a third-party provider, including an organization's own LLM gateway, and covers Chat, Cowork, and Code. That confirms the three distinct destination surfaces are real; it does **not** turn this Enterprise-admin migration wizard into a generic ChatGPT importer or a personal API-key migration contract.
+
+The native migration wizard copies each user's own Chats and Projects, plus Cowork/Code sessions already on that computer. It omits uploaded/project-knowledge files, cloud Cowork sessions, other users' content, and requires manual handling for memory, personal instructions, Skills and connectors; artifact/file transfer is partial. A separate Claude Desktop session ZIP covers Desktop sessions, projects, memory, scheduled tasks, skills and uploaded plugins but expressly excludes Claude Code CLI sessions. Consumer data export also says its archive cannot be imported to another personal Claude account. These are source-specific paths and gaps, not guarantees for arbitrary harness data.
+
+Primary first-party references (checked 2026-11-24):
+- https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider
+- https://support.claude.com/en/articles/9450526-export-your-claude-data
+- https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+- https://support.claude.com/en/articles/18466061-move-claude-code-cli-users
+
+## Disposition
+**Adjacent memory and local text-recall prior art only; not a direct migration engine or a session-fidelity dependency.** Useful high-level pattern: separate human-auditable durable memory from a rebuildable transcript-search cache and make memory edits confirmable/reversible. Do not infer that transcript recall restores Projects, Section Groups, multimodal/context/tool events or provider-side state. Nexus still needs its own versioned source adapters, canonical SessionGraph, per-mode target writers, provenance/loss manifests, and round-trip tests.

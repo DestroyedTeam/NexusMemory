@@ -1,0 +1,29 @@
+CANDIDATE #294 — pixle-codes/scrollback — reviewed 2026-11-25
+
+IDENTITY / LICENSE
+- Repository: https://github.com/pixle-codes/scrollback
+- Disposable checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-pixle-codes-scrollback-20261125-followup294
+- HEAD `c99fd7033ad69f32a5c906d82adc560a71486656` (2026-08-25), tag `v1.1.0`; MIT license confirmed in local LICENSE and official GitHub metadata. The repository is small (two commits in the public page) and is not a migration product.
+- CodeGraph: 8 files, 138 nodes, 293 edges; index current. `.codegraph/.gitignore` remains without `!.gitignore`; candidate Git status was empty.
+
+WHAT IT ACTUALLY DOES
+`scrollback` is a local, offline, stdlib-Python 3.11+ index/search CLI for exactly three *local CLI* history stores: OpenCode, Claude Code CLI, and Codex CLI. It reads OpenCode SQLite via `mode=ro`, Claude/Codex JSONL, flattens selected content into a local SQLite FTS5 database, and offers ranked search, snippets and session listing. Its CLI has `index`, `search`, `sessions`; it has no importer, destination writer, session restore, portable archive, migration mapping, or Harness configuration path.
+
+- The stored session record contains id/source/title/directory/start/stamp and a flat list of text docs. It does not preserve Projects/Sections, parent/child/subtask/branch links (e.g. OpenCode `parent_id`, Claude `parentId`), attachments/images/audio, tool execution state, token/cost usage, or a replayable transcript. OpenCode reasoning and tool input; Claude text and `tool_use` inputs; and Codex text/function/local-shell call inputs are indexed as text, with per-document clipping at 8,000 characters and some parser caps at 2,000. It does not import tool outputs as full structured events.
+- “Codex” is Codex CLI rollout JSONL, not the ChatGPT app or Codex app Projects. “Claude” is `~/.claude/projects/**/*.jsonl` from Claude Code CLI, not Claude Desktop third-party-gateway Chat/Cowork/Code. No third-party gateway/API-key data is handled. Skills, MCPs, plugins, schedules, memory and attachments are not transferred.
+- Sources are only read; indexing writes a second, consolidated FTS database. There is no encryption or redaction in the index path. The README calls it a private database, but the implementation does not enforce owner-only directory/file modes.
+
+REPRODUCIBLE INDEX PERMISSION / SENSITIVE CONTENT FINDING
+`scrollback/store.py:index_path()` makes the configured/default directory with `Path.mkdir(parents=True, exist_ok=True)` and `open_index()` calls `sqlite3.connect`; neither chmods the directory/database nor enables at-rest encryption. The source extractors explicitly index reasoning and arbitrary tool input (including shell command strings, tool input keys/values and written file text), which may contain secrets.
+
+A synthetic-only CLI probe used a temporary, world-searchable HOME (`0755`), `umask 022`, one fabricated Claude JSONL session containing `SYNTHETIC_PRIVATE_MARKER_7f2a`, and the real `python3 -m scrollback index --json` command. It did **not** inspect user stores. Exit 0; stdout literal `{"version": "1.1.0", "new": 1, "updated": 0, "pruned": 0, "docs": 2, "sessions": 1, "by_source": {"claude": 1}}\n`; stderr empty. Observed modes: HOME `0755`, index directory `0755`, `index.db` `0644`, source fixture `0644`; SQLite query confirmed the synthetic marker is stored in the index. Evidence: `docs/research/evidence/pixle-scrollback-private-index-permissions.json`.
+
+This proves the index permissions are inherited from umask and traversable parents, not forced private. On a shared machine or a home tree readable by other local accounts, the consolidated index can disclose conversation/reasoning/tool-input data. We did **not** inspect the real user HOME permissions or any existing index. Treat the privacy concern as a code/property finding with conditional real-world exposure, not a claim that this user's data was exposed. Do not use on sensitive/shared systems without restrictive permissions or an encryption/redaction design.
+
+TESTS
+- `rtk proxy env HOME=/tmp/nm-scrollback-test-home-294 python3 -m unittest discover -s tests -t .`: exit 0; 32 tests ran, `OK`; stdout empty; stderr contains the progress dots and two `ResourceWarning: unclosed file <_io.BufferedReader>` warnings from pipe tests. Full literal stderr: `docs/research/evidence/pixle-scrollback-unittest.stderr`. Tests create synthetic OpenCode DB and Claude/Codex JSONL in temp directories and run the real CLI; no live user store is read.
+
+DISPOSITION
+Retain as a useful **read-only local indexing/search prior-art reference** for parsing three CLI formats and literal/ranked FTS5 queries, not as a transfer engine. The schema and parser flatten source events and omit hierarchy; the unencrypted, potentially mode-0644 index is a material privacy gap for a product that ingests reasoning and command inputs. Candidate has no target writer or native-session acceptance test.
+
+Nexus Memory source remains **Destruction Era**. User-confirmed targets remain distinct: Claude Desktop third-party-gateway Chat, Cowork, Code, plus local/self-hosted Claude Code.

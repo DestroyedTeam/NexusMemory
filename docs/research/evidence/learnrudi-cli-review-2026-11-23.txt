@@ -1,0 +1,28 @@
+# Candidate #192 — `learnrudi/cli`: resource manager and native launch pointers, not a session importer
+
+Review: 2026-11-23. Pinned `main` and `refs/remotes/origin/main` at `797980b5a906e258c54d54c49ad3cfbb367e5279` (commit `2026-10-23T18:29:27-04:00`); checkout clean. MIT. Package README says `@learnrudi/cli@1.11.0-rc.1`, `pnpm@10.22.0`, Node `^22.0.0 || ^24.22.0`. GitHub Releases page showed no releases. npm registry publication was not independently determined because its fetch returned 403.
+
+## Disposition
+
+**Strong ResourcePlane / host integration and native-session-pointer reference; reject as a cross-Harness Projects/Sections/transcript importer.** It manages MCP stacks, local tools/runtimes, multi-harness Skills projections and native CLI launches. README/`AGENTS.md` say provider-native systems remain authoritative for transcripts. No ChatGPT/Codex source parser or Claude Desktop 3P Chat/Cowork/Code session adapter was found.
+
+## Positive patterns
+
+- Canonical `~/.rudi/skills` source projected to host-specific paths (Codex, Claude, Gemini, Antigravity), with digests/ownership receipts, dry-run, drift/unmanaged detection, scoped force, backups/rollback and restart-required reporting. Reuse the reconciliation/ownership model, not blind copy logic.
+- MCP/runtime setup and secrets (`~/.rudi/secrets.json`, restrictive permissions) are resource-plane capabilities.
+- Agent Host launches native provider CLIs in isolated workspaces and records bounded launch/workspace/artifact metadata. `src/agent-host/resume.js` requires a prior RUDI launch record, existing workspace and non-null native session ID before it asks the provider CLI to resume. This is not a general history importer.
+- Agent groups are parallel launch groups (2–10 launches), not parent-child conversation branches.
+
+## False friends and data gaps
+
+`packages/db/src/service/sessions-v2.ts` has a historical RUDI-owned `RudiSession` schema with provider/session ID, project/run-group, origin, title/snippet/status/model/system prompt, timestamps, turn/cost aggregates, cwd/branch/tags and native-storage reference. `packages/db/src/service/migrations.ts` converts only RUDI's own old `projects.json`/`turns.jsonl`; old turn conversion sets assistant response and thinking fields to null. Current CLI explicitly retires `sessions`, `projects`, `import`, and `db`; it does not import provider history and says it leaves `~/.rudi/rudi.db` untouched. Do not count historical database schema as current ChatGPT import capability. No Projects/Section/session-tree, arbitrary transcript, media, attachment, token, memory, schedule or Claude Desktop mode migration.
+
+## Isolated verification
+
+- System Node 26.7.0 was outside the declared engine range; system pnpm 11.25.0 warns that it ignores package overrides. Used Node 24.22.0 darwin-arm64 (SHA-256 checked against the official Node release checksum) and pnpm 10.22.0 in a disposable cache/home. Frozen install exited 0, installed 94 packages; only allowlisted `better-sqlite3` and `esbuild` build scripts ran.
+- Documented `pnpm test`: exit 0; 43 suites / 963 tests / 953 passed / 0 failed / 10 skipped. Optional `src/__tests__/e2e` directory is absent: unit tests only, no live provider E2E.
+- `pnpm build`: exit 0 including SQLite teardown acceptance probe; esbuild emitted CJS `import.meta` warnings. Removed ignored generated `dist/task-audit-darwin`; tracked checkout remained clean.
+- `npm pack --dry-run --ignore-scripts --json`: exit 0; 10 entries, 530,912 packed and 2,551,257 unpacked bytes.
+- No user home, real RUDI DB/secrets, real Claude/Codex session, provider account or live model call was touched.
+
+**Recommendation:** adopt only canonical resource inventory/projections, digest ownership/drift, dry-run/rollback and native launch-pointer concepts. Keep Nexus `SessionGraph`/messages/artifacts separate. Full findings at pinned source <https://github.com/learnrudi/cli/tree/797980b5a906e258c54d54c49ad3cfbb367e5279>; GitHub Releases <https://github.com/learnrudi/cli/releases>.

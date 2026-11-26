@@ -1,0 +1,52 @@
+# LKCY23/agent-session-migration — source review #145
+
+Review date: 2026-11-22 (Asia/Shanghai)
+Pinned checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-LKCY23-agent-session-migration-20261122`
+HEAD: `5d2c56b1662a4c5da1c95949ad17643a7d304b19` (`2026-11-21T09:27:05-08:00`, `ci: open pull request for upstream tool version updates`)
+Upstream: <https://github.com/LKCY23/agent-session-migration>
+
+## Verdict
+
+This is a small Skill + installer/version-check orchestrator for four existing local session tools, not a cross-Harness migration engine. The checked-out README/SKILL scope is Codex, Claude Code, Pi, DeepSeek Harness (DSH), and Antigravity. It has no ChatGPT web export reader, no ChatGPT Project/Section graph mapping, no Claude Desktop 3P Chat/Cowork writer, no cloud/API-key gateway configuration adapter, and no neutral session-graph implementation. It cannot satisfy the requested Nexus Memory route. Do not use it as the core or as a pinned Nexus dependency. Its source-preservation, preview-first, explicit loss reporting, and reopen/resume checklist are useful workflow ideas only.
+
+GitHub metadata in the candidate inventory: 0 stars, 0 forks, no detected license metadata; the checkout contains no `LICENSE`. No release entry was found on the repository Releases page. This does not grant reuse rights.
+
+## Repository and behavior reviewed
+
+The checkout is mostly `README.md`, `SKILL.md`, `tools.json`, short references, `scripts/tools.py`, `scripts/smoke_test.py`, and a weekly updater workflow. The matrix calls external programs (`session-migrate`, `harnext`, `dsh-chat-import`, `ccx`) sequentially and sometimes converts through Claude Code JSONL; it does not implement transforms itself. The smoke script has no ChatGPT or DSH test. Missing executables return `skip`, and `main()` fails only for `fail`, so an all-skipped run exits 0. Its default `ccx ls` check sets a temporary `CCX_HOME` and `CLAUDE_CONFIG_DIR`, but does not set `ANTIGRAVITY_HOME`; therefore the script cannot claim that all reads are isolated from a machine's default Antigravity store. The opt-in `--allow-ag-write` writes into the real Antigravity Desktop and attempts cleanup while discarding the deletion command's result. Neither smoke mode was run against the host.
+
+`scripts/tools.py install ccx --force` removes the configured `~/.local/share/agent-session-migration/ccx` tree recursively, then unlinks any existing `~/.local/bin/ccx` path without verifying that it belongs to this installer. No installer or migration was executed. Safe `--dry-run` executions returned 0 and printed only the pinned commands; the `--force` dry run printed the clone and symlink actions without performing them.
+
+`check-updates --json` was run read-only, without `--apply` and without GitHub tokens. It exited 0 with empty stderr but all four lookups returned `latest: null` and a local Python TLS certificate-verification error; it consequently reported `has_updates: false` even though no endpoint had been checked successfully. Independent current-source checks on 2026-11-22 observed: `session-migrate 0.13.0` (the candidate pins 0.12.0), `@buildingthefuture/harnext 0.9.0` (candidate pins 0.8.2), `dsh-chat-import 0.26.8` (candidate pins 0.26.2), and `ccx 0.1.7` (candidate pins 0.1.7). The version checker does expose per-tool errors in JSON/Markdown, but its exit status does not fail on fetch errors; workflow review remains manual and no update was applied.
+
+## Upstream capability cross-check / documentation drift
+
+The candidate's `references/dsh-chat-import.md`, for its pinned `dsh-chat-import 0.26.2`, says `import_chat` accepts only Codex, Claude Code, or Pi, and its concise reference omits a ChatGPT source. The upstream `v0.26.2` usage document already documents `format: "chatgpt"` from `conversations.json`; `branch: "all"` materializes each root-to-leaf conversation-DAG branch as a session and represents exported tool messages as tool-call/result events. It also documents preview, imported image attachments, timestamps/provider token usage, compaction checkpoints, and a generic local-file import flow. The latest `v0.26.8` release (2026-11-18) adds further formats. These are valuable adjacent primitives, but DSH is an intermediate host—not the requested Claude Desktop target—and the candidate's matrix/reference is materially incomplete. A separate implementation-level audit of `dsh-chat-import` is the next high-value action; no feature was inferred beyond its pinned public docs in this review.
+
+`session-migrate` has also expanded past the candidate's two-row quick matrix. The current upstream release is 0.13.0 and the project describes 18 harnesses / ordered source-target routes, but this is coding-agent session portability; the reviewed release material does not claim ChatGPT web Projects or Claude Desktop on 3P. `harnext` is likewise scoped to Claude Code, Pi/Oh My Pi, and Codex. `ccx` covers Claude Code, Codex, and Antigravity Desktop; candidate docs state the Antigravity inbound history is condensed into one initial message and outbound tool records become text. None is a universal Project/Section/session graph or Claude Desktop Chat/Cowork/Code writer.
+
+## Target-scope confirmation
+
+The user confirmed that the target includes all three Claude Desktop modes (Chat, Cowork, Code), specifically the local/self-hosted Claude Code path and the 3P-configurable Desktop client/session store. Current official Claude Desktop 3P docs confirm the full experience includes Chat, Cowork, and Code; Chat/Cowork conversation state is under `local-agent-mode-sessions/`, while Code has metadata under `claude-code-sessions/` and its resumable transcript remains under `~/.claude/projects/`. The official import workflow is for Claude-origin history and does not establish a generic ChatGPT Projects/Sections importer. A Code-only JSONL writer would therefore be a partial route, not completion of the target scope.
+
+## Commands and test boundary
+
+- `rtk git clone https://github.com/LKCY23/agent-session-migration.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-LKCY23-agent-session-migration-20261122` — exit 0; HEAD captured above.
+- `rtk codegraph init .` — succeeded earlier in this checkout; CodeGraph status was up-to-date. Targeted `rtk codegraph explore` exposed `scripts/tools.py` and `scripts/smoke_test.py` source; no broad grep was used before CodeGraph.
+- `rtk proxy python3 scripts/tools.py install ccx --force --dry-run` — exit 0; stdout printed the pinned `git clone ... --branch v0.1.7` and `ln -sf ... ~/.local/bin/ccx` actions; no installation was performed.
+- `rtk proxy python3 scripts/tools.py install all --dry-run` — exit 0; stdout listed four pinned tool commands; no install was performed.
+- `check-updates --json` (read-only; full command/output summarized above) — exit 0, stderr empty, all four lookups failed TLS verification, latest fields null, `has_updates:false`; no file was changed.
+- No unit suite exists. `scripts/smoke_test.py` was not executed because its ccx path can enumerate default host state and its opt-in path writes to the real Antigravity Desktop. No migration, package installation, project write, user transcript, API key, or inference request was used.
+
+## Primary sources
+
+- Candidate README/SKILL/source at pinned checkout: <https://github.com/LKCY23/agent-session-migration>
+- Upstream session-migrate releases: <https://github.com/xhluca/session-migrate/releases>
+- Upstream harnext: <https://github.com/AbhinavMir/harnext>
+- dsh-chat-import pinned usage: <https://github.com/Nwflower/dsh-chat-import/blob/v0.26.2/docs/USAGE.md>
+- dsh-chat-import current release: <https://github.com/Nwflower/dsh-chat-import/releases/tag/v0.26.8>
+- ccx release: <https://github.com/AaronWong1999/ccx/releases/tag/v0.1.7>
+- Claude Desktop 3P overview: <https://claude.com/docs/third-party/claude-desktop/overview>
+- Claude Desktop 3P storage: <https://claude.com/docs/third-party/claude-desktop/data-storage>
+- Claude Desktop 3P import: <https://claude.com/docs/third-party/claude-desktop/import>
+- Claude Code gateway setup for Desktop: <https://code.claude.com/docs/en/llm-gateway-connect>

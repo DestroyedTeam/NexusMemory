@@ -1,0 +1,26 @@
+# User-confirmed Claude destination scope (2026-11-22)
+
+The user confirmed that the destination includes all three Claude Desktop surfaces: **Chat, Cowork, and Code**. They specifically mean Claude Desktop used as a client/session manager with third-party gateway inference, plus local or self-hosted Claude Code. Do not conflate this with Anthropic-hosted Claude Code Cloud sessions or a Claude.ai-account-only move.
+
+## Official verification
+
+- Claude Desktop's configuration reference says `inferenceProvider` selects the inference backend and activates third-party mode; supported providers include `gateway`. The gateway has explicit `inferenceGatewayBaseUrl`, `inferenceGatewayApiKey`, and `inferenceGatewayAuthScheme` settings; the auth scheme defaults to Bearer and also supports `x-api-key`.
+- The same reference exposes the Code surface (`isClaudeCodeForDesktopEnabled`, default true), Cowork surface and Chat surface. These are Desktop 3P configuration concerns and not proof that an arbitrary external archive has a lossless importer.
+- Anthropic's migration guide for Claude Desktop on a third-party provider lists Chat, Cowork, projects, artifacts, memory, scheduled tasks, skills, plugins, connectors, file uploads, and Code as product features. It distinguishes earlier local Cowork/Code sessions from claude.ai history. Its Desktop session ZIP is unencrypted and explicitly excludes Claude Code CLI sessions; do not treat it as a safe interchange format or a ChatGPT importer.
+- Hence the intended API-key flow is a client-deployment target, not an inference that API keys authenticate Anthropic-hosted Code Cloud sessions. Preserve Desktop Code data and local/self-hosted Claude Code CLI data as separate source/target adapters.
+
+## Design consequence for Nexus Memory
+
+Represent deployment/provider/auth profile separately from UI mode, and model at least `desktop-3p/chat`, `desktop-3p/cowork`, `desktop-3p/code`, and `claude-code-local` as distinct adapter scopes. Keep mode-specific projects, task/session lineage, transcript/event records, local Code JSONL, attachments/artifacts, MCP/plugins/skills, memory, scheduled tasks, and opaque credential references in separate loss-accounted planes. Never archive the API key. A Code-only JSONL export is not acceptance evidence for Chat or Cowork.
+
+## Sources
+
+- Claude Desktop 3P configuration reference: https://claude.com/docs/third-party/claude-desktop/configuration
+- Move to Claude Desktop on a cloud provider: https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider
+
+
+## User reconfirmation (2026-11-24)
+
+In response to the scope check, the user explicitly reconfirmed that **all three Claude Desktop surfaces—Chat, Cowork, and Code—are included**. Continue to distinguish the Desktop client running in third-party inference mode from local/self-hosted Claude Code and from Anthropic-hosted Cloud sessions.
+
+Fresh official references reviewed on 2026-11-24: https://claude.com/docs/third-party/claude-desktop/overview ; https://claude.com/docs/third-party/claude-desktop/feature-matrix ; https://claude.com/docs/third-party/claude-desktop/import ; https://claude.com/docs/third-party/claude-desktop/data-storage ; https://claude.com/docs/third-party/claude-desktop/chat ; https://claude.com/docs/third-party/claude-desktop/code ; https://claude.com/docs/third-party/claude-desktop/scheduled-tasks .

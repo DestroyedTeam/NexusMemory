@@ -1,0 +1,50 @@
+NEXUS MEMORY CANDIDATE REVIEW — Spaztazim/lucid-context-engine
+Review date: 2026-11-21 (Asia/Shanghai)
+Disposition: screen out as a Harness/session migrator; retain only as a narrow OpenClaw context-retrieval pattern. No source files in the upstream checkout were modified.
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/Spaztazim/lucid-context-engine
+- Local checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-Spaztazim-lucid-context-engine-20261121
+- Default branch: master. Exact fetched HEAD: 2dbfa1e8faa612278307cd9d30f51b6b6d637861. The clone and origin fetch succeeded; HEAD and origin/master matched.
+- Commit date: 2026-03-29 15:41:58 -0500; latest commit message adds ClawHub compatibility metadata. GitHub API metadata at review: created 2026-03-29T05:44:57Z, updated 2026-04-11T12:23:20Z, pushed 2026-03-29T20:41:59Z, TypeScript, MIT, 3 stars, 0 forks, 0 open issues, not archived. Releases API returned []; Actions workflows API returned total_count=0, workflows=[].
+- Tracked files include index.ts, src/config.ts, src/engine.ts, src/search.ts, openclaw.plugin.json, package.json, README.md, SKILL.md and prebuilt dist. No test files/directory, test script, package lock, or CI workflow is tracked.
+
+WHAT IT ACTUALLY DOES
+- index.ts registers one OpenClaw plugin/context engine named lucid. It is not a generic harness manager or an independent desktop application.
+- src/engine.ts:38-45 implements ingest() as a constant {ingested:false}; it stores no incoming session messages. assemble() leaves the host messages array unchanged, skips trivial prompts, runs retrieval, and places rendered snippets in systemPromptAddition. compact() delegates to OpenClaw runtime.
+- src/search.ts:31-82 spawns the configured local Node qmdShimPath with arguments search, prompt, -n 2*topK, --json, parses JSON output, and returns an empty list on a nonzero child exit or malformed JSON. src/search.ts:109-129 scores QMD results by file-path recency/type/collection multipliers, thresholds them, then limits result count. src/search.ts:131-153 formats snippets with a displayed path and salience.
+- A real session graph is absent: no ChatGPT/Codex Project or Section Group, Session/message/turn/fork/subtask identifiers, import/export, target-native restore, sidecar archive, attachment/image/link/tool-result preservation, token-usage ledger, schedules, MCP/plugin/resource conversion, or provider credential transfer.
+- No Claude Code reader/writer and no Claude Desktop Chat, Cowork, Code, or third-party-gateway session adapter exists. Its only named host is OpenClaw; no Cloud/API-Key session creation or restore behavior is implemented.
+- Therefore it cannot transfer the user's Destruction Era content or reproduce its Project/Section/session hierarchy. Its value is limited to an optional retrieval/context-injection plane, which must remain distinct from the canonical conversation archive.
+
+IMPLEMENTATION / DOCUMENTATION GAPS
+- README describes budget-aware injection respecting remaining context-window tokens. The reviewed source calculates estimatedTokens only from the existing messages (roughly chars/4) and caps retrieval by result count topK; it does not compare retrieved snippets against a remaining token budget.
+- README describes hybrid BM25 + semantic retrieval. The repository itself delegates to an external qmd-shim.js and its source comment calls the invoked QMD search command BM25 with no LLM expansion. Hybrid/semantic behavior is not established by this implementation and depends on the external shim/QMD runtime.
+- README advertises graceful/silent passthrough. A timeout is caught by assemble() and emits console.warn before returning the base messages; a nonzero child exit resolves as an empty result. This is not a session loss issue, but the wording is broader than the code.
+- The retrieved snippet is passed into a system-prompt addition; the code has no explicit trust label, source approval, redaction, or prompt-injection boundary. This is a design/security concern inferred from source, not an exploited vulnerability.
+- qmdShimPath is executable Node code and spawn inherits process.env. There is no bundled shim, signature/provenance lock, or output-size cap. The code passes argv without a shell, but prompt text is included as a process argument.
+- README byte decoding as strict UTF-8 failed at byte offset 659 on byte 0x97. Reading a replacement-decoded view succeeded; no candidate file was rewritten.
+- package.json sets peer dependency openclaw to * and has no lockfile. Its metadata advertises minimum plugin API/gateway 2026.3.7 and build SDK 2026.3.24, but no current OpenClaw version matrix or compatibility test exists.
+
+TEST / QUALITY EVIDENCE
+- CodeGraph init/status on the disposable clone: 4 TypeScript files, 42 nodes, 79 edges; index up-to-date. Git working tree stayed clean.
+- Tracked dist/src/search.js was exercised with a temporary synthetic qmd-shim.js (no user data/network/model); exit 0. Literal stdout:
+  {"resultCount":1,"results":[{"file":"qmd://memory/2026-11-20/decision.md","title":"Fixture","snippet":"synthetic context","qmdScore":0.8,"salienceScore":2.7}],"context":"## Recalled Context (auto-retrieved from workspace knowledge base)\n\n### [2026-11-20/decision.md] (salience: 2.70)\n*Fixture*\nsynthetic context\n\n---\n_Context retrieved automatically. May or may not be directly relevant._"}
+- rtk npm run typecheck exited 127 with stdout: “> tsc --project tsconfig.json --noEmit” / “sh: tsc: command not found”. rtk npm run build exited 127 with stdout: “> tsc --project tsconfig.json” / “sh: tsc: command not found”. Dependencies were not installed; these are environment/prerequisite failures, not a proven compiler defect. We did not install the large, unpinned OpenClaw peer into the checkout.
+- GitHub releases and workflows endpoints returned empty arrays. No upstream test or release claims are made.
+- No migration accuracy metric can be calculated because no migration implementation or representative source→target fixtures exist.
+
+OFFICIAL HOST CONTEXT
+- Current OpenClaw docs describe ContextEngine plugins as owning session ingest, assembly, and compaction; a context engine can also be a retrieval extension, and a non-owning engine should delegate compact(). LUCID follows the assembly/compaction shape, but its ingest explicitly records nothing. Official docs: https://docs.openclaw.ai/plugins/architecture-internals#context-engines and source page https://github.com/openclaw/openclaw/blob/main/docs/plugins/architecture-internals/context-engines.md
+- Pinned repository sources: https://github.com/Spaztazim/lucid-context-engine/blob/2dbfa1e8faa612278307cd9d30f51b6b6d637861/src/engine.ts ; https://github.com/Spaztazim/lucid-context-engine/blob/2dbfa1e8faa612278307cd9d30f51b6b6d637861/src/search.ts ; https://github.com/Spaztazim/lucid-context-engine/blob/2dbfa1e8faa612278307cd9d30f51b6b6d637861/package.json ; live metadata: https://api.github.com/repos/Spaztazim/lucid-context-engine ; releases: https://api.github.com/repos/Spaztazim/lucid-context-engine/releases ; workflows: https://api.github.com/repos/Spaztazim/lucid-context-engine/actions/workflows
+
+TOOLING CORRECTIONS (preserve error origins)
+- Atomic dispatcher initially searched only the temporary candidate snapshot for CONTROLLER_COMMAND.json and reported it missing (exit 1). A corrected dispatcher searched the known active workspace/artifact roots, loaded the controller from /Users/vincentadamnemessis/NexusMemory/artifacts/verified-workspace-routing-2026-11-20/CONTROLLER_COMMAND.json, read ACTIVE_OBJECT/LAST_CONFIRMED_RESULT/NEXT_EXECUTABLE_ACTION/INPUT_PATHS/ACCEPTANCE_EVENT, and invoked its command array with the current candidate URL/path. An intermediate malformed substitution produced git clone argv ending in .git and an empty destination, which Git rejected with exit 128 (“repository '.git' does not exist”). The corrected command used https://github.com/Spaztazim/lucid-context-engine.git and the recorded checkout path; clone exit 0, then fetch exit 0 and HEAD was captured.
+- rtk read README.md failed because the file is not strict UTF-8 (exit 1). Corrected using Python decode(errors=replace); no source change.
+- npm view openclaw@2026.3.24 succeeded and reported unpackedSize 187914932. The exact lookup for typescript@5.9.0 returned npm E404; corrected lookup typescript@5.9.3 returned 5.9.3. This does not establish that the project's semver range is unsatisfiable.
+- One project-doc inspection used the wrong presumed path docs/research/RESEARCH.md and returned FileNotFoundError (exit 1). Corrected to docs/RESEARCH.md; the research and shortlist files were then read successfully.
+- An initial registry-inspection helper assumed repositories was a mapping; the actual schema is an array. Corrected to locate by full_name; no registry data was written by the failed assumption.
+
+CORPUS STATE
+- Original 303-result GitHub metadata corpus: 85 reviewed, 218 pending after this review; next unreviewed candidate is stefafafan/skm. This is incremental candidate triage, not a claim of exhaustive market or Harness coverage.
+

@@ -1,0 +1,40 @@
+# Candidate #203 — MlsMoon/moon-game-dev-tool-manager (2026-11-23)
+
+## Identity and pin
+- Repository: https://github.com/MlsMoon/moon-game-dev-tool-manager
+- Branch: `develop`; pinned HEAD / `origin/develop`: `f204cb9271954895200a92c282f71ffdb963997b` (2026-09-20); checkout was clean before review.
+- License: MIT. Version file is `0.2.5`; latest published Release observed is v0.2.5 at `921ad50` (2026-09-18). Current develop commit is newer than the release.
+- Source checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-mlsmoon-moon-game-dev-tool-manager-20261123-followup203`.
+- Official repository describes a Windows desktop app to install MlsMoon-managed Agent Skills, Unity Plugins and Packages; the public catalog currently has three Skills and three Plugins, with Packages only via local override. It is a ResourcePlane/catalog manager, not a user-conversation or session migrator.
+
+## Relevance to Nexus Memory
+This candidate has no ChatGPT/Codex Project, Section Group, SessionGraph, turn/task/fork/parent-child hierarchy, transcript, attachment/media, token/usage, cross-session memory, schedule, MCP/server configuration or Claude Desktop third-party-gateway Chat/Cowork/Code import/export model. The folder `Skills`/`skills` and installation workspace are not equivalent to chat Sections or conversation Projects. It provides only narrow resource delivery across `.agents`, `.claude`, `.grok`, legacy `.codex`, and game-project-specific `Assets/Plugins` / `Packages` paths. It has no Claude Desktop Chat, Cowork or Code adapter and no API-key gateway session support. **Disposition:** exclude from the core SessionGraph/migration shortlist; retain only as a low-priority Skill/Unity package catalog reference, subject to the safety findings below.
+
+## Source-level findings
+- `SkillInstaller.InstallAsync` obtains a repo cache, calls `ResolveSource`, then routes ordinary Skills to `SkillCopyInstall.InstallAsync`.
+- `CatalogStore.Ingest` fills missing ID/InstallName but does not validate or constrain either path-like value. `MlsmoonSkillConfig.ResolveInstallDirectory` falls back to `WorkspaceScanner.SkillInstallPath`, which simply combines `<workspace>/<root>/skills/<installName>` without checking containment. This is reachable from the catalog `id` in `SkillCopyInstall.InstallAsync`.
+- `SkillCopy.Replace` rejects a destination that is already a Git repo, but otherwise recursively deletes an existing destination directory and copies into it without requiring a MlsMoon ownership marker. This conflicts with README's assurance that unlisted local files are not modified/deleted and with its later statement that only marker-bearing directories are deleted.
+- `SkillInstaller.ResolveSource` applies `Path.GetFullPath(cache + sourcePath)` but does not require the resolved directory to remain under the cloned cache. A catalog-controlled `sourcePath` can therefore select a sibling/ancestor path if present.
+- Plugin/Package destinations are better constrained: `ProjectCopy.ResolveDestination` rejects rooted paths and `.`/`..` segments, canonicalizes the full destination, and checks it remains below the workspace. Preserve this as a positive narrow guard; it does not cover ordinary Skills.
+- Marked uninstall checks `.mlsmoon-skill.json` / plugin/package markers, which is safer than the install replacement behavior. The test suite does not cover an unmarked ordinary Skill destination collision or Skill install-name containment.
+
+## Disposable probes (synthetic data only)
+The upstream Core project was copied to `/tmp/nexus-nm-followup203/test-compat`; only eight C# 12 overload-ambiguous expressions `Split(['\r', '\n'], ...)` / `Split(['\t', ' '], ...)` were rewritten in that disposable test copy to explicit equivalent `new[] { ... }` char arrays, so the installed .NET SDK 8.0.129 could compile it. No upstream checkout or user data was modified.
+
+Executed against the candidate Core methods `MlsmoonSkillConfig.ResolveInstallDirectory` and `SkillCopy.Replace`, with both workspace and payload entirely in a unique temporary root:
+```json
+{"hadOwnershipMarkerBeforeCollision":false,"preexistingUnownedFileDeleted":true,"escapedPath":"/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-mlsmoon-probe-8225528d9f674572a76f1d10b4e38314/escaped-skill","outsideWorkspace":true,"escapedHadOwnershipMarkerBeforeCollision":false,"escapedOutsideSentinelDeleted":true,"escapedPayloadExists":true}
+```
+Probe exit: `0`. The first collision placed a synthetic unmarked `user-owned.txt` at the ordinary Skill destination and it was deleted. The second used Skill ID `../../../escaped-skill`, resolved outside the disposable workspace but inside the temporary root, placed an unmarked sentinel there and observed `SkillCopy.Replace` delete it and copy the synthetic `SKILL.md` there. This demonstrates a path-containment/ownership failure in the ordinary Skill code path; it was isolated and did not touch user files.
+
+A separate `ResolvePluginDestination_RejectsEscape` test uses a Windows backslash path and passes on Windows CI; on macOS the same path is not an OS separator and that test fails to reject the literal backslash form. This host-dependent assertion is not evidence that the Windows-only product's Windows guard fails, but indicates the Core test is not cross-platform portable.
+
+## Build/tests and upstream CI
+- Original checkout: `rtk dotnet --version` → `8.0.129`; `rtk dotnet test tests/MlsmoonSkillManager.Tests/MlsmoonSkillManager.Tests.csproj --configuration Release` exited `1` before tests because C# 12 could not disambiguate eight collection-expression `string.Split` overloads (`CS0121`) in `WorkspaceRepo.cs` (181, 344, 456), `WorkspaceGit.cs` (87), `GhCli.cs` (117, 282), `GitCompare.cs` (208), and `GitRemote.cs` (253).
+- Disposable compatibility copy, after only the equivalent explicit-char-array workaround: 21 passed / 3 failed / 0 skipped. Failures were `WorkspaceBookTests.DisplayName_UsesFolderName`, `WorkspaceBookTests.AddOrGet_DedupsAndMovesToFront`, and `CatalogAndInstallTests.ResolvePluginDestination_RejectsEscape`; all use Windows drive/backslash assumptions that do not hold under macOS path semantics. Do not represent this as an upstream Windows test failure.
+- Official Windows workflow uses `windows-latest` and `dotnet-version: 8.0.x`; the latest visible run #18 at the pinned commit `f204cb9` is Success (1m32s), packaged a 57.8 MB portable EXE, with one Node 20 deprecation warning. The local compile incompatibility and disposable macOS-only test mismatches remain an environment divergence, not a claimed upstream CI failure.
+
+## Sources
+- README and source at pinned commit: https://github.com/MlsMoon/moon-game-dev-tool-manager/tree/f204cb9271954895200a92c282f71ffdb963997b
+- Latest official workflow run #18: https://github.com/MlsMoon/moon-game-dev-tool-manager/actions/runs/35496340093
+- Releases: https://github.com/MlsMoon/moon-game-dev-tool-manager/releases

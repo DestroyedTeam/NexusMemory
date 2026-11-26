@@ -1,0 +1,71 @@
+# Candidate #202 — miles990/skillpkg
+
+Review date: 2026-11-23. Scope: pinned GitHub source audit, npm package provenance comparison, local build/tests/lint/typecheck, and isolated fake-directory behavior probes. No user Skill store, real MCP endpoint, provider API, ChatGPT export, Claude Desktop session, or actual user project was accessed.
+
+## Identity, maintenance and distribution
+
+- Repository: https://github.com/miles990/skillpkg
+- Current main: 8ec9655e8267e1fe9b37a4edc488c16f591233e7, 2026-01-15, “docs: Archive skillpkg - 功能已遷移至 Claude Code Plugin”.
+- Shallow checkout path: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-miles990-skillpkg-20261123-followup202. Current remote refs/heads/main matched the cloned HEAD; branch main; worktree clean after local CodeGraph setup and ignored dependency/build artifacts.
+- CodeGraph initialization/status: exit 0, 132 files, 1,319 nodes, 4,328 edges; status up to date. Removed only the local .codegraph/.gitignore line !.gitignore after init and retained the ignore file.
+- The README itself marks the project ARCHIVED and recommends the Claude Code Plugin Marketplace instead; GitHub shows 73 commits, 0 open issues, 0 PRs. No git tags, local .github workflow directory, or workflow runs were observed; the official Actions page shows the setup/landing screen rather than runs.
+- The three published npm packages are skillpkg-cli, skillpkg-core, and skillpkg-mcp-server, all latest 0.5.7; npm registry metadata records 2026-01-12 as the latest package publication date. The GitHub main README archive notice followed on Jan 15. Official npm registry integrity for each downloaded 0.5.7 tarball matched the registry dist.integrity:
+  - skillpkg-cli: SHA-256 84a0a3fe03545d531a68f6be788b9989f90ffeb91b7d9684dc56bd8978a2e438.
+  - skillpkg-core: SHA-256 169909cb840f7ed7cc018ad23a5390a639dc6e016ed631df55a6bca7115e4bab.
+  - skillpkg-mcp-server: SHA-256 290def3f7c49b7f84d7e0effdd058fd0f576b9d2913cfb696c2275c579808151.
+- Using the repo-pinned pnpm 8.15.0, a clean build produced entrypoint JS and declarations byte-identical to the 0.5.7 npm tarballs. The tarballs also contain stale/orphaned dist files not produced from current tracked source: CLI 94 published vs 92 clean-build dist files (two old sync sourcemaps); core 293 vs 281 (12 old manager-module artifacts); MCP server 80 vs 72 (8 old search tool artifacts). No differing files were found among the common built dist paths. This is packaging residue, not evidence that the three entrypoint JS files differ.
+
+## Product fit and actual implementation
+
+The useful abstraction is a deterministic Skill ResourcePlane: skill manifests, source/dependency resolution, a local/global store, project-level skillpkg.json, simple state/dependency tree, and resource sync to Claude Code, Cursor, Codex and Copilot directories. The current Syncer target table maps .claude/skills, .cursor/skills, .codex/skills, and .github/skills. Official Codex docs still describe .codex/skills as a native skill directory. A project manifest may also define MCP server config, textual reminders and hooks. A configured MCP record is configuration data; it is not a converted historical session or a portable credential reference. The core syncMcpConfig method can write .mcp.json, but CodeGraph shows syncAll's only caller is syncer.test; CLI auto-sync and MCP sync_skills call syncToTarget, so current CLI/MCP install/sync flow does not invoke this MCP writer.
+
+The data model is a single Skill with name/version/description/instructions/author/license/repository/keywords/triggers/capabilities/platform metadata and dependencies. skillpkg.json has project name, skill source map, MCP config, reminders, hooks and sync targets. These are package/project setup resources, not ChatGPT or Codex Projects/Section Groups, conversation Sessions, message/fork/parent-child event graphs, links, attachments, outputs, token usage, durable memory, or scheduled task state. No Claude Desktop third-party-gateway Chat, Cowork or Code session store reader/writer or gateway API-key/session adapter exists. README’s Claude Desktop MCP example merely configures an MCP server for skill management; it does not import/export any Desktop mode’s history or project/session structure.
+
+Two subsystems have different formats and are not symmetric:
+1. Syncer can write directory-form SKILL.md for the four platforms. The older AdapterManager/Importer uses Claude Code, a legacy .codex/agents Markdown format, Copilot’s merged copilot-instructions.md and Cline; it does not use the newer .codex/skills directory import route.
+2. Importer returns one Skill object and only parses SKILL.md; its Skill type has no files/assets field. Exporter likewise writes one SKILL.md into dir/zip/tar/pack formats, not the full source directory.
+3. CLI help lists no sync or migrate command. The README’s skillpkg sync examples are not executable: the built CLI returns exit 1, error: unknown command 'sync'. The v1.x-to-v2.0 MIGRATION.md command is also commented out in cli.ts; the built CLI returns exit 1, error: unknown command 'migrate'. install may auto-sync after install and the MCP server exposes sync_skills, but neither command provides session migration. The README's use of “migration” refers only to skillpkg’s own config/state format and plugin marketplace replacement.
+
+## Local execution results
+
+- Environment: Node v26.7.0; repository declares Node >=18 and pnpm 8.15.0.
+- Install command: rtk npm exec --yes --package=pnpm@8.15.0 -- pnpm install --frozen-lockfile --ignore-scripts. Exit 0; frozen lockfile unchanged; 334 packages installed; install scripts were explicitly disabled.
+- Test command: rtk npm exec --yes --package=pnpm@8.15.0 -- pnpm test. Exit 1; 13 files, 261 tests: 259 passed, 2 failed. Failures are in parser.test.ts: “should return errors for missing required fields” expects missing version to fail, while current schema requires only name and description; “should reject unknown fields” expects rejection, while current schema sets additionalProperties: true. These indicate stale tests versus the currently permissive schema, not successful test completion.
+- Build: rtk npm exec --yes --package=pnpm@8.15.0 -- pnpm build. Exit 0; core, CLI and MCP-server TypeScript builds completed.
+- Typecheck: rtk npm exec --yes --package=pnpm@8.15.0 -- pnpm typecheck. Exit 0; core and MCP-server typecheck completed.
+- Lint: rtk npm exec --yes --package=pnpm@8.15.0 -- pnpm lint. Exit 1; 7 errors and 7 warnings: prefer-const in cli/commands/export.ts:48, cli/commands/init.ts:333 and core/adapters/copilot.ts:194; no-case-declarations in core/doctor/doctor.ts:410-423. Other warnings include non-null assertions and any types.
+- CLI check: rtk node packages/cli/dist/index.js --help exited 0 and listed no sync or migrate command. rtk node packages/cli/dist/index.js sync exited 1 with stdout error: unknown command 'sync'; rtk node packages/cli/dist/index.js migrate exited 1 with stdout error: unknown command 'migrate'.
+
+## Isolated synthetic filesystem probes
+
+All probes used a newly created temporary root under /var/folders/.../T; they did not touch user-owned skill/project directories.
+
+1. Unowned output deletion: Syncer.syncAll on a project with an empty incoming skill map, but an existing .claude/skills/unrelated-user-skill/KEEP.txt, returned success and reported the directory as deleted; the sentinel did not survive. cleanupOrphans removes every directory missing from the current map without a skillpkg ownership marker.
+2. MCP config loss: a pre-existing .mcp.json contained user_server; syncMcpConfig with imported_server returned action updated and rewrote mcpServers so only imported_server remained. Existing servers are not merged/preserved. MCP env strings are serialized directly into .mcp.json.
+3. Skill-name path traversal: parseSkillMd accepted the synthetic untrusted name ../../store-escape; StoreManager.addSkill then wrote SKILL.md outside the configured .skillpkg store, at a sibling temp-root path. No name containment validation runs at parse/store boundary.
+4. Export path traversal: Exporter.export with synthetic name ../export-escape and output=<temp>/exports returned success and wrote SKILL.md at <temp>/export-escape, outside the output root. A normal safe name also exported successfully.
+5. Same-count asset drift: source and target had identical SKILL.md plus one reference file each, but source reference content was source-v2 while target held target-v1. Syncer.syncToTarget returned success/action unchanged because the SKILL.md hash matched and the additional-file check compares only file counts; target retained target-v1.
+6. Codex Skill import mismatch and asset loss: a synthetic .codex/skills/demo-skill/SKILL.md plus references/guide.md was auto-detected as platform claude-code; explicit import with platform codex failed “File is not a valid OpenAI Codex format”. Generic folder import returned one Skill object containing schema/name/version/description/instructions only; the existing references/guide.md was not carried into the result.
+
+## Errors and corrections
+
+- First attempt at npm pack failed exit 254 because /tmp/nexus-skillpkg-0.5.7 did not exist; corrected by creating that disposable directory, then packing the three exact packages from registry.npmjs.org and validating all SRI values.
+- rtk npm view initially used the configured npmmirror registry; repeated with explicit --registry=https://registry.npmjs.org and obtained the same integrity/version data from the official registry.
+- rtk npm exec pnpm test failed because two current source test assertions disagree with schema required/additionalProperties settings; this remains a real test-suite failure, not retried as success.
+- First asset-drift probe exited 1 because its source references directory was not created before writing the synthetic file; corrected by creating both source/target references directories first. Corrected probe exited 0 and observed action unchanged with stale target asset.
+- rtk grep was first run against directories and exited 2; corrected by listing package command directories and using CodeGraph/file-specific inspection.
+- rtk ls .github exited 1 because the candidate checkout has no .github/ directory; confirmed with official Actions page, which showed no workflow runs.
+- Npm test/package probes were isolated in this cloned repo. No network fetch of third-party Skill source and no MCP server/provider was executed.
+
+## Disposition
+
+Reject as a core Nexus Memory migration engine and do not use its sync/install/remove implementation as-is. Keep it as a historical medium-value resource-plane reference for declarative Skill/MCP source mapping and per-target serialization, because it correctly treats Skill payload and project package setup as first-class resources. Before borrowing any design, replace path construction with validated opaque IDs + containment checks, model ownership before cleanup, merge/preview/preserve unrelated MCP servers, stage writes with rollback, compare asset hashes/manifests rather than counts, and design loss-aware import/export. It fails all target acceptance tracks for ChatGPT/Codex Projects and Sections, session nesting/branches/transcripts, attachments/usage/memory/schedules and Claude Desktop 3P Chat/Cowork/Code session migration.
+
+## Primary sources
+
+- GitHub repository/current README: https://github.com/miles990/skillpkg
+- Pinned archive commit: https://github.com/miles990/skillpkg/commit/8ec9655e8267e1fe9b37a4edc488c16f591233e7
+- GitHub Actions page: https://github.com/miles990/skillpkg/actions
+- npm profile/packages: https://www.npmjs.com/~miles990
+- Official OpenAI Codex skill guidance: https://developers.openai.com/blog/eval-skills
+- OpenAI Agent Skills concepts: https://developers.openai.com/api/docs/guides/tools-skills

@@ -1,0 +1,35 @@
+# Candidate #210 — RafaelQSantos-RQS/MyAgentControl
+
+Review date: 2026-11-23. Repository: https://github.com/RafaelQSantos-RQS/MyAgentControl. Pinned `main` / `origin/main` at `92b3fd6bffcf6b2d255cd26052d1b53e190d8889` (commit date 2026-08-30; `feat: add validation modules for agents, skills, commands, and evals`). Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-rafaelqsantos-rqs-myagentcontrol-20261123-followup210`; final `git status --short` is empty. CodeGraph was initialized and verified up to date (53 files, 595 nodes, 1,424 edges). All safety probes used disposable `/tmp/nm-myagentcontrol-followup210` data; no real OpenCode tree, user config, API, credential, conversation, or session was accessed.
+
+## Classification and source surface
+
+This is a Rust 2024 / MIT, pre-v1 configuration/resource installer for **one OpenCode-compatible agent tree**, not an agent runtime and not a cross-Harness migration utility. Its README says it is a Rust reimplementation of OpenAgentsControl v0.7.1; the vendored `content/` directory is compile-time embedded and maintained locally. The binary does not invoke OpenCode or a model API. Commands install/add/remove/status/validate/wizard/list resource files into `.opencode/` and hash them in `.mac/manifest.json`.
+
+The embedded registry is schema v2.0.0 with five install profiles and 248 typed resource entries: 8 agents, 19 subagents, 17 commands, 2 tools, 1 plugin, 4 Skills, 194 context documents and 3 config records. The vendored tree is documented as 442 files. Profiles are curated resource bundles and `dependencies` are install prerequisites; neither represents source Projects, sidebar Section Groups, session parents/branches or task/subagent conversation relations. No ChatGPT/Codex transcript import/export, session/message IDs, conversation/event graph, attachments, model usage/token ledger, MCP-auth exchange or schedule importer appears in `src/`, `tests/`, or the embedded registry. The `project` noun in context-wizard content refers to a filesystem workspace/context document, not a ChatGPT Project object.
+
+The CLI's `list` command works in the pinned binary (248 records). README's Status paragraph still says `list` is not yet implemented, so that sentence is stale. GitHub reports 0 stars / 0 forks and 31 commits; no releases and no pull requests were visible at review time. The repository declares MIT; `NOTICE.md` separately attributes the vendored OpenAgentsControl baseline as MIT. Public source visibility is not a reason to copy any code without respecting both notices.
+
+## Build, tests and disposable functional smoke
+
+- `rtk cargo test --locked --manifest-path <checkout>/Cargo.toml`: exit 0, **120 passed (7 suites)**.
+- `rtk cargo fmt --manifest-path <checkout>/Cargo.toml -- --check`: exit 0.
+- `rtk cargo clippy --locked --manifest-path <checkout>/Cargo.toml -- -D warnings`: exit 0, no issues.
+- `rtk cargo build --locked --release --manifest-path <checkout>/Cargo.toml`: exit 0; 55 crates compiled.
+- GitHub's pinned-commit page reports the same 120-test/fmt/clippy result, and the corresponding latest visible Actions run for commit `92b3fd6` completed successfully. The Actions page shows only two workflow runs, both 2026-08-31; there is no release package to install.
+- Temporary CLI smoke `add config:agent-metadata` → `status` → `remove config:agent-metadata` all exited 0 on a fresh temp tree; status printed `No modifications` before removal. `list` exited 0 and printed the embedded registry.
+
+## Disposable symlink-containment probes (critical writer/removal gap)
+
+The normal happy-path tests do not cover symlinked managed parents. `plan_files` joins embedded registry paths directly under the caller's `--dir`; `copy_bytes` uses `create_dir_all`/`fs::write` without resolving and constraining symlinks. `add_component` then hashes every planned target into the manifest, even when `copy_bytes` reported a collision instead of writing that target. `remove_component` trusts that manifest path and uses `remove_file` before pruning directories.
+
+1. **Install escaped the chosen tree.** Synthetic temp layout: managed root `/tmp/nm-myagentcontrol-followup210/symlink-write/managed`, with its `config` subdirectory a symlink to sibling `/tmp/nm-myagentcontrol-followup210/symlink-write/outside`. CLI `add config:agent-metadata --dir <managed>` exited 0 and reported one file copied. It created `outside/agent-metadata.json` (10,292 bytes, SHA-256 `c7ae34cb341f14e742d277772933946678b41389ee379755b29c6c87ba7e737c`) outside the requested managed root. The package's own `.mac/manifest.json` was written under the managed root.
+2. **Remove deleted a foreign sentinel despite a collision and then errored.** Separate temp layout had the same symlink but prepopulated the outside `agent-metadata.json` with `SYNTHETIC_FOREIGN_OWNER_CONTENT`. `add ...` without `--force` exited 0 and reported `0 file(s) copied, 0 skipped, 1 collision(s)`, yet wrote the foreign file's SHA-256 into its manifest entry (`655ef7106a0d10b72b2b910646dc6379a620fb0972ed944ba6b48a97f07ac5d3`). `remove config:agent-metadata --dir <managed>` exited 1 with literal stdout/stderr combined by the runner: `Error: E600: cannot remove /tmp/nm-myagentcontrol-followup210/symlink-delete/managed/config: Not a directory (os error 20)`. After that failed command, the outside sentinel file was gone while the `managed/config` symlink remained. Thus the command can cause an outside-root deletion and partially fail after the destructive action.
+
+These are genuine source-code-path observations using synthetic temp files only. A production-safe resource adapter would need canonical containment after symlink resolution for every planned/read/write/delete target, must never claim manifest ownership of a collided unowned file, and must stage/rollback the whole write transaction. The candidate's hash manifest and collision-aware default are useful concepts but insufficient as implemented.
+
+## Nexus Memory disposition
+
+`OPEN_CODE_RESOURCE_REGISTRY_AND_PROFILE_INSTALLER_ONLY_NOT_SESSION_MIGRATOR`; keep registry/profile grouping and content-hash manifest ideas as low-priority ResourcePlane references, **do not use its writer or remover** until the demonstrated symlink escape, collision ownership, and partial-failure semantics are fixed. It cannot reconstruct ChatGPT Projects, Section Groups, `Destruction Era` session trees, Claude Desktop 3P Chat/Cowork/Code histories, or local Claude Code sessions. It is not evidence of a cross-Harness import capability.
+
+Primary sources: pinned source commit https://github.com/RafaelQSantos-RQS/MyAgentControl/commit/92b3fd6bffcf6b2d255cd26052d1b53e190d8889 ; repository https://github.com/RafaelQSantos-RQS/MyAgentControl ; Actions https://github.com/RafaelQSantos-RQS/MyAgentControl/actions ; Releases https://github.com/RafaelQSantos-RQS/MyAgentControl/releases ; PRs https://github.com/RafaelQSantos-RQS/MyAgentControl/pulls .

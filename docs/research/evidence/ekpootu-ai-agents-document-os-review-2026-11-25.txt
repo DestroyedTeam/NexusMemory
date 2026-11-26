@@ -1,0 +1,29 @@
+# Candidate #280 source review: ekpootu/ai-agents-document-os
+
+- Review date: 2026-11-25 (Asia/Shanghai).
+- Repository: https://github.com/ekpootu/ai-agents-document-os
+- Pinned shallow-clone `master` HEAD: `b3e8c89c0cc0ebf787235742d502cd7558d02b16` (commit date 2026-09-10; `feat: release Document OS Guide v6.0 with Golden Ratio layout, 3D Flip Book skill, and multimodal sourcing`).
+- GitHub repository-page snapshot: MIT; 0 stars / 0 forks; 9 commits. Candidate inventory metadata is from the 2026-11-25 search snapshot.
+- Local CodeGraph: 14 Python files, 222 nodes, 392 edges; index verified current. The checkout has 62 files excluding `.git` and `.codegraph`; no test/workflow/CI paths were found. No package installation or project test command was run because no test suite/CI was present.
+- No user account, source export, session, gateway credential, target profile, or application store was accessed.
+
+## Product and data boundary
+
+- The product is a local document-processing/plugin bundle for PDF, DOCX, XLSX, PPTX, Markdown, OCR, document QA, and flipbooks. Its cross-Harness story is distribution of document skills and scripts, not chat/session migration.
+- `.agents/plugins/document-os/plugin.json` registers `document-router`, `document-qa`, and `flipbook-generator`, with a brand-identity skill dependency. There is no native transcript importer, session archive reader/writer, Project/Section/parent-child model, or MCP server implementation in the pinned source.
+- `export_cross_harness.ps1` recursively copies skill files into Claude Code global/workspace `.claude/skills`, OpenCode `~/.config/opencode/skills`, and an Antigravity path. It does not convert chat history, project or section hierarchy, user memory, MCP configuration, plugins, attachments, tool calls, branches, schedules, or usage/token metadata. The README's broader list of Harnesses is not evidence of target-native session fidelity.
+- The script's `ValidateSet` accepts `Universal`, but its dispatch branches handle only `ClaudeCode`, `OpenCode`, `GlobalAntigravity`, and `All`; selecting `Universal` has no matching copy branch. This is a static control-flow finding; the potentially no-op mode was not executed.
+- The POSIX installer creates a Python venv and installs unpinned latest package versions. `--global` copies the plugin to the Gemini/Antigravity directory only. The export uses `Copy-Item -Force` and has no visible dry run, target backup, conflict report, transaction/rollback, post-copy verification, or session-data safeguards.
+- A corrected static file scan found no `conversation`, `session import`, `chat history`, `project hierarchy`, `section group`, or `MCP server` references in the local repository. The README's “MCP & deterministic tooling harness” framing did not correspond to an MCP server implementation in this checkout.
+
+## Quality and disposition
+
+- Source reviewed: `README.md`, `.agents/plugins/document-os/plugin.json`, `install_document_os.sh`, `export_cross_harness.ps1`, plus the Python tooling through CodeGraph. No test execution is claimed.
+- Disposition: **LOW_RELEVANCE_SKILLS_AND_DOCUMENT_RESOURCE_PLANE_REFERENCE_NOT_SESSION_MIGRATOR**. Retain only its bundled document skill distribution and deterministic document tooling as optional resource-plane ideas. Exclude it from Nexus Memory's session/project/section migrator set and do not infer that “cross-Harness” means ChatGPT/Codex → Claude Desktop (Chat/Cowork/Code) or local/self-hosted Claude Code transcript restore.
+
+## Pinned source pointers
+
+- [Repository README at pinned HEAD](https://github.com/ekpootu/ai-agents-document-os/blob/b3e8c89c0cc0ebf787235742d502cd7558d02b16/README.md)
+- [Cross-Harness export script](https://github.com/ekpootu/ai-agents-document-os/blob/b3e8c89c0cc0ebf787235742d502cd7558d02b16/export_cross_harness.ps1)
+- [Plugin manifest](https://github.com/ekpootu/ai-agents-document-os/blob/b3e8c89c0cc0ebf787235742d502cd7558d02b16/.agents/plugins/document-os/plugin.json)
+- [POSIX installer](https://github.com/ekpootu/ai-agents-document-os/blob/b3e8c89c0cc0ebf787235742d502cd7558d02b16/install_document_os.sh)

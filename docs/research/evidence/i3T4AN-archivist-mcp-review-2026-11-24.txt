@@ -1,0 +1,48 @@
+# Candidate #237 — i3T4AN/Archivist-MCP review
+
+Review date: 2026-11-24 (Asia/Shanghai).
+Requested repository: https://github.com/i3T4AN/Archivist-MCP
+Pinned checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-i3t4an-archivist-mcp-20261124-followup237`
+
+## Provenance and maturity
+
+- Shallow clone exited 0; branch `main`, HEAD and `origin/main` are `54fcaca4b25f1452ce5ced55a878199d8b285bec`, dated `2026-03-22T21:33:23-06:00`, subject `Remove GitHub Actions workflow for token-scope-compatible push`; checkout clean.
+- `LICENSE` is MIT, copyright Ethan Blair (2026). GitHub page showed 4 stars/0 forks, 3 commits, no Releases and 0 open Issues at review. The checkout has no `.github` CI workflow. CodeGraph is current: 86 files, 979 nodes, 2,462 edges. `.codegraph/.gitignore` retained with only its `!.gitignore` self-preserving exception removed.
+- The source is locally runnable and the full test suite passes (see validation). Low adoption/no release/short history mean this is promising reference code, not evidence of production maturity.
+
+## Actual data model — durable knowledge, not imported session history
+
+The project is a memory server for manually or agent-curated decisions, incidents, rules, entities, observations and typed graph relationships. `projects` and `users` are separate tables; `nodes` have `type/title/content/state/version`, `edges` have a small fixed relation type, and `artifacts` store URI/hash/metadata references. It exposes MCP tools for create/update/search/recall, conflicts, stale-memory invalidation and code-symbol indexing. `extract_symbols` scans supported source files and constructs Entity/DEPENDS_ON records; it is codebase indexing, not transcript ingestion.
+
+There is a `sessions` metadata table (`session_id`, `project_id`, `user_id`, `client_type`, start/end times), and `observations.session_id` is an optional foreign key to it. However:
+
+1. The shipped MCP tool list has no `create_session`/import-transcript method. Quickstart seeds only projects/users. A generic graph `Session` node is not the relational `sessions` row.
+2. A safe temporary-DB probe found `create_session_tool_available=false`; creating an `Observation` with a synthetic unknown `session_id` returned `INTERNAL_STORAGE_ERROR: FOREIGN KEY constraint failed`. A source scan found only the schema declaration and the observation insert; no code path inserts sessions.
+3. No message/event stream, turn ordering, source active-branch state, parent/child session tree, subtask/delegation edges, token/usage counters, typed media or transcript attachment import/export was found. `Session` node types and generic edges could encode hand-built metadata, but they do not recreate a source Session tree or replayable conversation.
+4. `scope=branch` is a memory-record promotion workflow (branch-scoped fact to project-scoped fact), not a harness conversation fork/branch.
+5. `core_memory.md/.json` is a compact, budgeted projection of active decisions/rules/incidents/architecture (default budget 12 KiB), and can exclude lower-priority items. It is useful context materialization, not a lossless archive.
+
+This is a useful **independent memory plane** that can be considered as a future target adapter after a canonical import and field-level mapping. It does not solve ChatGPT `Destruction Era` Project/Section/Session migration into Claude Desktop Chat/Cowork/Code or local/self-hosted Claude Code API-Key sessions.
+
+## Export, retention and security boundaries
+
+- `export_audit_log` exports only audit events (default 200, max 1,000), redacted details and a SHA-256 digest; it is not a graph/content export or portable migration bundle. Snapshot/restore copies the full local SQLite DB for same-system recovery; no cross-Harness importer was found.
+- `purge_observations` is a limited observation-retention task: old low-confidence/short observations can be deleted; longer or high-confidence items are marked for triage. It does not purge graph nodes, attached artifact records/files, decisions, rules, sessions or audit history. No ChatGPT scheduled-task conversion exists.
+- `SecurityConfig.encryption_required` defaults false. `db.connect` uses ordinary SQLite unless SQLCipher exists and a key/required mode is configured; when a key is configured but cipher support is unavailable, it fails closed. Default local database contents are therefore not encrypted at rest.
+- HTTP server defaults to loopback `127.0.0.1`, but MCP HTTP authentication is optional: with an empty `ARCHIVIST_SSE_TOKENS` map, `tools/list` and `tools/call` are accepted without a token. If the operator binds to a network interface without configuring tokens/TLS, memory/control endpoints are exposed. Team SSE always requires a bearer token and enforces role/project scope. Standard stdio is local-process trust; `--require-user-id` only checks a caller-supplied nonempty user_id, not authentication.
+- Secret redaction applies to logs/audit-export details, not stored node/observation content. In a disposable temporary DB, a synthetic fake `sk-FAKEONLYTESTTOKEN1234567890` sentinel passed through `create_entity` and remained raw in the persisted node content. This was a synthetic fixture, not a real credential. Treat the graph DB as sensitive and enable SQLCipher plus boundary controls before storing user conversation data.
+- `sanitize_text` normalizes input and filters a few prompt-injection phrases; it is not a secret-redaction layer. The code's security threat model correctly limits its described redaction to logs/exports, but a broader product description could be misread as ingest redaction.
+- The embedding worker actually implements deterministic `hash-local`; other named providers (`ollama`, `llama-cpp`, `transformers-local`) return no provider in this pinned source. Thus README's “local embeddings” description is not yet a functioning semantic-model backend here; retrieval still has FTS/graph paths.
+
+## Local validation
+
+Tests ran via `/tmp/nm-aiw-review-236-venv` with `rtk test /tmp/nm-aiw-review-236-venv/bin/python -m pytest`; exit 0, **79 passed in 5.89s**. The venv was disposable. Tests use temporary SQLite databases; the stdio integration test starts a child MCP process against a temporary DB. No user's `.archivist` directory, export, profile, API key, remote server or model endpoint was used. Additional temporary-DB checks above exercised only synthetic project/session/token fixture values.
+
+## Decision
+
+High-value adjacent prior art for durable memory graph semantics, project-scoped facts, audit/conflict/version handling, promotion/invalidation lifecycle, local core-memory materialization, MCP recall, SQLCipher fail-closed detection and backup/restore. Do **not** count it as a session migration adapter or cite audit-log export as data portability. If considered for integration, first add a real session creation/import API, portable versioned graph bundle, secret-redaction/retention for node and artifact content, documented auth-by-default when bound beyond loopback, explicit session/branch hierarchy mapping, dependency/build manifest and cross-version/real-client tests.
+
+Primary sources:
+- https://github.com/i3T4AN/Archivist-MCP/tree/54fcaca4b25f1452ce5ced55a878199d8b285bec
+- https://github.com/i3T4AN/Archivist-MCP/blob/54fcaca4b25f1452ce5ced55a878199d8b285bec/LICENSE
+- Pinned code reviewed: `archivist_mcp/migrations/sql/0001_core_graph_schema.sql`, `tooling/server.py`, `storage/repository.py`, `db.py`, `mcp_http_server.py`, `mcp_stdio_server.py`, `sse_server.py`, `memory/materializer.py`, `indexing/indexer.py`, `security/input.py`, `security/redaction.py`, `team/auth.py`; `docs/security_threat_model.md`, `docs/upgrade_migration.md`.

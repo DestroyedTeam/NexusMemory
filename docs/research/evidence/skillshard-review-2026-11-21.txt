@@ -1,0 +1,52 @@
+# Candidate #103 — sergionoodles/skillshard
+
+Review date: 2026-11-21  
+Pinned HEAD: `05345c60ba4506add81eda1e3d97f0091738121c`  
+Tag: `v0.6.0`; latest observed release workflow run at that exact SHA succeeded.  
+Repo snapshot: Rust + GPUI desktop app; 2 stars, 0 forks, no SPDX/license metadata and no `LICENSE` file; created 2026-09-18, pushed 2026-10-19, last updated 2026-10-28; not archived. No source reuse recommendation.
+
+## Product fit and implementation
+
+`Skillshard` manages installed agent Skills across global and filesystem-project scopes. It scans supported agents' skill directories, displays installs and lockfile/update state, delegates install/update/remove to the `skills` CLI, supports per-agent links and enable/disable, moves/copies Skills among scopes, and requests partner security-review verdicts before install. It is a narrow local Skill/ResourcePlane GUI, not a Projects, Section Groups, chat/session, or history migrator.
+
+The distinction is explicit in the pinned source (`src/model.rs`): `Scope` has only `Global` and `Project(PathBuf)`, where Project is the directory containing `.agents/skills`; it is not a product-level project object. `Skill` contains directory/title/description, scope, canonical filesystem copy, agent install links, CLI lock entry, disabled/update state, and token-cost estimate. There is no account/project/thread/message/event/fork/subagent/attachment/usage-history/schedule/MCP/plugin-conversation schema. It has no ChatGPT or Codex history input and no Claude Desktop Chat/Cowork/Code third-party-gateway session writer.
+
+`src/skills_cli.rs` builds non-interactive `skills add`/`remove`/`update` arguments, then starts the CLI as a child process, sets `CI=1`, removes `CLAUDE_CODE`, and captures stdout/stderr. If a `skills` binary is not on `PATH`, the fallback runs `npx --yes skills@latest`; that fallback is not version-pinned. The project's own integration doc says package/lock metadata is delegated to the separate skills CLI. Skillshard's filesystem “Project” scope therefore must not be scored as ChatGPT Project import compatibility.
+
+The registry security review is an advisory, partner-source risk display—not a guaranteed gate. In `src/ui/install_audits.rs`, `can_install` accepts a successful audit lookup *or* a failed lookup; the failure UI explicitly says installation can continue, and an empty lookup renders “No published audit” but also allows install. This fail-open behavior is covered by `failed_audits_offer_retry_and_do_not_block_installation` and the empty-audit UI test. Treat those verdicts as supplemental signals only; they do not sandbox Skills or replace code review.
+
+Source review also shows lifecycle operations are multi-step filesystem mutations: disable removes agent links/copies, moves the canonical directory to a parking path, then writes state; enable moves the parked copy, updates state, then recreates links. No transaction journal/atomic rollback spans these steps in the reviewed functions. This is a design risk to test before applying to valuable user Skill folders, not a reproduced data-loss bug. No production user home or real Skills installation was touched.
+
+## Build, tests, and provenance
+
+- Checkout was cloned from `https://github.com/sergionoodles/skillshard.git`; pinned HEAD is the hash above. The local `git status --short` was clean after removing CodeGraph's `.gitignore` self-preserving exception; CodeGraph index remains ignored and current.
+- GitHub metadata query: `rtk gh repo view sergionoodles/skillshard --json name,description,stargazerCount,forkCount,licenseInfo,isArchived,createdAt,updatedAt,pushedAt,url` → `licenseInfo: null`, 2 stars, 0 forks, not archived, `pushedAt=2026-10-19T08:27:22Z`.
+- `rtk gh run list -R sergionoodles/skillshard --limit 10 --json name,conclusion,status,headSha,createdAt,workflowName` shows the exact-HEAD completed `Release` workflow at `05345c60...` as success. The only tracked workflow is `.github/workflows/release.yml`; it builds and packages Linux/macOS releases and does not run tests.
+- Isolated toolchain: `rustc 1.95.0`, `cargo 1.95.0`.
+- Disposable test copy: `/private/tmp/nm-skillshard-review-2026-11-21/source`.
+- Command: `rtk cargo test --offline --locked --manifest-path /private/tmp/nm-skillshard-review-2026-11-21/source/Cargo.toml`
+- Exit status: `101` (could not execute suite offline; no dependency installation/network build was attempted).
+- Literal stdout: `cargo test: 1 errors, 0 warnings (0 crates)`
+- Literal stderr:
+  ```text
+  error: no matching package named `gpui-kit` found
+  location searched: crates.io index
+  required by package `skillshard v0.6.0 (/private/tmp/nm-skillshard-review-2026-11-21/source)`
+  As a reminder, you're using offline mode (--offline) which can sometimes cause surprising resolution failures; if this error is too confusing, you may wish to retry without the offline flag.
+  ```
+- Therefore tests are source-reviewed but not locally executed. Do not claim a local test pass. Upstream Release workflow success proves release build/package steps only, not test coverage.
+
+## Disposition
+
+Reject as a Nexus Memory migration dependency and any evidence of ChatGPT/Claude session fidelity. Retain only as a low-weight comparison for a cross-agent Skill manager UI and as a reminder to model Skill ResourcePlane operations separately, with explicit source/version/provenance, version-pinned tools, audit-not-equals-sandbox semantics, and failure-safe rollback. Its missing license metadata also bars copying/re-distributing source until licensing is clarified.
+
+The user's confirmed Claude target remains local/self-hosted Claude Code plus Claude Desktop third-party inference with **Chat, Cowork, and Code all in scope**, as separate adapters; Anthropic-hosted Cloud remains a separate product boundary. No ChatGPT export, app account, Claude Desktop profile, or session data was accessed.
+
+Primary sources:
+
+- Repo and pinned tree: https://github.com/sergionoodles/skillshard/tree/05345c60ba4506add81eda1e3d97f0091738121c
+- Scope/data model: https://github.com/sergionoodles/skillshard/blob/05345c60ba4506add81eda1e3d97f0091738121c/src/model.rs
+- CLI process boundary: https://github.com/sergionoodles/skillshard/blob/05345c60ba4506add81eda1e3d97f0091738121c/src/skills_cli.rs
+- Audit/installation policy: https://github.com/sergionoodles/skillshard/blob/05345c60ba4506add81eda1e3d97f0091738121c/src/ui/install_audits.rs
+- Skills CLI integration: https://github.com/sergionoodles/skillshard/blob/05345c60ba4506add81eda1e3d97f0091738121c/docs/skills-sh-integration.md
+- Release workflow: https://github.com/sergionoodles/skillshard/blob/05345c60ba4506add81eda1e3d97f0091738121c/.github/workflows/release.yml

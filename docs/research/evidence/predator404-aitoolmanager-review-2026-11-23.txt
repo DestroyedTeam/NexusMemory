@@ -1,0 +1,32 @@
+# Candidate #206 — Predator404/aiToolManager (2026-11-23)
+
+## Identity and fit
+- Repository: https://github.com/Predator404/aiToolManager
+- Branch `main`; pinned HEAD / `origin/main` `1d331d49ddc6e83b27fa521ace1a59ee4dd7ff2d` (2026-08-22; `Ignore local conversation-logs/ (build transcripts, not shipped)`). Checkout clean at review start.
+- Node CLI/TUI `ai-tool-manager` v0.1.0, `private: true`, no `license` field; no README or LICENSE file in the pinned checkout. CodeGraph: 33 files, 404 nodes, 1,851 edges.
+- Official repository calls it a cross-harness manager for **oh-my-pi (OMP), Claude Code, and Prime Agent**, covering Skills, MCP servers, Extensions, Commands and Claude Code Hooks/Plugins. Official repo page confirms this scope; Actions shows no workflow runs, Releases has none: https://github.com/Predator404/aiToolManager · https://github.com/Predator404/aiToolManager/actions · https://github.com/Predator404/aiToolManager/releases .
+
+This is the closest resource/config-plane reference in the current candidate batch: it uses a canonical `.agents` store for Skills/Commands and per-harness adapters for native mirrors; it explicitly treats MCP schemas as harness-specific, targets one harness/scope per operation, and uses sidecars for Claude Code MCP/hooks that lack native disable switches. It also has per-item category/descriptions/related metadata and a local↔global scope. **However, “project” is a filesystem root, not a ChatGPT Project/Section; no session, conversation, message, branch, transcript, attachment, token-usage or schedule model/import/export exists.** Its harness list excludes ChatGPT, Codex and Claude Desktop’s 3P Chat/Cowork/Code modes. It is a deterministic config manager, not a universal migration tool.
+
+## Quality/provenance
+- `rtk npm ci --ignore-scripts --no-audit --no-fund`: exit 0, 55 packages.
+- `rtk npm test`: exit 0; **100 tests across 10 files passed**.
+- `rtk npm run typecheck`: exit 0.
+- `rtk node bin/aiToolManager.js --help`: exit 0 and exposes exactly skill, command, mcp, extension, hook groups; no session/project-conversation migration commands.
+- Source tree has no CI workflow or releases. `package.json` is `private: true`, no SPDX license and no LICENSE file. Do not reuse code until licensing is clarified.
+
+## Synthetic data-loss probes (all in disposable `/tmp`, removed afterward)
+1. **Enabling a mirror overwrites an unowned real directory.** Actual CLI `skill enable demo --harness claude-code --scope global` exited 0 without a collision warning/prompt. Preseeded `.claude/skills/demo/user-owned.txt` was deleted; directory became a symlink to the canonical `.agents/skills/demo`. Literal state output:
+`{"mirror_is_symlink":true,"unowned_mirror_sentinel_exists":false,"import_collision_sentinel_exists":false,"imported_body":"new imported source"}\n`
+   Source path: `enableSkillMirror` → `mirrorOne` → `createOrReplaceSymlink`; the last helper removes any existing path (including a non-symlink directory) recursively. `unmirrorOne` correctly refuses a real directory, but the enable path does not. Existing tests cover unmirror refusal, not enable collision.
+2. **Import overwrites an existing canonical Skill without confirmation.** Actual CLI `skill import <source> --scope global` exited 0 and imported one same-named Skill; a synthetic pre-existing `user-owned.txt` in the canonical destination disappeared, replaced by the imported `SKILL.md`. The CLI import callsite has no confirmation/`--force`; `copySkillAndSeed` uses `copyRecursive`, which removes destination first.
+3. **Promotion compares only SKILL.md, then replaces the whole directory.** A temporary project/global Skill pair had byte-identical `SKILL.md`, a project-only asset and a global-only user asset. `planSkillPromotion` returned `conflict:false`; `promoteSkill` removed the global-only asset, copied the project-only asset and replaced project canonical content with a symlink. Literal output:
+`{"mirrorResult":{"targetIsSymlink":true,"unownedSentinelDeleted":true,"pointsToCanonical":true},"promotionResult":{"conflictReported":false,"globalOnlyAssetDeleted":true,"projectOnlyAssetCopied":true,"projectCanonicalNowSymlink":true}}\n`
+   The CLI/TUI ask for confirmation but show source/destination paths, not a full tree diff; the conflict check only compares the primary `SKILL.md` (or the single command file). This is a data-loss risk for assets/references even after the user accepts the promote operation.
+4. **MCP config writes can broaden file permissions.** A separate temp-only `addServer` probe started with a `.claude.json` mode 0600 and existing server; after atomic JSON rewrite with a synthetic bearer header, the mode was 0644, the synthetic value was plaintext, and the existing server remained. Literal stdout:
+`{"beforeMode":"600","afterMode":"644","syntheticCredentialPresent":true,"oldServerPreserved":true,"configPath":"/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/aitm-mcp-mode-poc-h7cOdk/.claude.json"}\n`
+   `writeFileAtomic` creates a default-permission temp and renames over the existing file without preserving mode/chmod. This is a local config-secret permission issue; the token was synthetic, no user config/key was touched.
+5. **Possible Windows path-separator gap (simulated, not a Windows runtime test).** `assertSafeItemName` rejects `/` segments and absolute paths, but does not split `\\` segments. On this POSIX run it accepted `..\\..\\..\\..\\outside`; `path.win32.join('C:\\Users\\test\\.agents\\skills', name)` resolves to `C:\\outside`. Because Windows Node uses `path.win32`, add explicit backslash/Windows path validation before claiming safe Windows support. This is a path-semantics simulation, not an executed Windows build.
+
+## Recommendation
+Retain only as a valuable **Skills/MCP/Commands/Hooks/Extensions adapter architecture** reference, especially the explicit harness/scope matrix and native-disable/shadow-sidecar approach. It does not satisfy the user's session/project/Section hierarchy migration objective or all-harness coverage, and its collision/import/promotion/permission paths should not be reused unchanged. For Nexus, add file ownership checks, root-safe Windows-aware names, complete tree-hash conflict detection, staged backups/rollback and restrictive permissions before any resource-plane writer is trusted.

@@ -1,0 +1,32 @@
+# Candidate review — wess/loom (#107)
+
+Reviewed 2026-11-21. Repository checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-wess-loom-20261121`; pinned HEAD `8da92268c6562bf59180492ceb40b65f5325c752`; latest published tag observed `v0.1.1`. GitHub reported 2 stars, 0 forks, MIT, not archived; exact-HEAD CI run 29953967830 and Pages run 29953966848 completed successfully. Root license is MIT. These are snapshot facts, not adoption/popularity claims.
+
+## Scope and model
+
+Loom is a small Rust CLI/Homebrew-style package manager for reusable agent Skills. Its manifest is a YAML recipe (name/version/license/source/ref/subdirectory/entry/files), not the skill payload. The installed-state JSON only tracks `{name, version, agent, path, source_url}`. Config maps arbitrary agent IDs to skills directories; shipped defaults are `claude-code`, `codex`, and `cursor`. Git refs can be tags/branches/commits; archive manifests require SHA-256. The website catalog stores manifests, and Loom's own `~/.loom` holds config, state, and fetch caches.
+
+No Projects, Sections/Section Groups, transcripts, Sessions, message/event/branch trees, parent-child sessions, attachments, token/cost use, MCP/plugin configuration, schedules, or memory stores are represented. It has no ChatGPT/Codex Projects or session importer, no Claude Desktop Chat/Cowork/Code adapter, and no Cloud/API-key session writer. “Agent” is a directory-placement target; it is not a session-runtime adapter. Thus it does not address the confirmed migration target beyond an adjacent Skills ResourcePlane.
+
+## Source review
+
+- `src/manifest/mod.rs`: manifest fields are a Skill payload recipe. Git `ref` may be a movable branch; no resolved commit/tree hash is persisted in the installed registry. `compatibility` is advisory rather than an enforced capability matrix.
+- `src/config/mod.rs`: defaults are Claude Code, Codex, and Cursor skill folders; adding another local directory does not make it a Desktop history adapter.
+- `src/install/mod.rs`: before each install, `target = agent_skills_dir.join(manifest.name)`; if it exists, `remove_dir_all(target)` runs unconditionally, then the fresh payload is copied. There is no ownership/managed-marker check or per-operation confirmation. State tracks only the simple registry record.
+- `src/manifest/mod.rs` validates that a name is lowercase/nonempty/no whitespace, but does not reject path separators or `..` segments. `src/install/mod.rs` directly joins the untrusted name to the target root.
+- `src/fetch/mod.rs`: Git source refs are fetched via `git`; archives are checked against declared SHA-256. These are useful reproducibility primitives but do not constitute a bundle-level or session fidelity lock.
+- CI (`.github/workflows/ci.yml`) runs release build, Rust tests, manifest lint, and website index generation. The 15 Rust unit tests cover manifest parsing/linting, URL/front-matter parsing and presentation; CodeGraph reported no covering tests for install/state/path behavior. There is no Project/session-import conformance suite.
+
+## Executed tests and isolated behavior probes
+
+1. `rtk proxy env LOOM_HOME=/tmp/nm-review-loom-home-20261121 cargo test --manifest-path /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-wess-loom-20261121/Cargo.toml --all-targets` — exit 0; 15 passed, 0 failed. The first run downloaded missing crates; the resulting local pass is observed.
+2. In `/tmp/nm-review-loom-poc-20261121` only, created a temporary Git skill, isolated `LOOM_HOME`, and a pre-existing target directory containing `foreign-data.txt`. The first CLI attempt with a fake `HOME` exited 1 because rustup could not find its default toolchain; the corrected run retained the real Rust toolchain HOME while setting isolated `LOOM_HOME` and a custom absolute skill target. A local bare Git fixture was served only over loopback. `loom install` exited 0, replaced the whole target, and the foreign marker disappeared. No real user skill folder was touched.
+3. In that same disposable tree, a manifest using `name: ../outside` passed validation. `loom install` exited 0 and wrote `SKILL.md` to `/tmp/nm-review-loom-poc-20261121/agent-skills/../outside`; it deleted the pre-existing `foreign-data.txt` outside the configured skills root and registered the traversal name/path. This reproduces a path-traversal/destructive-overwrite issue from a local fixture; the temporary tree was then deleted. No non-fixture data was touched.
+4. Initial fixture manifest with a plain local filesystem path as `source.url` failed with `error: invalid manifest: - source.url should be a url` (exit 1), because validation only accepts strings beginning `http` or `git`; the test was corrected to use an ephemeral loopback Git daemon and completed. The daemon was stopped and the fixture deleted.
+5. Calling Cargo with a temporary fake `HOME` failed exit 1 before Loom ran: rustup reported that no default toolchain was configured for that HOME. The rerun used actual toolchain environment plus isolated `LOOM_HOME`, not a user Loom home.
+
+## Disposition
+
+Reject as a Nexus Memory migration dependency. Retain only the general Skills packaging ideas—source manifests, explicit source refs/checksums, per-target resource projection, and non-mutating fetch/test—implemented independently with strict safe names, immutable content digests, target ownership checks, preview/approval, staged transactional writes, and rollback. The project is very small/low-adoption and demonstrates narrow resource placement, not cross-Harness transfer fidelity. Do not call the observed 15 tests or CI status evidence of migration accuracy.
+
+Primary source: [wess/loom](https://github.com/wess/loom/tree/8da92268c6562bf59180492ceb40b65f5325c752), [README](https://github.com/wess/loom/blob/8da92268c6562bf59180492ceb40b65f5325c752/README.md), [install source](https://github.com/wess/loom/blob/8da92268c6562bf59180492ceb40b65f5325c752/src/install/mod.rs), [manifest source](https://github.com/wess/loom/blob/8da92268c6562bf59180492ceb40b65f5325c752/src/manifest/mod.rs), [CI workflow](https://github.com/wess/loom/blob/8da92268c6562bf59180492ceb40b65f5325c752/.github/workflows/ci.yml).

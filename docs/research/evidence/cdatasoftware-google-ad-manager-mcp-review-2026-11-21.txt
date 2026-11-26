@@ -1,0 +1,42 @@
+# CData Google Ad Manager MCP repository review — connector only, deprecated
+
+Date: 2026-11-21. Repository: CDataSoftware/google-ad-manager-mcp-server-by-cdata. Reviewed checkout main SHA 31676a0aa80f4221656fe6ca445669cad1caf627; git ls-remote origin refs/heads/main matched. GitHub shows the owner archived the repository on 2026-11-17; the final commit itself says “Add deprecation notice ahead of archiving.” The README says the project is no longer maintained and recommends CData CLI for agentic coding and CData Connect AI for enterprise MCP. License: MIT. GitHub release page has no published releases; the repository contains only 4 commits and 5 stars/1 fork in the current HTML snapshot.
+
+## Verdict
+
+Low-value / pass for Nexus Memory's core project and session migration. It is a provider-specific, local stdio MCP server that exposes Google Ad Manager data through a separately installed CData JDBC driver. It has no Harness settings importer/exporter, Project/Section/session model, chat memory, transcript history, session hierarchy, scheduled-task conversion, or migration accuracy tests.
+
+Keep only as an example of a manually configured, local stdio MCP connection for a Claude Desktop-compatible client. It demonstrates why “MCP integration” is a separate capability from moving a session: the server supplies external database tools but neither reads nor migrates the host assistant's conversation. It does not implement a third-party model API-key gateway.
+
+## Source-level implementation review
+
+- src/main/java/com/cdata/mcp/Program.java starts a Java MCP server with stdio transport, registers resources and exactly three tools: GetTablesTool, GetColumnsTool, RunQueryTool. The source has no conversation/session storage or provider API.
+- GetTablesTool and GetColumnsTool use JDBC metadata. RunQueryTool accepts a SQL string and calls Statement.executeQuery(sql); no insert/update/delete tools are registered. Treat driver/account permissions as the data security boundary and use a least-privilege CData account.
+- Program.main waits on stdio and has the HTTP server path commented out. The configured .prp file supplies prefix, server info, JDBC driver path/class, and JDBC URL; the separately installed/licensed CData JDBC driver is a hard prerequisite.
+- README contains a deprecated/archived banner and calls the MCP server read-only, but a later Usage Details paragraph claims it can read, write, update, and delete. Source registration resolves this contradiction: the code registers metadata + query tools, not CRUD operations. README also retains placeholder/mismatched examples (including a Salesforce example and {source} placeholder) in a Google Ad Manager guide.
+- README describes configuring claude_desktop_config.json for Windows and macOS/Linux and restarting Claude Desktop. This is one client-specific MCP transport setup, not evidence of support across Claude Desktop Chat/Cowork/Code modes, and not a session/memory adapter.
+- Auth is delegated to the CData JDBC driver/JDBC URL (README describes OAuth browser flow). The repo does not manage Harness API keys, session credentials, OAuth identity transfer, or agent accounts. No secret-bearing .prp configuration was inspected.
+- Only 11 JUnit tests exist, for JSON schema/table parsing; no MCP server/JDBC integration or data-plane tests are present. No CI workflow or GitHub release was found. The CData JDBC driver is not included, so real Google Ad Manager connectivity was not tested.
+
+## Local verification (disposable checkout only)
+
+- HEAD and remote refs/heads/main both equal 31676a0aa80f4221656fe6ca445669cad1caf627; CodeGraph indexed 18 files, 323 nodes, 720 edges; status current.
+- Maven 3.9.16 and Java 26.0.1. rtk mvn test exited 0: 11 tests, 0 failures/errors/skips, 15.545s.
+- rtk mvn clean install exited 0, tests repeated 11/0, and both CDataMCP-1.0-SNAPSHOT.jar and CDataMCP-jar-with-dependencies.jar were built. The build emits a warning because source/target 17 are used without a module path. The Maven install wrote its SNAPSHOT artifact under ~/.m2/repository/com/cdata/CDataMCP/1.0-SNAPSHOT.
+- No vendor JDBC jar, API credentials, OAuth account, Claude Desktop process, or live MCP client was used; build/tests validate only the wrapper and its utility classes, not provider connectivity.
+- GitHub's public commit page says the repository was archived read-only on 2026-11-17. The repository README marks it deprecated/archived; no post-archive maintenance or release is implied.
+
+## First-party links and reviewed sources
+
+- Repository/README: https://github.com/CDataSoftware/google-ad-manager-mcp-server-by-cdata
+- Final main commit: https://github.com/CDataSoftware/google-ad-manager-mcp-server-by-cdata/commit/31676a0aa80f4221656fe6ca445669cad1caf627
+- MCP startup/tool registration: https://github.com/CDataSoftware/google-ad-manager-mcp-server-by-cdata/blob/31676a0aa80f4221656fe6ca445669cad1caf627/src/main/java/com/cdata/mcp/Program.java
+- JDBC configuration: https://github.com/CDataSoftware/google-ad-manager-mcp-server-by-cdata/blob/31676a0aa80f4221656fe6ca445669cad1caf627/src/main/java/com/cdata/mcp/Config.java
+- SQL tool: https://github.com/CDataSoftware/google-ad-manager-mcp-server-by-cdata/blob/31676a0aa80f4221656fe6ca445669cad1caf627/src/main/java/com/cdata/mcp/tools/RunQueryTool.java
+- Claude Desktop setup in README: https://github.com/CDataSoftware/google-ad-manager-mcp-server-by-cdata/blob/31676a0aa80f4221656fe6ca445669cad1caf627/README.md
+- Release page (no releases): https://github.com/CDataSoftware/google-ad-manager-mcp-server-by-cdata/releases
+- Archive/deprecation notice: https://github.com/CDataSoftware/google-ad-manager-mcp-server-by-cdata/commit/31676a0aa80f4221656fe6ca445669cad1caf627
+
+## Nexus Memory disposition
+
+Do not include this repo in the core cross-Harness migration-engine shortlist. Record it only in the MCP-provider connector examples as deprecated/archived, read-only, local stdio, provider-specific and credential/driver dependent. No Session or memory interoperability score should be assigned.

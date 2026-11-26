@@ -1,0 +1,43 @@
+# Candidate #150 — arthamegayasa/nam-stack (2026-11-22)
+
+## Identity and scope
+
+- Repository: https://github.com/arthamegayasa/nam-stack
+- Default branch main; isolated shallow checkout HEAD d645ff1438f90f6d19e5ded3cecf3f51f35dfc49.
+- License MIT; GitHub snapshot shows 0 stars / 0 forks and no releases. GitHub validation run #9 on main commit prefix d645ff1 passed on 2026-11-11.
+- It is the author's personal five-skill content repo for Claude Code, Codex, and Grok Build, not a skills manager and not a session/project migration tool.
+- The README delegates install/update to external xingkongliang/skills-manager (no version/commit pin) and also gives manual copy commands. This external dependency is queued separately for source audit; no functionality from it is attributed to this repo.
+
+## What is actually present
+
+Five skills: grok-imagegen, openrouter-imagegen, openai-imagegen, whats-next, and improve-loop. Files follow skills/<category>/<name>/SKILL.md, with Python image-generation scripts in two skills, a repository structure validator, and an OpenAI-imagegen fake-HTTP eval suite. There is no transcript, Projects, Sections, session tree, memory store, context or token ledger, MCP registry, plugin marketplace, scheduled-task or multi-harness migration code.
+
+The plain SKILL.md folder format is a portable starting point, but the instructions are not semantically universal:
+
+- grok-imagegen relies on Grok Build, T3 Code delegate_task or Grok CLI; its headless route uses the --always-approve flag. This is not equivalent to an ordinary safe shell capability.
+- whats-next requires repo/issue-tracker orientation, gh issue list and a specified subagent workflow.
+- improve-loop assumes a panel/gatekeeper and harness-specific subagent/wait/ledger semantics.
+- openai-imagegen and openrouter-imagegen need their respective paid-provider credentials and API endpoints. Scripts read keys from environment/files and, on Windows, the user environment registry; no key should be copied or migrated as skill content.
+- The repo lacks plugin.json, marketplace.json, MCP manifests, environment/capability declarations, and per-harness invocation adapters. Copying these folders does not provision Chat/Cowork/Code gateways, required providers, tools, user grants, or local plugins.
+
+## Checks and local runtime observations
+
+- rtk python3 scripts/validate.py — exit 0, stdout OK.
+- rtk python3 scripts/validate.py --self-test — exit 0; it rejects wrong frontmatter names, empty descriptions, missing frontmatter/SKILL.md, wrong depth, non-kebab names, duplicate names, and missing README rows.
+- rtk python3 -m unittest discover -s evals/openai-imagegen -p 'test_*.py' -v — exit 0; 13 tests passed, using a local fake HTTP server and synthetic test key. The test run emitted ResourceWarning messages for unclosed local mock sockets; no real API key or provider endpoint was used.
+- OpenAI-imagegen and OpenRouter-imagegen --dry-run commands succeeded with empty API key/base URL environment values, printed payloads only, and did not call a provider or write files.
+- Isolated output-path probe: imported this repo's FakeOpenAI local mock, used only synthetic key sk-synthetic-test-only and a TemporaryDirectory, then invoked openai_image.py with --out <tmp>/out and --name ../escaped. Command exit 0, HTTP went only to localhost, and the script wrote <tmp>/escaped.png outside its chosen output subdirectory; <tmp>/out/escaped.png did not exist. TemporaryDirectory cleanup removed the test output. The source interpolates --name into a path without validating containment; openrouter_image.py has the same path-join pattern. This is a real path-containment defect under a caller-controlled name, not evidence of external exploitation.
+- The test suite covers only openai-imagegen. No invocation or behavior eval exists for the other four skills or across Claude/Codex/Grok; scripts/validate.py is a structural/frontmatter/index check, not a security or cross-harness evaluator.
+
+## Relevance to the user-confirmed destination
+
+User scope remains Claude Desktop on 3P inference in Chat, Cowork, and Code, plus local/self-hosted Claude Code. Current official docs confirm Desktop 3P has a local skills/plugin provision plane, but Claude-account-synced skills do not sync when Claude Code uses an API key or third-party provider. To distribute skills across Desktop surfaces, use a user-uploaded plugin or a managed plugin marketplace; a plain raw Skill folder is not enough for Desktop's organization-plugin layout, and Code requires the marketplace route rather than the organization plugin directory. The repo contains no Claude Desktop plugin manifest or marketplace. Detailed official-source map: docs/research/evidence/claude-desktop-3p-skills-routing-2026-11-22.txt.
+
+Disposition: keep as a small personal Skill corpus and cross-harness behavior fixture, not as a manager or session migration dependency. Useful for evaluating portability loss of tool assumptions, provider credentials, CLI execution and permission semantics; not evidence of Projects/Sections/session graph portability.
+
+## Primary sources
+
+- Repository and source snapshot: https://github.com/arthamegayasa/nam-stack
+- Actions: https://github.com/arthamegayasa/nam-stack/actions
+- Releases: https://github.com/arthamegayasa/nam-stack/releases
+

@@ -1,0 +1,60 @@
+# Claude Desktop on third-party inference: current gateway, modes, and store review (2026-11-22)
+
+Scope: The user confirmed all Claude Desktop surfaces—Chat, Cowork, and Code—alongside local/self-hosted Claude Code. The corrected ChatGPT project/session name is Destruction Era. The user's “Cloud” wording for an API-key destination means Desktop/client-managed sessions configured for a third-party inference gateway, not Anthropic-hosted Claude Code Cloud. No account export, application store, gateway, or API key was accessed.
+
+## Official product boundary
+
+- Current Anthropic documentation describes Claude Desktop on third-party inference (3P) as a distinct deployment mode with the full Chat, Cowork, and Code experience. Model inference is sent to the configured provider/gateway; conversations are stored on the device (and on an SSH host for SSH sessions).
+- In Claude Code Desktop, gateway routing is read from the Desktop third-party inference configuration, not `ANTHROPIC_BASE_URL` or `settings.json`. A user can enable Developer Mode via Help → Troubleshooting → Enable Developer Mode, then Developer → Configure Third-Party Inference. An organization-managed profile takes precedence. With that gateway configuration active, Anthropic-hosted cloud environments and Remote Control are unavailable. This cleanly separates the desired local/client-managed, API-key-compatible path from hosted Claude Code Cloud.
+- The exact 3P app-data roots are `~/Library/Application Support/Claude-3p/` on macOS, `%LOCALAPPDATA%\Claude-3p\` on Windows, and `~/.config/Claude-3p/` on Linux, with documented legacy Windows locations.
+
+## Mode-specific records (not one interchangeable session schema)
+
+- Chat and Cowork state is under `local-agent-mode-sessions/`: a `local_<uuid>.json` session-state file, per-session working directory, transcript, `uploads/`, `outputs/`, and `audit.jsonl`. The audit log includes prompts, responses, tool inputs/results, returned thinking, permission decisions, model and token usage; it is plaintext on disk and is deleted with its session.
+- Project memory sits separately under `local-agent-mode-sessions/.../spaces/<projectId>/memory/`; user/global Cowork memory and instructions occupy other locations. Projects/folders/instructions, attachments, outputs, audit, and memory must be modeled as linked records with scope, not folded into transcript text.
+- Code session metadata is under `claude-code-sessions/`; transcript JSONL is in Claude Code's own `~/.claude/projects/` store, shared with local Claude Code CLI. The desktop app additionally holds Code worktree/runtime records. A migration should identify surface and deployment separately; Chat/Cowork labels may be unified over time and must not be treated as immutable parent nodes.
+
+## Import/recovery boundary
+
+- The first-party 3P importer copies Claude.ai conversations/projects and local earlier-install Cowork/Code sessions into the local store. It is a source-specific copy, not a generic ChatGPT/Codex archive importer; later source activity requires another import. Personal Claude.ai exports omit project knowledge-file contents and chat attachment bytes.
+- Desktop's 3P scheduled tasks run locally and require the device awake with Desktop open unless an organization uses a server-run deployment. Treat schedules and run histories as separate objects; the destination gateway credential does not make hosted Cloud sessions available.
+- Therefore the current docs confirm the target shape and native Claude-origin recovery routes, but not an arbitrary ChatGPT-to-Claude Desktop writer. Until a supported import endpoint or version-pinned disposable restore test proves it, direct undocumented local-store injection remains unsupported/manual review.
+
+## Primary sources checked (2026-11-22)
+
+- [Claude Desktop on third-party overview](https://claude.com/docs/third-party/claude-desktop/overview)
+- [Claude Desktop user identity and local data](https://claude.com/docs/third-party/claude-desktop/data-storage)
+- [Claude Code LLM gateway configuration](https://code.claude.com/docs/en/llm-gateway-connect)
+- [Claude Desktop 3P import history](https://claude.com/docs/third-party/claude-desktop/import)
+- [Chat in Claude Desktop on 3P](https://claude.com/docs/third-party/claude-desktop/chat)
+- [Code in Claude Desktop on 3P](https://claude.com/docs/third-party/claude-desktop/code)
+- [Scheduled tasks in Claude Desktop on 3P](https://claude.com/docs/third-party/claude-desktop/scheduled-tasks)
+
+Evidence level: current official product documentation only. OS, exact Desktop release, per-mode archive parser, imported ChatGPT content, and target native-resume behavior remain untested.
+
+## Supplemental official-documentation update (2026-11-22)
+
+Rechecked current Anthropic Claude Desktop on 3P docs after the user explicitly confirmed all three modes. The current docs now provide a useful first-party migration/export contract for Claude-owned data:
+
+- Chat, Cowork, and Code are all available in Desktop 3P, with model inference directed to the configured provider and conversation state stored locally (plus the remote host for SSH Code sessions). Current Unified Claude combines Chat and Cowork UI; on a device that can run Cowork, a home-screen prompt starts a Cowork session. Therefore keep stable identity/surface/runtime fields distinct from mutable UI labels.
+- The documented 3P roots are `~/Library/Application Support/Claude-3p/` on macOS, `%LOCALAPPDATA%\\Claude-3p\\` on Windows, and `~/.config/Claude-3p/` on Linux. Chat/Cowork state is in `local-agent-mode-sessions/` with per-session `local_<uuid>.json`, transcript, attachment copies, outputs and audit log. Audit records include prompt/response text, tool inputs/results, thinking text, permission decisions, model and token usage; the audit is plaintext and depends on full-disk encryption for at-rest protection. Code metadata is in `claude-code-sessions/`, while transcript JSONL remains in `~/.claude/projects/`.
+- User-level Cowork memory/instructions and `spaces/<projectId>/memory/` project memory are separate linked records. Chat/Cowork sessions, attached files, project folders/links, outputs, schedules and run history must not be flattened into transcript messages.
+- Native 3P export/import can move Claude Desktop data between devices. The official archive can contain sessions, projects/files, memory, scheduled tasks, skills, uploaded plugins, some preferences and local MCP commands; it may contain passwords/API keys and must be treated as sensitive. This is a Claude-owned archive, not evidence of a supported importer for ChatGPT archives.
+- The 3P import wizard supports Claude.ai chats/projects plus local earlier-install Cowork/Code sessions. The copy is one-time; subsequent source-side activity requires another import. Current documented automatic-copy version 5.11492.0+ preserves Cowork projects/descriptions/folders/sidebar pins, memory/instructions, schedules, uploaded plugins, saved skills, optional org plugins, live artifacts, and attached files on Chat/Cowork; model/approval choices and connector sign-ins are among the items that must be reconfigured, and Code attachment files are not copied. The docs call out more recent 5.1231.0 migration corrections. This source-specific path is not a general ChatGPT-to-Claude API.
+- Retention is surface-specific (`chatSessionRetentionDays`, `coworkSessionRetentionDays`, `codeSessionRetentionDays`) and applied separately to their respective records; project and memory can remain when sessions are deleted. This reinforces separate lifecycle/retention edges in Nexus.
+
+Primary links for the supplemental check: [local data](https://claude.com/docs/third-party/claude-desktop/data-storage), [import history](https://claude.com/docs/third-party/claude-desktop/import), [Desktop 3P configuration](https://claude.com/docs/third-party/claude-desktop/configuration), [Chat mode](https://claude.com/docs/third-party/claude-desktop/chat), [Desktop 3P overview](https://claude.com/docs/third-party/claude-desktop/overview), and [gateway routing](https://code.claude.com/docs/en/llm-gateway-connect). These are documentation findings; no local/Desktop data was inspected or imported.
+
+## Clarification-follow-up: API-key Desktop 3P is not Claude Code Cloud (2026-11-22)
+
+The user confirmed that “all three modes” means Chat, Cowork, and Code in the Claude Desktop app using local/self-hosted Claude Code and the app's Developer Mode third-party gateway. The current official setup flow explicitly matches that description: Help → Troubleshooting → Enable Developer Mode → Developer → Configure Third-Party Inference. For a static gateway key, Desktop 3P uses `inferenceProvider: "gateway"` with `inferenceGatewayApiKey`; the gateway must expose Anthropic Messages API semantics (`POST /v1/messages`, streaming and tool use; optional `GET /v1/models`). A raw OpenAI-compatible API is not interchangeable unless a gateway translates it. Direct Anthropic API key auth (`inferenceProvider: "anthropic"`, `inferenceAnthropicApiKey`) is a separate configuration.
+
+This is a local/client-managed target. The app stores Chat/Cowork/Code state locally (SSH Code also has a remote-host state component); it is distinct from Anthropic-hosted Claude Code Cloud sessions, which use claude.ai account authorization and are unavailable through a third-party gateway/API-key deployment. Do not promise `claude.ai/code` Cloud session creation/resume from the user's API key.
+
+Current additional details verified from official docs:
+- 3P import wizard has a Claude.ai export step plus a local Cowork & Code session step. It is a Claude-owned migration/import path, not a generic ChatGPT/Codex archive reader. It can be enabled by configuration, runs as a one-time copy, and may ask the user to confirm resumption of imported sessions.
+- Chat/Cowork state and Code metadata/transcripts are separate targets. The 3P Desktop application root is `Claude-3p`; Chat/Cowork uses `local-agent-mode-sessions` with state JSON, transcript, upload/output trees, and `audit.jsonl`; Code has app records under `claude-code-sessions`, while transcripts use `~/.claude/projects`. UI labels are mutable (Unified Claude can route home-screen prompts into Cowork) and must not replace stable surface/deployment identity.
+- Static API keys entered in Desktop's in-app configuration are encrypted via OS secure storage when available. Conversation/audit files remain plaintext, and export ZIPs are unencrypted and may include secrets; the Nexus migration product should keep credentials out of exported archive payloads, preserve only opaque references/relink steps, and clearly mark sensitive source artifacts.
+- 3P Cowork scheduled tasks run locally and need the device awake with Desktop open unless a server-run deployment is configured. Treat schedule definition, run history, approval state, and runtime dependency separately; API-key routing alone does not make them hosted cloud sessions.
+
+Sources: <https://claude.com/docs/third-party/claude-desktop/installation>; <https://claude.com/docs/third-party/claude-desktop/in-app-configuration>; <https://claude.com/docs/third-party/claude-desktop/gateway>; <https://claude.com/docs/third-party/claude-desktop/claude-api>; <https://claude.com/docs/third-party/claude-desktop/data-storage>; <https://claude.com/docs/third-party/claude-desktop/import>; <https://code.claude.com/docs/en/claude-code-on-the-web>.

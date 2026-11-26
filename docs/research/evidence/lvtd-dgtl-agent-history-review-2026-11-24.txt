@@ -1,0 +1,60 @@
+# Candidate #235 — agent-history (source, license, and tests review)
+
+Review date: 2026-11-24 (Asia/Shanghai)
+Candidate queue: primary GitHub corpus, entry 226 / review #235.
+Requested clone URL: https://github.com/lvtd-dgtl/agent-history
+GitHub canonical page resolves to: https://github.com/d3layd/agent-history
+Local checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-lvtd-dgtl-agent-history-20261124-followup235
+
+## Provenance and license gate
+
+The shallow clone completed with exit 0. Checkout reports `## main...origin/main` (clean), HEAD `fefe2d1833af2c93f0cf3048d5e2fcf5787b35d6`, commit timestamp `2026-11-21T17:04:01-06:00`, subject `Load the env file for every command, not only sync (#69)`. The origin remote is the requested `lvtd-dgtl/agent-history`; GitHub's public page redirects to `d3layd/agent-history`. The repository LICENSE and `pyproject.toml` state MIT; the LICENSE names Dennis Layden (2026). No contrary or leaked-source provenance notice was found in the reviewed README/license metadata. This is a license-eligible research reference, not a legal opinion.
+
+CodeGraph was initialized on the isolated checkout and verified current: 102 files indexed; 2,605 nodes; 8,507 edges; 98 Python source files. `.codegraph/.gitignore` remains present; its single `!.gitignore` self-preserving exception was removed as instructed, leaving the all-files ignore rule intact. Source review followed the provenance/license check.
+
+## What it actually does
+
+`agent-history` is a local semantic/full-text history archive and retrieval/injection layer, not a state migrator. `all_adapters()` registers local read adapters for Claude Code, Codex CLI, OpenCode, Hermes, OpenClaw, Grok, Gemini CLI, T3 Code, opt-in docs, and the redacted hub inbox. The separate `ClaudeAiExport` importer is explicit and snapshot-based; it is not a live adapter. The project's MCP server exposes history recall/show and note writing, not a generic source-to-target session importer.
+
+### Source and hierarchy fidelity
+
+- Claude Code: scans every configured local `~/.claude*/projects` profile recursively; recognizes JSONL user/assistant text, nested subagent files, sidechain/agent IDs, explicit `forkedFrom` relationships, project-memory Markdown, and remote-control bridge IDs. Its parser can handle torn final JSONL writes by retaining the byte offset. This is read/search indexing: it does not recreate a Claude Desktop project, Cowork workspace, or Cloud session.
+- Codex CLI: reads local `~/.codex/sessions/**/rollout-*.jsonl`, session metadata/working-directory updates, and `response_item` text blocks. It intentionally excludes developer/system messages, tool traffic, and non-text content. It is not a ChatGPT Projects/Sections adapter.
+- OpenCode/Hermes: read SQLite sources in read-only mode and query named columns rather than `SELECT *`; the source comments call out adjacent OAuth-token/system-prompt fields. Other adapters parse local transcript formats.
+- Session storage is chunk/provenance oriented (agent, origin, source session ID, cwd, timestamp, role, text, optional fork/sidechain/alias metadata). Alias/session-UID resolution can link identities, and `show` can display indexed chunks. This is not a canonical ordered Session/EventGraph with general parent/child, active-branch, task, artifact, attachment, and control-flow edges.
+- Claude.ai export: the explicit importer recognizes conversations, project JSON, account/project memories, design chats, and extracted attachment text. Projects become separate instructions/docs records. Its own source comments state that current exports do not link chats to projects; the reader preserves a conversation's list order, not source branch topology. It omits thinking/tool-use/tool-result prompt blocks, uploaded-image bytes, usage/token accounting, and general event metadata; attachment extracted text is capped at 100,000 characters. This is useful archive/search coverage, not a lossless migration format.
+- Claude.ai Chat exports are importable only after the user downloads/unpacks an export and explicitly invokes `import claude-ai`. The project's `doctor --coverage` explicitly lists live claude.ai Chat, claude.ai/code Cloud sessions, Claude Desktop Cowork, and other machines as surfaces no adapter can see. Local Claude Code JSONL may be indexed regardless of which model gateway created it, but there is no writer to a 3P Claude Desktop Chat/Cowork/Code session store or to Claude Code's API-key account state.
+
+### Resources, memory, automation, and security
+
+- Claude Code project-memory Markdown is indexed. The Claude.ai export importer creates searchable records for project descriptions/custom instructions/docs and account/project memories. This does not migrate Skills, MCP servers, arbitrary plugins, app settings, or a platform's private memory database.
+- The Claude Code plugin installs index/injection hooks (SessionEnd, PreCompact, UserPromptSubmit); cron and Windows Scheduled Task options can trigger indexing. These are this tool's own indexing jobs, not imported ChatGPT task/schedule definitions. SessionEnd only fires on clean exit; the README acknowledges the gap.
+- Local vector embeddings use Ollama; text/BM25 mode can work without it. A Claude Code plugin and MCP history tools are integration surfaces, not API-Key provider adapters or session writers.
+- Privacy tradeoff: the README calls the SQLite index a credential store. It retains full indexed message text; local secret redaction is **off by default**, matching is not a guarantee, and there is no encryption at rest. The outbound ship/hub path is redacted, but local indexing is not automatically sanitized. This must be treated as sensitive, opt-in local data with scoped access, retention and deletion controls.
+- The project has a documented macOS SQLite-extension constraint: its README says uv-managed Python 3.11–3.13 builds on macOS may lack extension loading, while its documented macOS route is Python 3.10 or another compatible SQLite build. This review host used Python 3.12 and skipped the extension-dependent tests.
+
+## Local validation
+
+No real profile, user transcript, API key, Ollama endpoint, desktop client, or provider request was used. Test dependencies were installed into disposable `/tmp/nm-agent-history-review-235-venv` from the project metadata; repository files were not installed into the user's global Python environment.
+
+Focused parser/identity suite:
+
+`rtk test /tmp/nm-agent-history-review-235-venv/bin/python -m pytest tests/test_adapter_claude_code.py tests/test_claude_profiles.py tests/test_adapter_codex.py tests/test_import_claude_ai.py tests/test_adapter_opencode.py tests/test_adapter_hermes.py tests/test_adapter_openclaw.py tests/test_session_identity.py`
+
+Observed exit 0; `105 passed, 56 skipped in 0.44s`.
+
+Full suite:
+
+`rtk test /tmp/nm-agent-history-review-235-venv/bin/python -m pytest`
+
+Observed exit 0; `434 passed, 410 skipped in 11.74s`. A second run with skip accounting reported 409 skips because this Python cannot load SQLite extensions and 1 Windows-only behavior. These skips mean the index/SQLite integration and Windows-specific coverage were not validated here; the pass count is not a full platform/integration certification.
+
+## Decision
+
+Keep as high-quality adjacent **local history ingestion, search, coverage reporting, privacy/retention, and MCP recall** prior art. MIT allows consideration of code reuse subject to normal attribution/dependency/security review. Do not classify it as a ChatGPT-to-Claude migrator, do not claim full SessionGraph/Project/Section fidelity, and do not use its text index as the canonical portable archive. The strongest clean-room design lessons are to keep read-only adapters version-scoped, explicitly mark live surfaces absent, track parser coverage/offsets and aliases, and make local secret retention opt-in and visible. It does not satisfy the requested ChatGPT `Destruction Era` Project/Section/Session migration or the three Claude Desktop third-party-gateway targets (Chat, Cowork, Code) and local/self-hosted Claude Code API-Key target.
+
+## Public primary sources
+
+- https://github.com/d3layd/agent-history
+- https://github.com/d3layd/agent-history/blob/fefe2d1833af2c93f0cf3048d5e2fcf5787b35d6/LICENSE
+- Pinned reviewed source paths in the checkout: `src/agent_history/adapters/__init__.py`, `claude_code.py`, `codex.py`, `claude_ai.py`, `opencode.py`, `openclaw.py`, `hermes.py`; `src/agent_history/sessions.py`; `tests/test_adapter_claude_code.py`, `test_adapter_codex.py`, `test_import_claude_ai.py`, `test_session_identity.py`.

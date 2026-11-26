@@ -1,0 +1,3 @@
+[FATAL] Invalid environment configuration. The following variables failed validation: STORAGE_DRIVER
+[FATAL] Invalid environment configuration. The following variables failed validation: STORAGE_DRIVER
+ ⨯ Next.js build worker exited with code: 1 and signal: null

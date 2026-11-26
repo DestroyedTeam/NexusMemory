@@ -1,0 +1,45 @@
+# Source review: lweiss01/holistic — 2026-11-25
+
+## Scope and disposition
+
+Reviewed candidate #288 from the active 303-repository primary inventory. Pin: `e698632106e40bc2c75f35592b6e5694eafe34e1` (the GitHub v0.7.2 release commit, 2026-11-18). License metadata and `LICENSE` identify MIT. Keep as a strong architectural reference for repository-scoped cross-agent continuity, explicit handoffs, per-agent capability profiles, opt-in portability and safety boundaries. Do **not** treat it as Nexus Memory's session migrator or as a drop-in solution for the requested transfer; its actual product model is intentionally summarized repo memory and operational telemetry, not cross-Harness import/export of native conversation graphs.
+
+The user has confirmed that Claude Desktop third-party-gateway **Chat, Cowork and Code are three distinct acceptance tracks**, plus **local/self-hosted Claude Code**. They must remain separately tested even if a vendor combines modes in one client UI. Holistic does not expose a native importer/writer for any of the three Claude Desktop 3P modes, ChatGPT Projects/Sections/Section Groups, or their native session trees. Its Claude Desktop setup configures an MCP server and its generated adapter calls itself “Claude/Cowork”; Claude Code has a separate hook/capability profile. These are continuity integrations, not native archive migration. Its runtime/Andon event contract accepts lifecycle and activity signals from integrations; a signal source is not an importer, transcript store or restore path.
+
+## What is implemented (source inspection at the pinned commit)
+
+- Core `SessionRecord` in `src/core/types.ts` stores one structured continuity record: agent, repo branch, start/update/end timestamps and lifecycle status, title/current goal/plan/latest status, work/tried/next items, assumptions, blockers, references, impact/regression notes, affected areas, optional `relatedSessions`, outcome/severity/completion signal, changed files, checkpoint count and resume recap. It does not have native-message/turn/tool-call/attachment/image/link/token-usage payloads or vendor IDs/parent IDs needed to reconstruct an original transcript.
+- `HolisticState` has one `activeSession`, a flat `pendingWork[]`, a `lastHandoff` and derived-doc index. Sessions are separate JSON files in active/archive directories. `relatedSessions` is a list of identifiers, not a parent/child or branch DAG. The current start/checkpoint/handoff flow summarizes work and stores an archive record; `readSessionsFromDir` parses those Holistic JSON records. No source transcript importer, source-native exporter or destination session writer was found in the reviewed code/docs.
+- README describes `HOLISTIC.md`, `.holistic/state.json`, append-only `.holistic/sessions/` and derived context documents. Completed/unreferenced records move to an archive after 30 days; archive search/diff can read those records. This is useful memory/handoff design, not vendor session preservation.
+- Cross-device sync is deliberately opt-in (`portableState`); generated scripts sync Holistic-owned state through the hidden Git ref `refs/holistic/state`. It is distribution of Holistic handoffs/docs, not conversion to the receiving Harness's native Projects/Sections or sessions, and it is not a Claude third-party API-key gateway session API.
+- Adapter documentation models capability honestly (`realtime_hooks`, `session_lifecycle_only`, `substrate_fallback`). It can serve as a reference for Nexus per-Harness capability matrices, but the generated adapter guidance is not an importer and product-specific fields are not normalized into a lossless interchange graph.
+- Andon documentation defines platform-neutral events such as session started/heartbeat/ended, tool/test activity and input/review gates. These events are intentionally about observability/liveness; no raw transcript serialization or import/export semantics are specified.
+
+## Four-track fit
+
+| Acceptance track | What this checkout offers | Migration verdict |
+|---|---|---|
+| Claude Desktop 3P Chat | Claude Desktop MCP configuration and a combined Claude/Cowork continuity adapter; no native Chat archive reader/writer | No Chat session transfer |
+| Claude Desktop 3P Cowork | Same combined adapter; no Cowork task/artifact/session importer | No Cowork migration |
+| Claude Desktop 3P Code | No distinct Desktop Code session importer; do not conflate with local Claude Code | No Desktop Code migration |
+| Local/self-hosted Claude Code | Hooks can signal/checkpoint summarized work and Andon can observe events; no raw CLI session JSONL importer or cross-Harness restore | Useful live-continuity reference only |
+| ChatGPT source (Destruction Era) | No ChatGPT Project/Section/Section Group or native chat tree reader | Does not address the source model |
+
+## Security and operational boundary
+
+The project says core CLI is local-first, with portable sync off by default; when enabled, Holistic files can be pushed to the configured remote. Its security policy describes best-effort text redaction for secrets and explicitly notes structured metadata is not fully covered, as well as a missing dry-run/uninstall limitation. Do not place secrets or raw transcripts into portable state without a separate privacy review. The optional Andon add-on starts local services on loopback ports and has a token/origin boundary; **no Andon service, daemon, live agent account, API key, gateway, or user session was started or exercised in this review**. `HOLISTIC_ANDON=0` was set for candidate tests.
+
+## Reproducible checks
+
+- Runtime: Node `v26.7.0`; `npm ci --ignore-scripts` exit 0 (98 packages added; install scripts deliberately disabled).
+- Full candidate test runner, default macOS temp path: `env HOLISTIC_ANDON=0 node --experimental-strip-types ./tests/run-tests.ts` exit 1, 329 PASS and 1 FAIL. Failure is `enumerateGitWorktrees returns additional worktree paths`: the test fixture expects `/var/folders/.../T/...`, while Git reports the same location as `/private/var/folders/.../T/...`; the assertion uses `path.resolve` without resolving that symlink. Captured stdout/stderr are `lweiss01-holistic-tests-default-tmp.stdout` and `.stderr` beside this report.
+- Same full runner with `TMPDIR=/private/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T HOLISTIC_ANDON=0` exit 0, `330 test(s) passed.` Captured stdout/stderr are `lweiss01-holistic-tests-canonical-tmp.stdout` and `.stderr` beside this report. Stderr includes expected security-test refusals for non-loopback destinations and Git worktree setup messages.
+- These tests validate Holistic's own code and fixtures only. No live source/destination Harness validation, gateway/API key, export/import fidelity, cross-Harness restore or losslessness claim was tested.
+
+## Sources
+
+- Repository and README: https://github.com/lweiss01/holistic
+- Latest release page (v0.7.2, released 18 Nov 2026; archive search/diff fix and dependency update): https://github.com/lweiss01/holistic/releases/tag/v0.7.2
+- Pinned source model: https://github.com/lweiss01/holistic/blob/e698632106e40bc2c75f35592b6e5694eafe34e1/src/core/types.ts
+- Pinned session event contract: https://github.com/lweiss01/holistic/blob/e698632106e40bc2c75f35592b6e5694eafe34e1/docs/AGENT_SESSION_EVENT_CONTRACT.md
+- Security policy: https://github.com/lweiss01/holistic/blob/e698632106e40bc2c75f35592b6e5694eafe34e1/SECURITY.md

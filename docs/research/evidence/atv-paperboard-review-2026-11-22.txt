@@ -1,0 +1,48 @@
+# All-The-Vibes/ATV-PaperBoard — implementation and compatibility review
+
+Date: 2026-11-22. Candidate #114 in the 303-name primary corpus. User target remains ChatGPT Projects / Section Groups / Session graph for Destruction Era to local/self-hosted Claude Code and Claude Desktop third-party-gateway Chat/Cowork/Code, separately per mode. No real ChatGPT export, session, key, or target account was touched.
+
+## Provenance and current maturity
+- Repository: https://github.com/All-The-Vibes/ATV-PaperBoard
+- Dispatcher clone command `rtk git clone https://github.com/All-The-Vibes/ATV-PaperBoard.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-all-the-vibes-atv-paperboard-20261122` exited 0; clean `main`; HEAD `4b068bcab8e4dc105f0ef975ee224564f5d63383`, commit dated 2026-05-18. GitHub repo page showed 49 commits, 1 star, 1 fork, Apache-2.0.
+- PyPI `atv-paperboard` currently lists 0.1.4, released 2026-05-17, Apache-2.0, Python >=3.10, with provenance for the published files. GitHub Releases page lists v0.1.2 as latest visible GitHub release despite the v0.1.4 tag and PyPI release. The repo page showed 6 open / 17 closed PRs, including #11 (uninstall/cleanup), #13 (design.md bridge bump) and #23 (Impeccable bump). These are unmerged; main does not have their changes.
+- `rtk codegraph init` indexed 74 files, 1,011 nodes and 2,052 edges; status up to date. `.codegraph/.gitignore` retained after removing its `!.gitignore` exception.
+
+## What the implementation actually does
+- One Python core + harness wrappers recognize Claude Code, Codex CLI, GitHub Copilot CLI, GitHub Copilot Coding Agent via Actions, and standalone. `paperboard render` accepts JSON/Markdown and writes a derived `{slug}.html` + `{slug}.DESIGN.md` + `{slug}.meta.yaml`; CLI regenerates a static HTML gallery. Skills/hooks suggest or opt into rendering structured status/table outputs. There is no import/export of agent sessions.
+- Persistence roots are harness-specific: Claude `CLAUDE_PLUGIN_DATA`, Codex `~/.codex/atv-paperboard-artifacts`, Copilot CLI `COPILOT_HOME` or `~/.copilot/plugin-data/...`, Copilot agent repo-relative, standalone cwd. `PAPERBOARD_ARTIFACT_DIR` can override all roots but does not merge/parse harness histories. README explicitly declares cross-harness aggregation a v0.1.x non-goal.
+- The `sections` schema (`hero`, `sec`, `stack-list`, etc.) shapes a rendered HTML report; it is not ChatGPT’s Project Section Group or a Session hierarchy. No source IDs, conversation/branch/subtask model, attachment transfer, token usage, memory/schedule migration, chat history writer, MCP server (deferred), ChatGPT adapter, Claude Desktop Chat/Cowork/Code adapter, or Claude Code session reader/writer exists. Claude Code CLI is supported, but that is distinct from Claude Desktop Code mode.
+- The product is an output-presentation/resource-plane utility, not a data portability engine. `core.render.render_artifact()` writes only HTML/design/meta; the original JSON/Markdown input is not persisted. README says `meta.yaml` contains the source input path, but current source writes no input path/title or source digest; this was verified in a fresh wheel smoke. `_GENERATOR` is hard-coded to `atv-paperboard/0.1.0` while package version is 0.1.4, and `tests/test_render_real_world.py` asserts that stale value.
+
+## Security and persistence boundaries
+- Rendered HTML is active content. README explicitly documents raw HTML pass-through and says it is not sanitized. `body_html` is emitted as-is, Jinja uses `autoescape=False`, and Markdown raw HTML lines are preserved. A synthetic isolated `body_html` with `<script>window.__paperboard_probe__=1</script>` rendered with that script tag preserved (`render_exit=0`, `script_tag_preserved True`); it was not opened/executed. Treat untrusted imported/session HTML as unsafe until independently sanitized. Structured table cell helpers escape values, but that does not sanitize all input paths.
+- Default browser opening runs a loopback-only HTTP server on `127.0.0.1` and opens the generated artifact; headless/remote guard exists. CLI `--design URL` accepts a URL and uses urllib to fetch it to a temp file; that is explicit user input, not a safe untrusted-session parser.
+- Main has no retention/cleanup command. Open PR #11 proposes `paperboard uninstall` with dry-run by default, `--yes`, `--keep-artifacts`, `--all-harnesses`, allowlist/sentinel checks and 12 tests plus maintainer-reported sandbox scenarios; this is not merged and was not treated as shipped functionality.
+
+## Local verification at pinned source
+- Disposable test copy: `/tmp/nm-atv-paperboard-review-20261122/repo`; no changes to the candidate checkout. Python environment: Python 3.12.4/pytest 9.2.0, package dependencies in venv. `npm ci` with `PUPPETEER_SKIP_DOWNLOAD=true` exited 0 (284 packages; Puppeteer browser download/install script was not executed by npm’s install-script policy).
+- `python -m pytest tests/ -v --tb=short`: 215 collected, 212 passed, 3 skipped, 0 failed, 8.38s. Skips: one Windows-only detached-spawn fallback; two visual screenshot tests because Pillow was not installed. This suite tests parsers/renderers/config and hook helpers, not live ChatGPT/Claude Desktop session transfer. The two live Claude/Codex hook scenarios are explicitly manual in `tests/phase0/test_v3_v4_v5_v6.py`; V5/V6 here are mock env/PATH checks, not real host E2E.
+- `ruff check core tests adapters`: exit 0, all checks passed.
+- `python -m build`: exit 0 (sdist + wheel); `twine check dist/*`: exit 0. Build emits setuptools warnings that `license = { text = ... }` and license classifiers are deprecated and must be corrected before 2027-02-18.
+- Fresh venv install of the locally built 0.1.4 wheel, then `paperboard render --input examples/inputs/build-status.json --no-open --output-dir /tmp/nm-atv-paperboard-review-20261122/smoke-out`: exit 0. The temp dir contained build-status.html (29,271 bytes), build-status.DESIGN.md (4,255), build-status.meta.yaml (262), gallery.html (11,416). Metadata recorded generator atv-paperboard/0.1.0, harness codex (the desktop test environment exposed a Codex signal), design/tier/slug/lint, but no source file/path.
+- In disposable copy, `adapters/claude-code/build.py` and `adapters/copilot-cli/build.py` both exited 0. Initial `diff -qr` parity returned exit 1 solely because Python test imports had generated `__pycache__` inside fresh `_dist`; removed generated cache directories and reran both comparisons, which exited 0.
+- Remote verification boundary: the repository Actions page and the PyPI-linked provenance run URL returned HTTP 404 in the web fetcher; no current upstream Actions run result is claimed. Local CI-equivalent checks above are observed. GitHub Releases latest visible entry is v0.1.2 while PyPI latest is 0.1.4 and the repository has v0.1.4 tag.
+
+## Corrected command/error ledger
+- `rtk grep` was first pointed at `tests/`, `scripts/`, and `core/` directories and exited 2; corrected to explicit `tests/*.py core/*.py`, then shell pattern `scripts/*.py` produced zsh “no matches found” (exit 1) and was removed. Corrected query exited 0.
+- Incorrect manifest paths `/.claude-plugin/plugin.json` at repository root and `adapters/codex/plugin.json` returned exit 1. `rtk ls -R` showed the Claude Code manifest is `adapters/claude-code/.claude-plugin/plugin.json`; corrected file read succeeded. Codex has AGENTS/openai.yaml and an INSTALL guide, not a `plugin.json` (by design).
+- First raw full-test invocation omitted the venv `PATH`; `test_v6_python_on_path` failed because neither `python` nor `py` resolved. Re-run with `PATH=/tmp/nm-atv-paperboard-review-20261122/venv/bin:$PATH` passed 212/215 (3 documented skips).
+- GitHub Actions tab and PyPI-attestation linked workflow-run page returned 404. No substitute latest-run claim is made.
+- Initial generated `_dist` parity check saw only test-generated `__pycache__`; removed caches and reran parity successfully.
+- First project-recording script wrote a `Path` object instead of the review string into the evidence file and exited 1 before creating the evidence/doc append; corrected by separating `review_text` from `evidence_path`. Candidate inventory update was already successful and remains the same.
+
+## Primary sources
+- Pinned README: https://github.com/All-The-Vibes/ATV-PaperBoard/blob/4b068bcab8e4dc105f0ef975ee224564f5d63383/README.md
+- Pinned persistence resolver: https://github.com/All-The-Vibes/ATV-PaperBoard/blob/4b068bcab8e4dc105f0ef975ee224564f5d63383/core/persist.py
+- GitHub repository: https://github.com/All-The-Vibes/ATV-PaperBoard
+- GitHub pull requests: https://github.com/All-The-Vibes/ATV-PaperBoard/pulls
+- PR #11 (unmerged uninstall/cleanup): https://github.com/All-The-Vibes/ATV-PaperBoard/pull/11
+- PR #13 and #23 (unmerged dependency updates): https://github.com/All-The-Vibes/ATV-PaperBoard/pull/13 ; https://github.com/All-The-Vibes/ATV-PaperBoard/pull/23
+- PyPI package/release provenance: https://pypi.org/project/atv-paperboard/
+- GitHub Releases: https://github.com/All-The-Vibes/ATV-PaperBoard/releases
+- GitHub Actions page: https://github.com/All-The-Vibes/ATV-PaperBoard/actions

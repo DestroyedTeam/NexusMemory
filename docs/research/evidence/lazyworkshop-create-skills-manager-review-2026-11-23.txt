@@ -1,0 +1,36 @@
+# Candidate #191 — lazyworkshop-create/skills-manager review
+
+Review date: 2026-11-23
+Pinned source: https://github.com/lazyworkshop-create/skills-manager/tree/9d794f6491444b9705e0d0914092dd8552a972a1
+HEAD and `refs/remotes/origin/main`: `9d794f6491444b9705e0d0914092dd8552a972a1` (2026-01-15T13:34:13+08:00). Isolated shallow clone; source checkout clean. CodeGraph indexed the one Python source file: 30 nodes, 127 edges. The generated `.codegraph/.gitignore` was retained; only its self-preserving `!.gitignore` line was removed, and CodeGraph status re-verified.
+
+## Scope and behavior
+
+This repository is a small Python UI/downloader/updater for Agent Skills in `wshobson/agents`. It lists preselected Skill mappings from `skills.json`, can browse the remote repo, then copy Skills to a VS Code global directory, a generic `./skills` project directory, a user-entered path, or a hard-coded “Claude Desktop” folder. It has no Harness/session schema and performs no state migration. No support for ChatGPT/Codex projects, Section Groups, conversation hierarchy, branches, events, transcript/attachments/media/token accounting, MCP, plugin connectors, memory, or schedules. It does not set up an API key or third-party gateway.
+
+The implementation clones the default remote branch shallowly (no commit/hash pin), copies directory trees, and if a Skill contains `requirements.txt`, invokes pip against the active `sys.executable`. Existing destinations are recursively deleted before copying, without ownership checks, backup, dry-run or rollback. No test suite, license file/SPDX, dependency lock, or CI workflow was found. The README says the code was AI-generated but that is not a license grant.
+
+## Claude target mismatch confirmed against current official docs
+
+The candidate's `--claude-install` path is `~/Library/Application Support/Claude/skills` on macOS, `%APPDATA%\\Claude\\skills` on Windows, and `~/.config/Claude/skills` on Linux. This does not match Claude Desktop on 3P's documented app-local-data deployment model (`Claude-3p`), and the current official Skills docs do not specify these generic paths as the Desktop 3P Chat/Cowork installation mechanism. Desktop 3P user extensions are added/managed in the app UI and stored in that app's local data directory; organization-wide distribution uses plugins/marketplaces or a system-wide directory. The distinct Code filesystem skill conventions are `~/.claude/skills/` (personal) and `.claude/skills/` (project). This installer reaches either only via its arbitrary custom-path option, with no target validation, and does not configure plugins/MCP/hooks needed by some extensions.
+
+The official Skills help says account Skills synchronize into Claude Code only when signed in with a Claude account; they do not sync when Claude Code is signed in with an API key or runs against a third-party cloud provider. For this user's API-key/gateway path, Skills synchronization must therefore be handled by a separate explicit adapter; this installer neither detects that boundary nor handles it.
+
+## Isolated runtime checks
+
+- `PYTHONPYCACHEPREFIX=/private/tmp/nm-followup191-pycache python3 -m py_compile install_skills.py`: exit 0, stdout/stderr empty.
+- `HOME=/private/tmp/nm-followup191-home PYTHONDONTWRITEBYTECODE=1 python3 install_skills.py --help`: exit 0. The CLI help worked; stderr contained a `DeprecationWarning` for `locale.getdefaultlocale`, which is scheduled for removal in Python 3.15.
+- With fake HOME and `input()` returning `3`, `get_target_directory()` returned `/private/tmp/nm-followup191-home/Library/Application Support/Claude/skills`, confirming the hard-coded default without creating it.
+- A synthetic-only isolated probe imported `install_skills.py`, replaced the clone command with copying a fixture tree, set the config key to `../../escape`, pre-seeded the resolved destination with `unmanaged.txt`, symlinked a Skill file to a separate temporary file containing `SYNTHETIC_EXTERNAL_MARKER_NOT_A_SECRET`, and monkeypatched dependency installation to a no-op. `update_or_install_skills(...)` exited 0. Observed: destination escaped the selected target root; preexisting unmanaged file did not survive; source symlink was dereferenced and the synthetic outside file's contents copied. stdout: `Fetching latest skills from repository...`; `Repository: synthetic://local-fixture`; `Found existing installation for ../../escape`; `Updating ../../escape...`; `✓ Successfully processed ../../escape.` stderr empty. This tested only disposable `/private/tmp` state; it did not read or change user data, access network, invoke pip, or access real secrets. This demonstrates an unsafe config/installer boundary, not remote exploitation or exfiltration.
+
+## Official sources reviewed 2026-11-23
+
+- Anthropic, [MCP, plugins, skills, and hooks for Claude Desktop on 3P](https://claude.com/docs/third-party/claude-desktop/extensions): Desktop 3P extension/skills support, local user extensions, plugin marketplaces, modes and filesystem deployment.
+- Anthropic, [User identity and local data](https://claude.com/docs/third-party/claude-desktop/data-storage): 3P app data, session and Code storage boundaries.
+- Anthropic Help Center, [Use skills in Claude](https://support.claude.com/en/articles/12512180-use-skills-in-claude): Code account-sync behavior versus API key / third-party provider.
+- Anthropic Platform docs, [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview): filesystem-based Claude Code skill locations and distinction from API/claude.ai skills.
+- Anthropic Help Center, [Move from Claude Enterprise to Claude Desktop on a cloud provider](https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider): Desktop 3P target capabilities and migration caveats.
+
+## Disposition
+
+Reject as a cross-Harness or SessionGraph migration candidate. Keep, at most, as a basic Skills catalog/discovery UX reference; no source-code reuse recommended until there is license clarity, containment, no-follow symlink policy, ownership-aware backup/restore, no shell-based package installation by default, commit-pinned source integrity, and versioned adapters for the actual Claude Desktop 3P and Code targets. Detailed impact is recorded in `docs/COMPATIBILITY.md` and the research plan.

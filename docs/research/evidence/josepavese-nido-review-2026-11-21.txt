@@ -1,0 +1,32 @@
+NEXUS MEMORY — PINNED SOURCE AND TEST REVIEW
+Repository: Josepavese/nido
+Pinned branch HEAD and origin/HEAD: b0d419977bd095ddf643d8976eef721bd833567a (commit date 2026-11-19)
+Latest listed release at review: v4.11.0 (2026-11-13)
+GitHub metadata observed 2026-11-21: MIT, 2 stars, 1 fork, 0 open issues.
+
+WHAT IT ACTUALLY IS
+- A cross-platform local QEMU virtual-machine manager with a shared CLI, terminal TUI and local MCP stdio server. Resource model is host VM / image catalog / template / blueprint / local config and disk snapshot, not AI conversation Projects or Sections.
+- The optional `nido-vm-testing` is a Codex-compatible operational Skill teaching an agent to create disposable VM-backed test environments. That is a reusable prompt/resource, not transcript or task-context export.
+- MCP docs state the client starts `nido mcp` as a local child process; no remote HTTP/SSE listener. `nido register` prints a block but does not install it into every client. MCP surfaces provide tools/resources for local VM and installation mutations. This is not an API-key remote MCP service and does not create/resume Claude Code API-key sessions. Any Desktop mode must be separately checked for local stdio availability; a model gateway is not a session adapter.
+
+SESSION / HIERARCHY / DATA BOUNDARY
+- The README's “durable MCP session” and validator scenario `MCPDurableSessions` are VM operations over one stdio connection (create → wait → guest shutdown → disk snapshot → restart → delete). “Durable” refers to VM resource state, not a ChatGPT/Codex/Claude transcript, conversation ID, parent/child task, or model context.
+- `nido_events` subscriptions are local connection-session controls; subscriptions expire at EOF. `nido://system/events` is bounded recent-event state, not a durable audit log. `internal/events/bus.go` explicitly says there is no daemon or durable event journal; reconnect starts with resync/re-read.
+- Disk snapshots require stopped VMs and capture disks only, not guest memory. No Project/Section/Session archive, message-turn, branch, attachment/image, token/cost, plugin, MCP server definition, persistent memory, or user task-scheduler import/export was found in the reviewed product and storage paths.
+- `.github/workflows/update-registry.yml` runs daily at 08:00 UTC to refresh the image catalog; it is a maintainer automation, not an importable user schedule.
+
+SAFETY / FIT
+- MCP can mutate/delete local VMs, cached images, templates, configuration and installation; the docs assign client approval to the connected MCP client. The guest VM boundary is not complete isolation: host mounts, forwarded ports and PCI passthrough cross it. Treat as a useful adjacent local execution/isolation ResourcePlane; do not rely on it as a security guarantee for arbitrary untrusted harness inputs.
+- Recommendation: retain as a high-quality adjacent runtime/MCP reference for optional task-owned sandbox execution and resource lifecycle; exclude from Nexus Memory's ConversationGraph/session migration engine. It does not solve Project/Section/session fidelity or API-key destination import.
+
+TEST / CI EVIDENCE
+- Exact local command: `rtk proxy go test -count=1 ./...`, Go 1.26.5 darwin/arm64; exit 0, 31 package test results passed, other packages had no test files, no failures. `rtk proxy go vet ./...`; exit 0, stdout/stderr empty. The Go toolchain was downloaded into disposable `/private/tmp` storage from the official Go archive after verifying its metadata SHA-256 `efb87ff28af9a188d0536ef5d42e63dd52ba8263cd7344a993cc48dd11dedb6a`; no system Go installation or repo files were changed. No local VM/guest or user VM was started.
+- Exact-HEAD GitHub Cross-Platform CI run 44572703631 succeeded for all five jobs: macOS, Windows, Ubuntu unit-test jobs; Linux VM smoke; release binary build. Workflow includes formatting, Go vet, staticcheck, govulncheck, Linux isolated CLI/MCP safety tests, VM lifecycle validation and release archive verification. This is CI evidence, not an independent security audit or Claude Desktop compatibility test.
+- CodeGraph: 315 indexed files, 4,728 nodes, 14,151 edges. Candidate checkout remained clean at exact HEAD after ignoring the local `.codegraph` index.
+
+PRIMARY SOURCES
+- Pinned README: https://github.com/Josepavese/nido/blob/b0d419977bd095ddf643d8976eef721bd833567a/README.md
+- Pinned MCP + Skills guides: https://github.com/Josepavese/nido/blob/b0d419977bd095ddf643d8976eef721bd833567a/docs/mcp.md ; https://github.com/Josepavese/nido/blob/b0d419977bd095ddf643d8976eef721bd833567a/docs/agent-skills.md
+- Event journal and MCP durable-lifecycle source: https://github.com/Josepavese/nido/blob/b0d419977bd095ddf643d8976eef721bd833567a/internal/events/bus.go ; https://github.com/Josepavese/nido/blob/b0d419977bd095ddf643d8976eef721bd833567a/internal/validator/scenario/mcp_durable.go
+- Exact HEAD CI: https://github.com/Josepavese/nido/actions/runs/44572703631
+- Current listed release: https://github.com/Josepavese/nido/releases/tag/v4.11.0

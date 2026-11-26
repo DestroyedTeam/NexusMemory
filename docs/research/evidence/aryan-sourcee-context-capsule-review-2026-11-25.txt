@@ -1,0 +1,44 @@
+# Candidate #269 — Aryan-sourcee/context-capsule (2026-11-25)
+
+## Decision
+**Reject as a Nexus Memory migration engine or native-session adapter.** Retain only as low-confidence prior art for local browser-DOM capture and an explicitly human-reviewed, text-only handoff. It cannot migrate Projects, Section Groups, Destruction Era sessions, native branches, or target-native Claude Desktop 3P Chat/Cowork/Code / local Claude Code sessions.
+
+## Identity and provenance
+- Repository: [Aryan-sourcee/context-capsule](https://github.com/Aryan-sourcee/context-capsule), default-branch HEAD reviewed at `ccad87e557c0787f7ccc1e7f3822d169e4fda79c` (2026-07-18; commit message: “Fix floating button selectors + keyboard shortcut handler”). The clone was clean; `git status --short` and `git diff --exit-code` emitted no output. CodeGraph current index: 7 source files, 165 nodes, 863 edges.
+- Root README says MIT, but no LICENSE file exists at this commit (`LICENSE` URL returns 404) and the discovery record has `license_spdx: null`. Treat reuse rights as unverified; no code reuse recommended.
+- The repository is a Manifest V3 Chrome extension. Its host matches cover selected web chat domains (ChatGPT, Claude.ai, Gemini, Perplexity, Copilot); the checked manifest does not identify Claude Desktop, Codex, or a local Claude Code/gateway endpoint. [Pinned manifest](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/manifest.json).
+
+## What it actually does
+- Extracts text from the currently open supported web page using DOM selectors and `innerText`/`textContent`, strips it to plain text, filters messages shorter than 10 characters, and caps capture at the first 100 extracted messages. It does not read a ChatGPT export, a native desktop/local store, a project index, or an account-level session API. The page extractors create new random message IDs and stamp messages with the current capture time; they do not preserve source turn IDs or original creation timestamps.
+- Builds a `context-capsule` JSON packet with a single linear `conversation.messages` list. Message entries are reduced to `{id, role, content, timestamp}`; the generated IDs are positional (`msg-001`, etc.). There are no parent/child, branch, fork, task, Section Group, Project-membership, token/usage, or model-state fields. `manifest.contains` explicitly sets `context`, `files`, and `attachments` to false. Rich attachments, image bytes, tool event structure, and dependency/resource records are not transferred. [Pinned README/schema](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/README.md) · [pinned background builder](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/background.js).
+- The viewer accepts a `.capsule.json` file, validates it, and renders it in the viewer. That is a viewer/import into the extension UI, not a native provider session import. Its “restore” path formats the transcript into one continuation prompt and places it into a supported web chat composer (clipboard fallback); the user must submit that prompt. It does not recreate historical turns or write a Claude Desktop/Claude Code session. [Pinned viewer](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/viewer.js) · [pinned floating UI](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/floating-ui.js).
+- No Skills, MCP servers, plugins, memories, scheduled tasks, or gateway settings are detected or provisioned. No transcript storage hierarchy beyond the extension's local capsule list is represented.
+
+## Synthetic source-execution probe (no real user content)
+The actual `buildCapsule` function was executed in a Node VM with a synthetic two-message input carrying dummy native IDs, `parentUuid`, `branchId`, usage, model, tool-call and attachment fields, and a synthetic API-key marker. The helper detector found `apiKeys`; the standalone redaction helper changed its synthetic input. The capture/build/export path did not invoke that helper:
+- `secretStillInCapsule=true` for the synthetic marker.
+- First output message keys were exactly `id, role, content, timestamp`; native message ID, `parentUuid`, usage, tool-call data, and attachment payload were absent.
+- The supplied synthetic timestamp survived the builder, but the actual DOM extractor assigns `Date.now()` at capture instead of reading original turn time.
+- Capsule flags were `{conversation:true, context:false, files:false, attachments:false}`.
+
+The README describes optional sensitive-data redaction, but static call-site search found the helper definition/export and Health-page self-tests; no user-facing redaction control or call in capture, capsule build, save, or export. Therefore the claim is not an effective pipeline safeguard. The synthetic probe is not a claim about actual credentials or a live user session.
+
+## Validation and scope limits
+- No `package.json`, automated test directory, or executable test script was present; `TEST-CHECKLIST.md` is an unchecked manual pre-release checklist. Ran `node --check` on `background.js`, `content.js`, `floating-ui.js`, `health.js`, `popup.js`, `security-utils.js`, and `viewer.js`: exit 0 for all seven, empty stderr.
+- Static search of those main JS files found no `fetch`, `XMLHttpRequest`, `sendBeacon`, or `WebSocket` call sites. This was not a runtime network/telemetry test and does not independently prove the README privacy claims.
+- No app/browser profile, account, API key, user session, provider endpoint, or real transcript was accessed; no cross-Harness transfer was executed.
+
+## Compatibility disposition
+| Plane | Result |
+|---|---|
+| ChatGPT Projects / Codex Projects and Section Groups | No project/section reader, manifest, or writer |
+| Destruction Era / session hierarchy, branches, parent-child tasks | Linear plain-text capture only; IDs/graph relationships lost |
+| Claude Desktop third-party gateway: Chat / Cowork / Code | Not a target; Chrome page extension does not reach local Desktop stores |
+| Local/self-hosted Claude Code with API key/gateway | No CLI/local-store reader or JSONL writer |
+| Skills, MCP, plugins, memory, attachments, schedules | Not detected or migrated |
+| Text handoff | Possible as a lossy single-prompt paste, not a restored session |
+
+**Reuse recommendation:** no adapter/code reuse. The portable capsule idea may inform a future explicit “preview / copy summary” side channel, clearly labelled lossy and never reported as session migration. Nexus should preserve immutable source records plus typed multimodal assets, stable IDs and an explicit session/project/section graph, then report target-native import separately from prompt handoff.
+
+## Sources
+Pinned primary sources: [repository](https://github.com/Aryan-sourcee/context-capsule/tree/ccad87e557c0787f7ccc1e7f3822d169e4fda79c), [README](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/README.md), [manifest](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/manifest.json), [background.js](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/background.js), [viewer.js](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/viewer.js), [floating-ui.js](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/floating-ui.js), [security-utils.js](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/security-utils.js), [LICENSE path (404 at pin)](https://github.com/Aryan-sourcee/context-capsule/blob/ccad87e557c0787f7ccc1e7f3822d169e4fda79c/LICENSE).

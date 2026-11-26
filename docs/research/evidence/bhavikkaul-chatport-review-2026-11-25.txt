@@ -1,0 +1,53 @@
+# Candidate #271 — bhavikkaul/ChatPort (2026-11-25)
+
+## Decision
+**Lossy browser text handoff only; reject as a Nexus Memory migration engine.** It can move visible text between a small set of web-chat pages by constructing a prompt for a new conversation. It does not migrate historical native sessions, project/section trees, branches, hidden context, or Claude Desktop/Claude Code state.
+
+## Identity and provenance
+- Repository: [bhavikkaul/ChatPort](https://github.com/bhavikkaul/ChatPort); pinned HEAD `cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0` (2026-10-17 12:38:25 +0530; “Add files via upload”). GitHub showed 3 commits, 0 stars, 0 forks at review time; repository has 8 tracked application/document files and no release/CI/test/package structure.
+- No root `LICENSE` file; the pinned GitHub `LICENSE` URL returns 404 and the inventory SPDX value is null. Do not reuse code unless the author provides a license grant.
+- Manifest V3 Chrome extension 2.0.0, with `activeTab`, `scripting`, `storage`, `clipboardWrite`, and host matches for Claude.ai, ChatGPT web, Gemini, Perplexity, DeepSeek, Grok, Copilot, and Mistral Le Chat. It does not target Claude Desktop, ChatGPT/Codex desktop, or a local Claude Code gateway. [Pinned manifest](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/manifest.json).
+
+## Actual behavior and fidelity
+1. It reads the currently loaded web page through a dedicated DOM reader for Gemini/ChatGPT/Claude, a heuristic generic reader for other source pages, and selected-text fallback. The README explicitly says to scroll to the top to load older messages and discloses that the selectors have not been live-tested. Generic role inference is best-effort and discards exact duplicate message text; the popup warns when generic mode is used.
+2. The extracted message shape is only `{role, text}`. No original message IDs/times, branch/parent relationships, task tree, project/group membership, model or token state, tool events, hidden system instructions, or session IDs are read. `toMarkdown` preserves some visible formatting, code, and links in assistant DOM content, but the product is explicitly text-only: images, uploads and special cards are not carried.
+3. `buildPrompt` wraps the plain transcript with a “continue this conversation” instruction. The Transfer action opens a new destination chat and puts that text into the composer. The destination receives one new prompt; it does not receive reconstructed historical turns or a native session import. Copy and “Download .md” use the same prompt text, not a structured archive. The README itself notes the receiving model only sees text and does not actually remember the source chat. [Pinned README](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/README.md) · [pinned extractor](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/extractor.js) · [pinned fill path](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/fill.js).
+4. Destination support is the eight listed websites only. A generic source page may be read from the active tab, but there is no native writer for arbitrary targets. No Project/Section Group, Skills, MCP, plugin, memory, schedule, gateway, or other Harness configuration transfer exists.
+
+## Synthetic source-execution probe (no real chat data)
+Node VM executed the actual `buildPrompt` function with two synthetic messages carrying synthetic IDs, timestamps, a branch, project/session IDs, and an attachment name. Literal result:
+```json
+{
+  "containsMessages": true,
+  "containsProjectId": false,
+  "containsSessionId": false,
+  "containsMessageIds": false,
+  "containsTimestamp": false,
+  "containsBranch": false,
+  "containsAttachment": false,
+  "containsTargetPrompt": true,
+  "promptLength": 401
+}
+```
+This corroborates that the handoff artifact is a single textual prompt, not a session/graph representation.
+
+## Operational, privacy, and quality findings
+- `node --check` on `background.js`, `extractor.js`, `fill.js`, `popup.js`, `providers.js`: all five exit 0, stdout/stderr empty. There is no automated test suite, `package.json`, CI workflow, or test directory. The README directly warns that selectors were not tested against live sites.
+- Static search of the five JS files found no `fetch`, `XMLHttpRequest`, `sendBeacon`, or `WebSocket` call sites. This is only source inspection, not a network/privacy runtime test.
+- User opts into auto-send, but the checkbox preference is stored and reused; if enabled, the extension clicks the destination Send control. It also writes the full prompt to the clipboard and stores it as `pendingTransfer` in `chrome.storage.local`. The destination reader removes it after a successful fill or when it later sees an expired (>3 minute) transfer. Inference from these paths: if tab creation/fill fails and no matching destination page executes the cleanup, prompt text can remain in extension storage; no timer cleanup is present.
+- No live browser, account, login, API key, provider endpoint, user transcript, or target session was used. The UI selectors and auto-send were not exercised against real providers.
+
+## Compatibility against the requested targets
+| Target | Result |
+|---|---|
+| ChatGPT Projects / Codex Projects / Section Groups | Not represented; active ChatGPT web page text only |
+| Destruction Era sessions, branches, sub-tasks | No IDs, ancestry or graph; collapsed to linear role/text list |
+| Claude Desktop 3P Chat / Cowork / Code | Not supported; browser host is `claude.ai`, not local Desktop storage |
+| Local/self-hosted Claude Code API-key/gateway | Not supported; no CLI/store reader, hook adapter, or native writer |
+| Skills, MCP, plugins, memory, schedules | Not inspected or moved |
+| Basic chat continuation | Works as a lossy, user-reviewed prompt paste between listed web pages; optional explicit auto-send |
+
+**Disposition:** low-value prototype for a text-only handoff idea. No code reuse recommendation because the repository has no license grant and no live/browser tests. A future Nexus Memory “Copy prompt / export Markdown” fallback could be explicitly labeled lossy, but it must not be reported as session migration.
+
+## Sources
+Pinned primary links: [repository](https://github.com/bhavikkaul/ChatPort/tree/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0), [README](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/README.md), [manifest](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/manifest.json), [providers](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/providers.js), [extractor](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/extractor.js), [popup](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/popup.js), [fill script](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/fill.js), [LICENSE path (404 at pin)](https://github.com/bhavikkaul/ChatPort/blob/cf8bb7cc3c6cf0202083f99d34a86fa3e61442a0/LICENSE).

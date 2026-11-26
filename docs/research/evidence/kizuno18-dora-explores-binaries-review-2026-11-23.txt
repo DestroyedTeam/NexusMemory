@@ -1,0 +1,29 @@
+Nexus Memory candidate #185 source review — Kizuno18/dora-explores-binaries
+Review date: 2026-11-23
+Pinned repository state: https://github.com/Kizuno18/dora-explores-binaries/tree/9af34d9f8246613064e1bcf9b74289a2b101301d
+HEAD and refs/heads/main: 9af34d9f8246613064e1bcf9b74289a2b101301d. CodeGraph indexed one YAML file (`plugin.json`) and 0 semantic nodes; Markdown and install docs were inspected directly. The clone remained clean after removing only the generated `.codegraph/.gitignore` self-preserving exception.
+
+Decision
+--------
+This is a portable Skills/content-plane example, not a Harness project/session migration tool. The actual product is one canonical `SKILL.md` that shapes in-chat reverse-engineering narration. It includes no parser/import/export implementation, no project/section/session hierarchy, no transcript/message/branch/attachment/token/memory/scheduler transfer, and no Claude Desktop third-party-gateway Chat/Cowork/Code mode adapter.
+
+Observed scope and portability
+-----------------------------
+* Claude Code install is a plugin/raw skill copy; Codex is a file copy to a user skills directory; Cursor/Windsurf install as rules; generic LLM/API use manually prepends text to a system prompt. ChatGPT Custom GPTs and Claude Projects are presented as copy/paste into instruction fields. These are human installation recipes for the same prompt text, not versioned target adapters or native session/project importers.
+* The prompt's episode/handoff language tells a model how to end a conversation and describe a future continuation; it does not serialize or restore a session graph. The static “Real transcripts” examples are human-readable docs, not an importer.
+* README explicitly describes the single-file/no-runtime approach and limits the persona to chat. This is a positive minimal Skills-plane packaging seam: a canonical content source plus a small Claude Code `plugin.json`, with per-host install notes. It is not evidence of automatic compatibility or measured fidelity across harnesses.
+* `plugin.json` parsed successfully; `SKILL.md` is 17,781 bytes and has frontmatter. No executable runtime or third-party dependency is included. The only workflow is Markdown lint + Markdown link checking; there is no unit/behavior test suite or target-runtime compatibility matrix. CI configuration was inspected, not run or treated as a CI result.
+* Codex install instructions include a broad `pkill -f 'codex.*app-server --listen'` command; it was not executed. No installation docs were followed, no user profile was modified, and no API/model/service was called.
+* The README’s parody/legal statements were not independently legal-reviewed. Do not copy its Dora-branded text into Nexus; only the packaging/portability lesson may be relevant.
+
+Checks performed
+----------------
+* `rtk git clone --depth 1 https://github.com/Kizuno18/dora-explores-binaries <isolated #185 checkout>`: exit 0.
+* `rtk git rev-parse HEAD refs/heads/main`: both `9af34d9f8246613064e1bcf9b74289a2b101301d`; latest commit date 2026-09-19.
+* CodeGraph: 1 YAML file / 0 nodes; markdown docs inspected directly.
+* `node -e JSON.parse(plugin.json)`: exit 0, parsed valid plugin metadata.
+* No tests or runtime/target integration were run because the product is a prompt-only Skill. No user data, credentials, third-party service, networked API, or installation target was touched.
+
+Recommendation
+--------------
+Keep as a low-priority example of one canonical SKILL.md delivered through several manual installation routes. It supports only a narrow resource/content plane and has no relation to the requested Destruction Era session/project migration beyond the general portability principle. Nexus must separately translate each Harness's skill manifest/config and model SessionGraph state; copy/paste instructions are not migration fidelity.

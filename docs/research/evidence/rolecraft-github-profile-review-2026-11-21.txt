@@ -1,0 +1,26 @@
+# Candidate #101 review — rolecraft-sh/.github (2026-11-21)
+
+## Identity and disposition
+
+- Upstream repository: https://github.com/rolecraft-sh/.github
+- Exact checked-out HEAD: `a36eb962fc27a35d9c79ce0e3e1e3a0cadfe94ae` (`main`).
+- Git-tracked file list: exactly `profile/README.md`. The README is the GitHub organization profile/landing page; it links separate RoleCraft projects (core CLI, GitHub Action, registry, skills collection, VS Code extension).
+- GitHub metadata: public, 2 stars, 0 forks, no recognized license, created 2026-07-20, pushed 2026-09-09. `gh run list` and `gh release list` returned empty arrays. No implementation, tests or release artifacts exist in this repository.
+- Disposition: screen out as a GitHub organization profile, not the RoleCraft product implementation. The linked core project `rolecraft-sh/rolecraft` is already reviewed in this registry at `edfd87eed27288fa9e29521eb90e946130075842`; reuse that existing review record instead of duplicating it.
+
+## Scope findings
+
+The README describes the separate RoleCraft product as an 86+ agent Skills/MCP manager; the `.github` repository itself only displays those links and marketing copy. It has no runtime code, schema, commands, adapters, Session/Conversation/Project/Section graph, transcript import/export, attachment/token/schedule support, Claude Desktop Chat/Cowork/Code gateway adapter, or local Claude Code history support. The README's MIT badge refers to the separate RoleCraft product; this `.github` profile repo has no LICENSE file / recognized license metadata of its own.
+
+## Evidence and errors
+
+- `rtk git ls-files` returned only `profile/README.md`.
+- `rtk ls -la` returned only `.git/` and `profile/`; `rtk ls -la profile` returned only `README.md`.
+- `rtk gh run list --repo rolecraft-sh/.github --limit 10` → `[]`; releases → `[]`; issues → `[]`.
+- GitHub current organization profile lists `.github` as the profile repository and links the actual `rolecraft` core repo separately. The core's already-reviewed record and detailed implementation/tests/security findings are `docs/research/evidence/rolecraft-codegraph-review-2026-11-20.txt`.
+- A direct web open of the pinned repo tree returned a restricted-URL fetch error; the public organization page was retrieved via GitHub search and confirms the profile role. No source data or test command was missing as a result.
+- No code build/test/POC was applicable; no user sessions, credentials, or private data were touched.
+
+## Registry state
+
+After candidate #101 the 303-row corpus is 101 reviewed / 202 unreviewed. The next unreviewed registry row is computed by the controller. Research remains active and non-exhaustive.

@@ -1,0 +1,53 @@
+NEXUS MEMORY — candidate review evidence
+Candidate: danieljustus/symaira-vault
+Review date: 2026-11-20 (Asia/Shanghai)
+Disposition: ADJACENT_CREDENTIAL_MCP_SECURITY_REFERENCE_NOT_CONVERSATION_MIGRATOR
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/danieljustus/symaira-vault
+- Local source checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-danieljustus-symaira-vault-20261120
+- Reviewed local/remote main HEAD: 3ae37916b834e3fb81caddc038f4022967411ef8 (2026-11-18, `docs: adopt product boundaries revision 8 (built-in capabilities, Desktop and Brain unification)`). The commit is documentation-only (`docs/product-boundaries.md`).
+- License: Apache-2.0. Current published release page shows v0.25.0, released 2026-11-16 at commit a40558a; the release page says main is 10 commits ahead. README describes this as pre-1.0.
+- Captured repo metadata: 34 stars / 3 forks; source inventory marks it Rust, MCP, password-manager, Claude Code, Codex CLI, Hermes, OpenClaw and OpenCode topics.
+- CodeGraph current index: 725 files, 19,745 nodes, 85,225 edges. Removed only `.codegraph/.gitignore`'s `!.gitignore` self-preserving exception; `rtk codegraph status` reports current. `rtk git -C <checkout> status --short` exited 0 with empty stdout after cleanup.
+
+PRODUCT DATA MODEL / IMPORT BOUNDARY
+- Symaira Vault is an encrypted local credential vault and MCP/credential service, not a transcript or long-term AI memory store.
+- The core data is path-keyed secret entries with fields and metadata, including login/password, notes, URL, TOTP, passkeys, SSH keys, sharing, recipient/identity data, manifest integrity, versioning and vault Git history/sync.
+- Readme + `docs/migration.md` document imports from 1Password, Bitwarden, `pass`, CSV/browser CSV, and CXF credentials. CXF collection nesting maps to path prefixes. These are credential export formats, not ChatGPT/Codex chat/session formats.
+- There is no ChatGPT/Codex transcript reader or Cloud writer; no Project/Section Group graph, parent/fork/session event model, attachment tree, token/tool-history import, or cross-harness conversation archive.
+- “Session Caching” in this project means an unlocked vault session cached in the OS keyring for 15 minutes; it is not an AI conversation session.
+- Vault paths such as `projects/local-dev/` are secret namespaces. They do not model ChatGPT Projects or Sections.
+
+HARNESS / MCP / API-KEY VALUE
+- `symvault mcp` supports stdio and localhost HTTP; `symvault agent install` writes this service's own MCP configuration for selected clients (documented Claude Code, Codex, Hermes, OpenClaw, OpenCode, and related local agents).
+- Agent profiles support `allowedPaths`, MCP tool allowlists/capabilities, scoped expiring tokens, approvals and audit records. Bundled `add-credential` / `rotate-credential` / `find-and-use` / `share-credential` prompts appear as MCP slash commands in supported clients; this is the project's own guided workflow, not an arbitrary Skills importer or cross-harness profile migration.
+- YAML API templates and the opt-in egress broker can resolve vault credentials at request time without passing decrypted values into a child process environment/argv/logs. This may be a future optional secret-reference provider for Nexus after explicit authorization; it does not migrate or validate an existing ChatGPT/AWS/Anthropic API key or create a destination Cloud session.
+- Platform support in README: macOS Apple Silicon and Linux CLI/server; iOS/Web where applicable; Windows and Intel Mac are unsupported. Not suitable as a universal Windows+macOS harness manager.
+- Repository's product-boundary doc says Vault remains an independently usable credential CLI/service, while Brain's normal UI is still an accepted, pending target; no external hosted-service/session migration claim is made.
+
+CURRENT UPSTREAM STATE
+- Official releases page shows v0.25.0 as latest published release (2026-11-16); its release notes describe intake changes and MCP access-control fixes.
+- GitHub Actions run #3392 for parent commit 98b76ff shows overall Failure, with annotation: `The job was not acquired by Runner of type hosted even after multiple attempts` for the macOS ARM64 job. The next commit, reviewed HEAD 3ae3791, changes only `docs/product-boundaries.md`; the Actions failure is infrastructure/runner capacity, not a demonstrated source test assertion failure. Do not claim CI fully green on HEAD.
+- The run page also shows Linux artifacts emitted; the failed run is not an all-tests-assertion failure.
+
+LOCAL TESTS / ENVIRONMENT
+- Rust and Cargo installed through the user's existing rustup selection after the initial `rtk proxy rustc --version` triggered toolchain sync; versions observed: rustc 1.98.0 (88d9e12ae 2026-08-18), Cargo 1.98.0 (797e8a9bc 2026-08-05), satisfying `rust-version = 1.98`.
+- Full command: `rtk env SYMVAULT_TEST_KEYRING=memory CARGO_TARGET_DIR=/tmp/symaira-vault-target-2026-11-20 cargo test --workspace --all-features --locked`; exit 0. All emitted test-binary and doc-test summaries reported 0 failures. Several contract tests replay source-bound/frozen Go observations; one public live-release contract also passed using public network access. Keyring was forced to memory and build artifacts were under `/tmp`, not a user vault.
+- `rtk cargo fmt --all --check` exited 0.
+- `rtk env CARGO_TARGET_DIR=/tmp/symaira-vault-target-2026-11-20 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` exited 0.
+- One process-contract test printed `kill: 34136: No such process`, but its test result was `ok` and the full Cargo process exited 0; this is recorded as nonfatal harness output.
+- No production vault, human keychain, API token, account, or AI conversation was opened/read/modified. No Cargo advisory audit or independent cryptographic audit was performed.
+
+NEXUS RECOMMENDATION
+- Retain as an adjacent secret-management/MCP policy reference and possible opt-in credential-handle provider; never make it the canonical session archive.
+- Represent a secret as a provider-qualified opaque reference and scope; require the user to authorize resolution at the destination; default to not copying any plaintext/token into portable session data.
+- Its credential collections and API calls do not satisfy the requested **Destruction Era** project/session migration; the user-nominated name remains canonical and no real export was touched.
+
+PRIMARY SOURCES
+- Pinned README and license: https://github.com/danieljustus/symaira-vault/blob/3ae37916b834e3fb81caddc038f4022967411ef8/README.md
+- Credential import formats: https://github.com/danieljustus/symaira-vault/blob/3ae37916b834e3fb81caddc038f4022967411ef8/docs/migration.md
+- Agent/MCP profile setup and token scopes: https://github.com/danieljustus/symaira-vault/blob/3ae37916b834e3fb81caddc038f4022967411ef8/docs/agent-integration.md
+- Latest published release: https://github.com/danieljustus/symaira-vault/releases/tag/v0.25.0
+- Latest observed CI run on the parent commit: https://github.com/danieljustus/symaira-vault/actions/runs/44338046446
+- Current HEAD product-boundary commit: https://github.com/danieljustus/symaira-vault/commit/3ae37916b834e3fb81caddc038f4022967411ef8

@@ -1,0 +1,37 @@
+CANDIDATE #292 — outerarc-ai/agent-sweep — reviewed 2026-11-25
+
+IDENTITY / LICENSE
+- Repository: https://github.com/outerarc-ai/agent-sweep
+- Disposable checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-outerarc-ai-agent-sweep-20261125-followup292
+- Commit: 57f94ee6fc49362365f7f5ee2d208ab2b1b3d3b4 (2026-10-14); package.json reports version 0.1.0. SPDX: Apache-2.0, confirmed in the local LICENSE and package metadata. No license restriction blocked review.
+- CodeGraph was initialized only in the disposable checkout. After an initial unsupported `--yes` option (exit 1; help showed it is not supported), `rtk codegraph init <checkout>` succeeded: 76 files, 733 nodes, 2,646 edges; status is current. `.codegraph/.gitignore` retained and only its `!.gitignore` self-preserving exception was removed. `rtk git status --short` is empty (CodeGraph artifacts are ignored).
+
+WHAT IT IS — AND WHAT IT IS NOT
+This is a local cross-Harness **residue inventory and cleanup** tool, not a project/session migrator. It declares eight local Harness descriptors: Claude Code CLI, Codex CLI, Cursor, Windsurf/Devin, Trae, Copilot CLI, Aider, and Goose/OpenCode (37 configured targets in the observed `agent-sweep/harnesses@1` output; some are report-only). The CLI enumerates path-shaped units and reports size, leaf mtimes, symlinks, orphan status, process/lock activity, and guard status. It does not parse full conversation content, export/import transcripts, write target-native sessions, or create a portable project/session hierarchy.
+
+The README advertises macOS/Linux/Windows, but it explicitly states Windows lacks process-occupancy detection and weakens encoded-cwd orphan verification. The tests run here are macOS-only; no Windows portability claim was independently verified.
+
+- Claude Code coverage is the local CLI path (`~/.claude/projects`, todos, caches, worktrees), not Claude Desktop third-party-gateway Chat, Cowork, or Code. Codex coverage is `~/.codex/sessions`/`archived_sessions` and related log/cache paths, not the ChatGPT desktop Project/Section Group object model.
+- There is no ChatGPT app, Claude Desktop mode, DeepSeek Harness, or cross-Harness source→target transfer adapter. The scanner does not migrate Skills, MCPs, plugins, schedules, memories, credentials/API-key configuration, attachments, or conversation branches/task lineage. Memory, MCP, plugin, settings/auth and active workspace locations are explicitly protected from cleanup; protected is not migrated.
+- A useful adjacent reference is its registry-driven scanner, distinct read-only scan/analyze/plan stages, hard three-circle safety classifier, stale-plan re-verification, isolated report-only descriptors, synthetic end-to-end self-check, and local trash/restore manifest. These are cleanup/inventory patterns only; they do not satisfy Nexus Memory's transfer acceptance.
+
+SAFETY REVIEW / REPRODUCIBLE DATA-LOSS DEFECT
+`src/core/trash.js:116-147` restores each manifest entry, records existing destinations as conflicts, and refuses to overwrite them. However, after the loop it removes the entire batch directory whenever `missing.length === 0`, even if `conflicts.length > 0`. Thus a restore conflict can permanently delete the only remaining trash copy while preserving the replacement at the original path. This contradicts the documented recoverable/conflict-safe behavior.
+
+Synthetic-only reproduction (no real Harness or user files): create `original-to-restore` in a fresh temporary source, move it to a fresh temporary trash batch, write `replacement` at the original path, then call `restore(batch.id)`. Command is captured in `outerarc-agent-sweep-conflict-probe.stdout`; exit 0, stderr empty. Literal stdout:
+`{"conflicts":1,"restored":0,"missing":0,"replacementPreserved":"replacement","originalTrashPayloadSurvived":false,"batchSurvived":false}`
+The `replacement` survives, but the source payload and batch are both gone. The upstream test named `restore reports conflicts without overwriting` asserts only that replacement is not overwritten; teardown deletes its temporary trash root, so it does not check that the preserved source copy remains. Do not treat this checkout as safe to reuse for destructive work until the defect is fixed and a regression test verifies payload retention. No source changes were made here.
+
+TESTS / QUALITY
+Commands were run with isolated `HOME` and npm cache, on synthetic fixtures. No dependency installation, live Chrome, real Harness session, API key, user home scan, or destructive user-data operation was run.
+- `rtk npm test` with `HOME=/tmp/agent-sweep-review-home-292`, `npm_config_cache=/tmp/agent-sweep-review-npm-cache-292`, and both `AGENT_SWEEP_HOME` variables unset: exit 0; 112/112 pass, 0 failed, stderr empty. Full stdout: `docs/research/evidence/outerarc-agent-sweep-npm-test.stdout`.
+- `rtk npm run lint`: exit 0; stdout says 188 i18n keys × 2 locales, 47 modules checked, `OK`; stderr empty. Captured at `outerarc-agent-sweep-lint.stdout`.
+- `rtk npm run check`: exit 0; 24/24 synthetic self-check assertions pass, including read-only dry run, protected memory/plugin handling, and clean/restore happy path; it does not exercise conflict-payload retention. Captured at `outerarc-agent-sweep-selfcheck.stdout`.
+- `rtk npm run pack:check`: exit 0; 60 package files, 96.1 KB, `OK`; stderr empty. Captured at `outerarc-agent-sweep-pack-check.stdout`.
+- `rtk proxy env ... node bin/agent-sweep.js harnesses --json`: exit 0, stderr empty; schema `agent-sweep/harnesses@1`, ids `claude-code,codex,cursor,windsurf,trae,copilot,aider,goose`. Full JSON and normalized descriptor summary are in the evidence folder.
+- Initial test attempt deliberately set `AGENT_SWEEP_HOME=/tmp/...`; it exited 1 only because the unit `defaultTrashRoot` test expects the default `.agent-sweep/trash` and the override changed it to `/tmp/.../trash`. The failed stdout is retained at `outerarc-agent-sweep-npm-test-env-correction.stdout`; rerunning with that override unset passed 112/112. This was runner isolation configuration, not a candidate defect.
+
+DISPOSITION / INVENTORY
+Keep only as an adjacent cross-Harness local-state inventory/cleanup architecture reference, **not** a migration candidate or code foundation in its current state. The restore-conflict data loss is a release-blocking safety finding for cleanup use. Candidate row: `reviewed_cross_harness_cleanup_not_session_migrator_restore_conflict_data_loss`, with Apache-2.0 license metadata and test/probe evidence. No user session, Chrome profile, or credential was inspected.
+
+Nexus Memory scope remains Destruction Era → four separately verified target lanes: Claude Desktop 3P Chat, Cowork, Code, plus local/self-hosted Claude Code. User has explicitly confirmed all three Desktop modes are in scope; equal 3P gateway support remains unproven per mode.

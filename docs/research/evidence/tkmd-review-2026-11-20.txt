@@ -1,0 +1,50 @@
+# ktreharrison/tkmd implementation review — 2026-11-20
+
+## Identity, version and review scope
+
+- Repository: https://github.com/ktreharrison/tkmd
+- Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ktreharrison-tkmd-20261120`
+- Reviewed HEAD `14db41f865c2fd7c894d4b02638a24878c4e47a8` (2026-11-10; merge PR #10, config first-run race fix). GitHub showed 16 stars and 3 forks, `archived=false`; GitHub metadata field for a single SPDX license was `NOASSERTION` because this is dual-licensed.
+- `Cargo.toml` declares `MIT OR Apache-2.0`; both `LICENSE-MIT` and `LICENSE-APACHE` exist. Package version is 0.4.0, edition 2024. Latest GitHub release is v0.4.0 (Nov 10, 2026); reviewed main HEAD is 3 commits ahead of tag v0.4.0. Treat exact local tests as main-HEAD evidence, not release verification.
+- CodeGraph initialized and verified on the checkout: 22 files, 524 nodes, 1,991 edges; local Git status clean after preserving `.codegraph/.gitignore` and removing only its generated `!.gitignore` exception.
+
+## What the product actually models
+
+`tkmd` is a local Markdown project/task manager and MCP server for developer/agent task governance. Each task is a Markdown card with YAML frontmatter; the optional `project` field is a string/tag and dependencies use `blocked_by` / `blocks`. Local/global scopes, Obsidian Base views and a task dependency DAG are not a ChatGPT Project/Section/Section Group hierarchy.
+
+It does have a useful **task-to-agent-session reference**: cards contain an active/latest `session_id` and a `sessions` list such as `claude: <id>` and `codex: <id>`. A separate append-only `.events.jsonl` records task actions and the associated session ID. `TaskEvent` fields are timestamp, task id, action, actor, session_id, from/to status, eval result and title—not conversation turns or tool/media payloads. There is no parent/child/branch graph between the sessions themselves.
+
+`tk u <task>` synthesizes a host CLI resume command (`claude -r <id>`, `codex resume <id>`, `gemini -r <id>`, `opencode -s <id>`, `pi --session <id>`, and other mappings) and launches the installed CLI. `--print` displays the command instead. This relies on that local harness's own session store, binary and authentication; `tkmd` stores only the opaque ID/command string and does not export/import or reconstruct session content. The runner uses `Command::new(...).args(...)`, not a shell, but a stored full command or unknown agent/program is still executable local input when a user launches resume; Nexus must never auto-run imported command strings.
+
+An isolated end-to-end probe used a disposable task store and a stub `claude` executable: `tk add` stored a synthetic Claude session ID; `tk show` and `tk u --print` generated `claude -r synthetic-claude-session-123`; `tk u` passed `-r` and the ID to the stub. `tk u --agent codex --set synthetic-codex-session-456 --print` added a second agent ID to the card and generated `codex resume synthetic-codex-session-456`. The final card had a latest `session_id` plus two `sessions` references; the event log contained only the task `created` event. No real Claude/Codex process, account, session or API key was used. This proves pointer serialization and CLI dispatch only, not a real provider resume or migration.
+
+The stdio MCP server exposes nine task tools: `task_list`, `task_get`, `task_add`, `task_claim`, `task_eval`, `task_submit_review`, `task_note`, `task_complete`, and `task_cpm`. Session IDs can be attached to task add/claim/review/note records, but there is no MCP `session_resume`, transcript import/export, host MCP-config installer, or session importer. README's `skills/tkmd/SKILL.md` is a single operational skill for using this task manager, not a general Skills migration feature.
+
+## Nexus value and transfer boundary
+
+- **High-value adjacent design:** task dependency DAG, explicit local/global scope, per-task session references, multi-agent handoff list, session resume command map, event audit, deterministic CPM/DSM, human sign-off, and pinned verification receipts.
+- **Not a session migrator:** no ChatGPT/Codex Project/Section archive reader, session transcript/event-tree store, user/assistant/tool turns, subtask conversation linkage, image/file/link attachments, token/cost history, portable MCP/plugin registration, user/project memory, schedules, or Claude Desktop Chat/Cowork/Code, local Claude Code, or Anthropic-hosted Cloud session writer.
+- Do not conflate a task dependency edge with primary/controlled Session hierarchy, or a task `project` label with an app Project. A `session_id` link is a useful lossless metadata sidecar edge only when the original harness can still resolve the ID; after migration to another harness it may be unusable.
+- Security: task `eval` values run as shell commands through MCP/CLI; user-configured `on_done` hooks are another execution surface. `on_done` is off by default and board-supplied hook config is ignored, which is a useful governance pattern. Imported task checks/commands must be inert data until explicitly reviewed; never run them during migration.
+
+## Quality and coverage
+
+- Isolated commands used Rust 1.95.0 / Cargo 1.95.0, temporary `HOME`, `CARGO_HOME` and `CARGO_TARGET_DIR`:
+  - `cargo test --locked`: exit 0; 109 library tests + 17 integration tests passed, 0 failed, 2 ignored (one scale test in each group). The MCP lifecycle test checks task add/claim/eval/review and blocks machine sign-off; `test_cli_parse_claim_and_resume` checks argument parsing only.
+  - `cargo check --locked`: exit 0.
+  - `cargo fmt --all -- --check`: exit 0.
+  - `cargo clippy --locked -- -D warnings`: exit 101 on current `main`, `src/store/doctor.rs:85` (`clippy::nonminimal_bool`). The checked-in GitHub CI workflow runs the same strict Clippy gate on Ubuntu and macOS; no exact-HEAD upstream workflow result was established here, so do not claim upstream CI failed.
+- CodeGraph found no direct covering tests for `resume_command`, `agent_resume_cmd`, `agent_continue_cmd`, `record_session_on_card`, or `sync_card_sessions`; thus passing suite does not validate real harness resume semantics or session-ID safety. The local stub probe is synthetic and does not verify actual provider session existence/authentication.
+- Exact command outputs, process statuses, file contents and hash/checker results are in `/Users/vincentadamnemessis/NexusMemory/artifacts/verified-workspace-routing-2026-11-20/VERIFICATION.txt`.
+
+## Disposition
+
+Classification: **strong adjacent task-orchestration / session-reference / human-approval reference; not a cross-harness session migrator**. Borrow explicit `Task → SessionReference` data separately from canonical `Project/Section/Session/SessionEvent` relationships. Preserve opaque source IDs as non-runnable metadata, do not claim they remain resumable across harnesses, and require explicit review before executing checks or session commands.
+
+## Sources
+
+- Repository and README: https://github.com/ktreharrison/tkmd
+- Latest release page: https://github.com/ktreharrison/tkmd/releases
+- Pinned reviewed Cargo manifest: https://github.com/ktreharrison/tkmd/blob/14db41f865c2fd7c894d4b02638a24878c4e47a8/Cargo.toml
+- Pinned source tree: https://github.com/ktreharrison/tkmd/tree/14db41f865c2fd7c894d4b02638a24878c4e47a8
+- Relevant source: `src/model.rs`, `src/store/mod.rs`, `src/store/doctor.rs`, `src/mcp.rs`, `src/lib.rs`, `src/store/eval.rs`.

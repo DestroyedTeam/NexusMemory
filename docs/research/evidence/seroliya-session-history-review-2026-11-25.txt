@@ -1,0 +1,48 @@
+# Candidate #299 — Seroliya/session-history review (2026-11-25)
+
+## Provenance, license, and scope
+
+- Repository: https://github.com/Seroliya/session-history
+- Reviewed shallow checkout HEAD `83ca41a9cdfa9778aac7536f4e466e9c2faa201d`, commit date 2026-11-02, message `docs: add PROJECT.md for maintainers`; package/Skill v1.1.0; Node >=18; no runtime dependencies.
+- Local root `LICENSE` verified MIT, copyright 2026 Seroliya; includes a separate MIT notice for vendored fzstd. Official GitHub page showed 0 stars/forks and three commits; no release artifacts.
+- Product scope is a read-only Node CLI/Skill for DeepSeek Harness (DSH), Codex and **local Claude Code**. It has no ChatGPT export adapter, no ChatGPT Project/Section/Section Group source, and no Claude Desktop Chat/Cowork/Code or Anthropic-hosted Cloud writer. It cannot move sessions into a new harness. Its command surface is `roots/list/search/show/actions/handoff`; no import/export/apply target path.
+
+## High-value prior art
+
+- Canonical read model groups messages/events into turns and typed items with stable `T<turn>.<item>` refs. It can render outline/chat/tools/full views under a bounded token/character budget and expose tool calls/results, actions, files, todos, usage counts, compaction and handoff notes.
+- DSH `isSeeded`/`session/end-seed` marks inherited history; Codex `forked_from_id` and paged rollouts build explicit lineage; DSH fork lineage is heuristically inferred from a shared first message; Claude Code follows `parentUuid`/`logicalParentUuid` to the active branch and detects subagent sidecars. Later same-cwd sessions are suggestions, not guaranteed causal links.
+- Data handling is local/read-only with no network calls in the inspected CLI; the Skill explicitly says old transcripts are data, never instructions. It warns that redaction is heuristic and `--no-redact` disables it. This is useful source-adapter/lineage/read-budget prior art for Nexus, not a destination writer.
+
+## Fidelity limits relevant to Nexus Memory
+
+- No first-party ChatGPT conversations export/JSON tree, Project, Section or Section Group adapter. No app database/Projects/Section importer. Claude adapter is Claude Code's local JSONL only and has synthetic fixtures only; it is not Claude Desktop Chat/Cowork/Code.
+- `claude.ai` is not a source/target adapter here. No session import/export writer, project migration, attachment byte preservation, file hashing, schedules, MCP/plugin/Skill inventory migration or credential/gateway transport.
+- Images and attachment payloads are reduced to placeholders/notices; no asset manifest or source bytes. Unknown record types are skipped, not surfaced as a loss report. Codex compact content and some reasoning/agent bodies are encrypted and unreadable; tool formats and internal session schemas may change.
+- It is a local history reader for a coding-agent's next session. `handoff` is a heuristic text brief, not a rehydrated session. The README's benchmark (3 projects × 2 models, 12 runs) is small and author-reported; one with-skill DeepSeek run gave a reversed/obsolete plan as complete, and v1.1 lineage changes have not been re-benchmarked.
+
+## Cache privacy defect reproduced with fake stores only
+
+CLI output passes through `redact()`, but cache construction does not. `Store.buildDigest()` serializes raw user/assistant/tool text; `summarize()` also persists first-user/last-assistant snippets in `index.json`. A synthetic fake HOME (0755) and umask 022 held one fabricated API-key-shaped string and marker in a Claude JSONL under a temporary source root. Running default cached `search` produced redacted terminal output (`sk-[REDACTED]`), while the cache's `index.json` and gzip digest still contained the full `sk-test1234567890abcdefXYZ` and synthetic marker. Cache directory mode was 0755; both cache files were 0644. No real home/session was scanned. The same synthetic query with `--no-cache` exited 0, remained display-redacted, and created no cache directory.
+
+Evidence: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/seroliya-session-history299/cache-permissions-redaction-probe.json` and `no-cache-probe.json`. Chrome's storage docs are not applicable to this CLI; file-mode findings are from this synthetic local filesystem probe. Recommend redacting before persistence and enforce owner-only permissions, or default to `--no-cache` for sensitive transcripts.
+
+## Installer safety and cross-platform test failure
+
+- `scripts/install.mjs` treats **any symlink** in `~/.dsh/skills/session-history`, `~/.codex/skills/session-history`, or `~/.claude/skills/session-history` as installer-owned; it overwrites such links without `--force` and without backup. `uninstall` likewise removes any symlink at those exact slots. Fake DSH_HOME probes confirmed install replaces a user-owned symlink silently and uninstall later deletes a user-created symlink; the original target directory/sentinel survives. This contradicts the documented “only links/copies this installer created” guarantee. Evidence JSON: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/seroliya-session-history299/symlink-probes/install-uninstall-user-symlink.json`.
+- `npm test` ran under isolated HOME/tool roots and exited **1**: the Claude synthetic suite passed all 21 assertions; installer sandbox suite had 10/11 pass and failed `重复安装幂等`. Reproduction shows on macOS `/var/folders/...` vs `realpath` `/private/var/folders/...`: `same()` compares `path.resolve()` strings after resolving the destination symlink, so the second npx-style install reports/recreates links instead of recognizing them as ready. The source input directory is copied into an isolated temp npx package; no real session/home was touched. Exact output: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/seroliya-session-history299/npm-test.stdout` and `npm-test.stderr`; focused output: `install-idempotence-debug.mjs` was run with a synthetic temp tree and printed `readyCount:0`.
+
+## Synthetic source-adapter smoke tests (not production data)
+
+- Built two concatenated zstd frames for a fabricated DSH session and a separate synthetic Codex parent/fork pair. `show dsh-synth-001 --view full` exit 0 decoded both frames and preserved the synthetic user/assistant/tool-call/tool-result sequence; output showed one turn and 17 token usage.
+- Codex child `show` exit 0 surfaced `fork 自 <parent>` and the parent/child chain; `actions` exit 0 extracted a synthetic shell command. All three roots were explicitly overridden to these synthetic directories or empty dirs; `--no-cache` was used.
+- Claude branch/compaction/subagent parsing was covered by the bundled synthetic `tests/run.mjs`; no actual DSH/Codex/Claude session files from this machine were read.
+
+## Build and test result
+
+- `npm test` as above: 31 assertions pass / 1 fails (21/21 Claude synthetic checks plus 10/11 installer sandbox checks); overall exit 1. The failed assertion is the macOS path canonicalization/idempotence case, not an adapter functional test.
+- The upstream suite does not include DSH or Codex adapter fixtures; our isolated synthetic DSH/Codex probes are smoke tests, not fidelity coverage of real harness formats. No network audit or install from npm registry was run.
+- CodeGraph initialized in the disposable clone (15 files, 283 nodes, 856 edges); status current. `.codegraph/.gitignore` retained with only `!.gitignore` removed. Git status was clean after the correction.
+
+## Decision
+
+Disposition: **high-value read-side architecture prior art; not a migration engine or transfer dependency**. Reuse the typed event/item read model, source-specific parsers, branch/lineage warnings, read budgets, and prompt-injection posture as design references. Do not treat redacted terminal output as proof the cache is redacted; do not run installer/uninstaller against existing user symlinks until ownership is verified; preserve explicit loss reports and target-side native verification in Nexus.

@@ -1,0 +1,47 @@
+NEXUS MEMORY CANDIDATE REVIEW — stefafafan/skm
+Review date: 2026-11-21 (Asia/Shanghai)
+Disposition: not a Harness/session migrator. Retain as an adjacent Agent Skills ResourcePlane design reference only, with a confirmed symlink-mediated write/delete boundary issue. Do not install or reuse the archived package as a migration dependency. No upstream source file was modified.
+
+IDENTITY / CURRENT STATUS
+- Repository: https://github.com/stefafafan/skm
+- Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-stefafafan-skm-20261121
+- Default branch main, fetched HEAD 9cd248d2857f38d3d937606f82d54f52151ab7f8; origin/HEAD matched. MIT, package @stefafafan/skm 0.3.3, TypeScript, Node >=24, pnpm lockfile.
+- GitHub metadata at review: created 2026-03-21, pushed/updated 2026-05-20, archived by owner May 20, 2026, 3 stars, 0 forks, 11 open issues. README says deprecated and no longer maintained; npm 0.3.3 metadata also marks the package deprecated. v0.3.3 is the latest release and is signed/immutable, on the reviewed HEAD. No executable/macOS app/Windows EXE is provided; this is an npm-installed CLI.
+- Exact HEAD upstream CI run #232 and Publish run #15 both succeeded on this SHA. The owner subsequently archived the repository; latest runs are historical, not continuing support.
+
+ACTUAL PRODUCT / USEFUL DESIGN
+- Project/global Skill package manager for GitHub sources only. Commands include init, add, install, update, remove, rename, list, inspect and help. It discovers nested SKILL.md files for repo-wide imports and supports output directories such as .agents/skills or .claude/skills.
+- skills.json stores requested Skill source/ref/materialization intent; skills.lock.json records resolved Git commit and content integrity; .skm stores cached Skill files; generated Skill paths support copy/link/wrap. This is a useful narrow resource provenance/lock design, not evidence that Skills are the only cross-Harness portable object.
+- There is no Session, Message, Turn, branch/fork, subtask, Project/Section Group, transcript, canonical archive, attachment/image/link/tool-result, token-usage, MCP/plugin, memory, schedule, provider credential or Claude Cloud/API-key domain model. No Claude Code source/target adapter and no Claude Desktop Chat, Cowork, Code or third-party inference session writer.
+- Accordingly, the product cannot move the user's Destruction Era structure or conversation state. Skill directory placement is the only nearby overlap.
+
+SOURCE / SAFETY REVIEW
+- Source supports strong local validation: canonical Skill names reject dot/dot-dot, path separators, controls and Windows-hostile characters; project outputDir rejects absolute paths and lexical escape from project root; lockfile integrity values are checked against traversal; Git uses execFile argument arrays, detached exact-commit checkout and rejects refs starting with a dash; a symlinked root SKILL.md is rejected before copying.
+- Materialization is destructive at the managed name boundary: materializeSkill removes the existing outputDir/canonicalName recursively before copy/link/wrap. The filesystem copy helper also recursively removes its destination. There is no backup/undo or multi-Skill transaction journal.
+- A sandboxed temporary POC found a real parent-symlink escape despite lexical outputDir validation. The test initialized a disposable project and fixture repository, added hello-skill, replaced project/.agents/skills with a directory symlink to a sibling temporary external-skills directory, and placed external-skills/hello-skill/unmanaged.txt as a canary. Then skm install --project exited 0, deleted the canary and materialized SKILL.md under the external sibling. Literal probe stdout:
+  {"init_exit":0,"add_exit":0,"install_exit":0,"install_stderr":"","external_canary_before":true,"external_canary_after":false,"skill_materialized_outside_project":true}
+  All fixture paths were under a newly created temporary root, which was removed in finally; no user files were touched. Static mechanism: resolveProjectOutputDir uses lexical path.resolve/path.relative containment, while materializeSkill calls recursive removeIfExists on outputDir/name without realpath/symlink containment.
+- No exploitability outside this local install scenario was tested. Treat as an unsafe overwrite/path-boundary behavior requiring a user to run install on a project with a symlinked output path, not as a remote vulnerability.
+
+TEST / BUILD / DEPENDENCY EVIDENCE
+- Environment: Node v26.7.0, pnpm 11.25.0. pnpm install --frozen-lockfile --ignore-scripts completed and used the checked-in lockfile.
+- pnpm test ran TypeScript clean/build plus Node's test runner: 131 passed, 0 failed, 0 skipped.
+- pnpm lint: 0 warnings, 0 errors.
+- pnpm format:check exited 1 for five files: renovate.json, src/manifest/parse.ts, src/materialization/materialize-skill.ts, src/platform/hash.ts, test/manifest/parse.test.ts. These were not auto-formatted; upstream sources remain unchanged.
+- Initial pnpm audit --prod against the configured mirror failed because its security-advisory endpoint is not implemented there (ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS). Corrected command used the official npm registry: pnpm audit --prod --registry=https://registry.npmjs.org, exit 1, 1 high + 1 moderate production finding. pnpm why confirms ws 8.19.0 through @stefafafan/skm > ink > ws. GitHub advisories report affected ws versions below 8.21.0 for high-severity CVE-2026-48779 and below 8.20.1 for moderate CVE-2026-45736; patched versions are 8.21.0 and 8.20.1 respectively. Reachability through this CLI's usage was not established.
+- The package's CI workflow pins pnpm 10.33.0 and tests/lints/builds. Local build/test used pnpm 11.25.0; exact-head CI success is separate upstream evidence. Format check is not part of the checked-in CI workflow.
+
+SOURCES
+- Repository/deprecation and current archive state: https://github.com/stefafafan/skm ; release v0.3.3: https://github.com/stefafafan/skm/releases/tag/v0.3.3 ; live metadata: https://api.github.com/repos/stefafafan/skm ; npm metadata: https://registry.npmjs.org/@stefafafan%2fskm
+- Pinned source: https://github.com/stefafafan/skm/blob/9cd248d2857f38d3d937606f82d54f52151ab7f8/src/manifest/types.ts ; https://github.com/stefafafan/skm/blob/9cd248d2857f38d3d937606f82d54f52151ab7f8/src/materialization/materialize-skill.ts ; https://github.com/stefafafan/skm/blob/9cd248d2857f38d3d937606f82d54f52151ab7f8/src/platform/fs.ts ; https://github.com/stefafafan/skm/blob/9cd248d2857f38d3d937606f82d54f52151ab7f8/src/scope/resolve-scope.ts
+- Upstream exact-head runs: CI https://github.com/stefafafan/skm/actions/runs/26195936829 ; Publish https://github.com/stefafafan/skm/actions/runs/26195973292
+- Dependency advisories: https://github.com/advisories/GHSA-96hv-2xvq-fx4p ; https://github.com/advisories/GHSA-58qx-3vcg-4xpx
+
+TOOLING / TRANSACTION NOTES
+- Candidate review was dispatched from CONTROLLER_COMMAND.json after loading the required active-object, last-result, next-action, input-path, and acceptance-event fields. Clone exit 0; origin fetch exit 0; exact HEAD captured.
+- CodeGraph indexed 70 files, 735 nodes and 2,341 edges; status up-to-date. Generated .codegraph/.gitignore was preserved and only its !.gitignore exception was removed. Git status remained clean after dependency install, build, lint, tests and POC.
+- Audit first failed against configured registry mirror; corrected to registry.npmjs.org and the corrected audit returned the findings above. No source or generated tracked file was changed.
+
+CORPUS STATE
+- Original GitHub search corpus: 86/303 reviewed, 217 pending after this review; next unreviewed candidate is asm-cli/asm-cli. Candidate search triage is incremental and is not a claim of exhaustive market/Harness coverage.
+

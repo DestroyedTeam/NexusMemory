@@ -1,0 +1,71 @@
+# Evidence ledger — AI-Colleagues/skill-mgr
+
+Review date: 2026-11-21  
+Repository: <https://github.com/AI-Colleagues/skill-mgr>  
+Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ai-colleagues-skill-mgr-20261121`  
+Branch / HEAD: `main` / `12beaffd08dedad72a3a673f47569993bd856c69` (2026-04-24; `Bump version: 0.3.0 → 0.4.0`)  
+PyPI: `skill-mgr==0.4.0`; PyPI attestation binds the source distribution and wheel to this exact repository commit.
+
+## Disposition
+
+**Strong, narrowly scoped Skill lifecycle implementation; not a Harness/session migrator.** It is useful as a code-quality reference for a small cross-agent `SkillProvisioner` and CLI support matrix, but not as an implementation for Nexus Memory's requested Project/Section/Session/MCP/plugin/memory migration. Do not adopt its filesystem behavior as-is: two disposable local probes found that installing a local Skill follows a source symlink and copies external file contents into the target, and a same-name install replaces an existing unmanaged directory (including unrelated files) while reporting `updated`. These are observed source behaviors, not speculative path-traversal claims.
+
+## Intended scope and product requirements
+
+- `project/1_requirements.md`, `project/2_design.md`, and `project/3_plan.md` describe a standalone multi-agent **Skill** installer/library: one `SKILL.md` source, shared validation, per-agent install roots, `install/update/uninstall/validate/list/show`, and explicit OS support.
+- The requirements explicitly list format conversion, hosted registry, arbitrary Git providers, and agent authentication as non-goals. The only resource models are `SkillMetadata`, `SourceDescriptor`, `MaterializedSource`, `AgentAdapter`, and validation/per-target results.
+- The published adapter matrix contains five targets: `claude`, `codex`, `gemini`, `openclaw`, and `orcheo`. It has no ChatGPT or Cursor adapter and no mode-specific Claude Desktop Chat/Cowork/Code integration. A local `~/.claude/skills` path is not evidence of Desktop Session support.
+- No conversation/Project/Section/Session/message/branch/subtask model, source transcript importer, target session writer, MCP/plugin migration, long-term memory, attachments/media, token/cost ledger, schedule, or API-key/gateway session handling was found. This cannot meet the requested migration end state.
+
+## Implementation review
+
+- `src/skill_mgr/models.py`: `SkillMetadata` carries AgentSkills frontmatter fields; `SourceDescriptor` only has `kind`, original `ref`, local `path`, GitHub repository and nested subpath. It has no resolved commit/revision/integrity field.
+- `src/skill_mgr/sources/github.py`: GitHub shorthand fetches the repository's current default branch and downloads its tarball; archive extraction rejects symlinks/hardlinks and resolved paths escaping the temporary root. The command result retains the original shorthand rather than the resolved branch/commit, so a later run can fetch different content without a provenance record. Unit tests mock HTTP; no live GitHub install was used in this review.
+- `src/skill_mgr/validation/skill_md.py`: checks required YAML frontmatter, safe single-segment lowercase name, description, and a small field contract; unknown frontmatter keys are preserved as `extra_fields`. It does not semantically translate Skill behavior between Harnesses.
+- `src/skill_mgr/services/skill_manager.py` and `src/skill_mgr/fs.py`: source is validated once and one temp-staged copy is made per target. `atomic_copytree()` uses `shutil.copytree()` defaults (which follow source symlinks), deletes an existing destination tree, then renames the staged tree. Existing non-symlink directories are treated as updates; there is no ownership/provenance marker or conflict confirmation. `remove_tree()` does canonical containment-check the requested uninstall path against the registered target root.
+- Inference from this source model and CLI: GitHub shorthand installs are not reproducible pins and the JSON response does not reveal the actual default branch/commit selected. This also falls short of the project requirements' risk mitigation that default-branch behavior be explicit in CLI output.
+- The installed `skill-mgr` is a standalone CLI/library, not a daemon or Desktop app. Its root paths are filesystem Skill folders; there is no app-mode routing or session store access.
+
+## Reproducible local gates
+
+Environment: macOS arm64; the repository requests Python 3.12; `uv sync` selected CPython 3.12.6. The source checkout remained clean (generated `.venv` and CodeGraph data are ignored). No account credentials, user Skill directories, API keys, session exports or cloud sessions were used.
+
+| Command / input | Exit | Observed result |
+|---|---:|---|
+| `rtk codegraph init --yes /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ai-colleagues-skill-mgr-20261121` | 0 | Indexed 34 files, 410 nodes, 964 edges; CodeGraph status up to date. The only `.codegraph/.gitignore` edit removed `!.gitignore`, leaving index content ignored. |
+| `rtk uv sync --all-groups` | 127 | `[rtk: No such file or directory]`; `uv` was not on PATH. `rtk proxy python3 -m pytest --version` also exited 1 because global Python had no pytest. |
+| Corrected setup: `rtk proxy python3 -m venv /tmp/nm-uv-review-20261121`, then `rtk proxy /tmp/nm-uv-review-20261121/bin/python -m pip install uv` | 0 / 0 | Disposable venv created; uv 0.13.9 installed only under `/tmp`. |
+| `rtk proxy /tmp/nm-uv-review-20261121/bin/uv sync --all-groups` | 0 | CPython 3.12.6; 115 packages installed; local `skill-mgr` wheel built. |
+| `rtk proxy /tmp/nm-uv-review-20261121/bin/uv run make test` | 0 | 135/135 tests passed; coverage report 731 statements / 234 branches, 100% statement and branch coverage on macOS. |
+| `rtk proxy /tmp/nm-uv-review-20261121/bin/uv run make lint` | 0 | `ruff check`: all checks passed; `mypy src/`: no issues in 17 files; `ruff format --check`: 29 files already formatted. |
+| `rtk proxy /tmp/nm-uv-review-20261121/bin/uv run skill-mgr support-matrix --format json` | 0 | Exactly five adapters (`claude`, `codex`, `gemini`, `openclaw`, `orcheo`); each README row says Windows/Linux/macOS supported. Paths are `~/.claude/skills`, `~/.codex/skills`, `~/.gemini/skills`, `~/.openclaw/skills`, `~/.orcheo/skills`. |
+
+## Disposable runtime behavior
+
+All runtime targets below used `HOME=/tmp/...` and explicit `--target codex --target claude`; no real home directory was used.
+
+- `skill-mgr install /tmp/nm-skill-mgr-runtime-20261121/source --target codex --target claude --format json` → exit 0; both targets reported `installed` at `/tmp/nm-skill-mgr-runtime-20261121/home/.codex/skills/nexus-fixture-skill` and `.claude/skills/nexus-fixture-skill`.
+- `skill-mgr list --target codex --target claude --format json` → exit 0; both rows returned the synthetic Skill and expected description.
+- After adding `NOTES.md` with `synthetic v2` to the source, `skill-mgr update ... --target codex --target claude --format json` → exit 0; both targets returned `updated`; the copied files contained `synthetic v2`.
+- `skill-mgr uninstall nexus-fixture-skill --target codex --target claude --format json` → exit 0; both returned `uninstalled`, and both synthetic destination folders were absent afterward.
+
+## Safety probes (synthetic-only)
+
+1. **Local symlink follows source outside the Skill directory.** In `/tmp/nm-skill-mgr-symlink-poc-20261121`, source `external.txt` was a symlink to sibling `outside-canary.txt` containing `SYNTHETIC_CANARY_ONLY`. Installing this local skill to a disposable Codex root exited 0. The installed `external.txt` existed as a regular (not symlink) file and contained exactly `SYNTHETIC_CANARY_ONLY`. Thus `shutil.copytree(..., symlinks=False)` follows a local Skill source symlink; GitHub tarballs are treated differently and the archive extractor rejects links.
+2. **Unmanaged same-name directory is replaced.** In `/tmp/nm-skill-mgr-overwrite-poc-20261121`, a pre-existing, manually created skill directory contained `UNMANAGED-SENTINEL.txt=preserve-me`. Running `install` of a different source with the same valid Skill name exited 0 and returned status `updated`; afterward the sentinel was absent and the new source body was present. The destination was inside a disposable home. This shows no install ownership manifest/conflict guard, and `install` can destructively replace a same-name target.
+
+These POCs do not show that remote GitHub archives can escape extraction; the archive path/link checks and mocked negative tests passed. They do show gaps in local-source trust boundaries and target ownership handling. The 100% test coverage figure did not cover these two scenarios.
+
+## Provenance and activity
+
+- PyPI 0.4.0 was published 2026-04-24 using Trusted Publishing; the PyPI attestation names repository commit `12beaffd08dedad72a3a673f47569993bd856c69` and gives wheel/sdist SHA-256 hashes. This is positive provenance evidence, but does not address runtime source/destination safety.
+- GitHub's latest observed main/after-CI runs (#39) completed successfully on 2026-04-24 for the 0.4.0 commit; the registry records the last code push on that date (repository metadata was updated later). The CI workflow is documented as lint/typecheck/test across Windows, Linux and macOS. This review's executed tests/lint ran only on macOS.
+- GitHub's Releases page had no GitHub Release entries; PyPI provides the published 0.4.0. The inspected repository contains no `LICENSE` file and `pyproject.toml` has no project license field; treat reuse licensing as unresolved rather than inferring a license.
+
+## Primary sources
+
+- Repository README / implementation: <https://github.com/AI-Colleagues/skill-mgr>
+- Requirements/design/plan: `project/1_requirements.md`, `project/2_design.md`, `project/3_plan.md` in the pinned repository.
+- PyPI 0.4.0 files and attestation: <https://pypi.org/project/skill-mgr/>
+- Exact successful upstream CI list: <https://github.com/AI-Colleagues/skill-mgr/actions>
+- GitHub Releases page: <https://github.com/AI-Colleagues/skill-mgr/releases>

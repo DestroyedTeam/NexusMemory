@@ -1,0 +1,33 @@
+# Candidate #102 review — rolecraft-sh/skills (2026-11-21)
+
+## Identity and disposition
+
+- Upstream: https://github.com/rolecraft-sh/skills
+- Exact HEAD: `12b10bccadd7348235ee49bf4b18bc6729616e01` (`feat: enforce author/slug/license frontmatter schema (#6)`).
+- GitHub snapshot: MIT, public, archived by owner on 2026-09-11, 2 stars/0 forks, 0 releases, no recorded Actions runs. Root README lists 52 curated engineering Skills installable through RoleCraft.
+- Verdict: a content/Skills corpus, not a migration application. It can serve as a narrow Skill AssetPlane reference only; it has no project/session/event importer or harness-specific session adapters. The separate RoleCraft core CLI has already been reviewed at `edfd87eed27288fa9e29521eb90e946130075842`; this archived skills repository is not that CLI.
+
+## Source and data scope
+
+- Repo contains 52 `skills/*/SKILL.md` entries plus `scripts/validate-skill.js`, `.github/workflows/validate.yml`, and README/license metadata.
+- The frontmatter scan found `license: MIT` on all 52 skills and author labels: addyosmani 23, mattpocock 17, vercel-labs 7, rolecraft-sh 5. These are self-declared metadata values; upstream source/license provenance for each imported skill was not independently audited. Preserve authorship/license metadata if these assets are ever considered.
+- `deprecation-and-migration` is about software/API/feature deprecation and code migrations; `context-engineering` describes prompt/context setup and conversation history as a conceptual context tier. Neither implements moving actual Harness state.
+- There are no ChatGPT/Codex Projects, Section Groups, transcript/session graphs, message events, parent/fork/subtask relations, file attachments, media, tokens, per-session memory, schedules, MCP/plugin config importer, Claude Desktop Chat/Cowork/Code gateway adapter, or local Claude Code transcript writer in this repository.
+- README's “52 curated skills” is a library/catalog claim, not portability or session-migration evidence. The rolecraft CLI link is a separate project and has its own previously reviewed record.
+
+## Executable verification
+
+- `rtk proxy node --version`: exit 0, Node v26.7.0.
+- `rtk proxy node scripts/validate-skill.js`: exit 0; literal ending `Checked 52 skills, 0 error(s)`. This checks required frontmatter name/description/slug/author/license and slug==directory; it does not run skill behavior or test any Harness loader.
+- `.github/workflows/validate.yml` runs only this metadata validator when `skills/**` changes. GitHub `run list` for this archived repository returned `[]`; no actual passing CI run or release was found.
+- No dependency install, profile mutation, user session, credential, model endpoint, or target application state was used.
+
+## Tool/analysis notes
+
+- The CodeGraph index was initialized and verified for the repository (139 files, 4,421 nodes, 13,269 edges); generated `.codegraph/.gitignore` was corrected by removing only the `!.gitignore` exception. The code portion is very small; the bulk is Markdown Skill content.
+- A first read of `skills/skill-orchestration/SKILL.md` failed, and follow-up listing `skills/core` also failed. Corrected path checks `test ! -e skills/skill-orchestration` and `test ! -e skills/core/skill-orchestration` both exited 0: neither directory exists in this checkout. The README/catalog link `[skill-orchestration](core/skill-orchestration/)` is stale/broken in the pinned repository; this is a docs/tree mismatch, not a candidate runtime migration issue.
+- A broad CodeGraph query returned unrelated Skill script symbols; conclusions are based on repository README/tree, the targeted validator source, and counted Skill frontmatter.
+
+## Registry state
+
+Candidate #102 advances the 303-row corpus to 102 reviewed / 201 unreviewed; next row is computed from the registry. Cross-Harness research remains incomplete.

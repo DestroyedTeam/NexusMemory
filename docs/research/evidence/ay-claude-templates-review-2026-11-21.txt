@@ -1,0 +1,43 @@
+# walidboulanouar/ay-claude-templates — implementation review (2026-11-21)
+
+## Identity and recency
+
+- Repository: https://github.com/walidboulanouar/ay-claude-templates
+- Exact checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-walidboulanouar-ay-claude-templates-20261121`; default branch `main`.
+- HEAD and origin/default-branch commit: `634b2742dcde12445b45b59f097b70553247707b`; commit timestamp `2025-11-08T22:58:49+01:00`; local source checkout was clean after review/testing; CodeGraph 38 files / 452 nodes / 964 edges, index up to date.
+- GitHub reports MIT, 5 stars, 2 forks, last code push 2025-11-08, latest listed release v1.0.0 marked pre-release (2025-11-08), and no Actions runs (`gh run list --limit 5` returned `[]`).
+- npm package `@ay-claude/cli` latest/dist-tag 1.0.0, published 2025-11-08, Node `>=18`; no later version was listed at review. `package.json` names an OAuth-authenticated AY platform CLI; it is not an Anthropic API-key client.
+
+## Product boundary from source and docs
+
+AY Claude CLI is a marketplace/package installer for Claude Code extension resources: Skills, agents, commands, hooks, plugins, MCP-labelled packages, and settings presets. `getClaudePaths()` hardcodes user scope to `~/.claude` and project scope to `cwd/.claude`; content folders include `skills`, `agents`, `commands`, `hooks`, `plugins`, `mcps`, and `settings`. The source explicitly comments that `~/.claude` is “not Claude Desktop paths.” It authenticates to the AY service with an OAuth device flow and a bearer token before search/download; it does not import ChatGPT/Codex exports or call an Anthropic/API-key gateway for session continuation.
+
+Workspace data in `src/core/workspaces.ts` is a local list of members, packages, settings and a current workspace. It is not a conversation Project, Section group, Session, message, branch/fork, task run, attachment, token/cost record, or transcript. Search for `session|conversation|transcript|chatgpt|claude desktop|api key|gateway` found only generic mentions that Skills are available in Claude Code sessions, CLI auth “web sessions,” and a comment excluding Claude Desktop paths. No ChatGPT Project/Section or Claude Desktop Chat/Cowork/Code adapter/import/export was found. All three Desktop modes remain independently in user-confirmed scope.
+
+The implementation writes into fixed `~/.claude` paths and does not consult `CLAUDE_CONFIG_DIR`. Current first-party Claude Code settings documentation says `CLAUDE_CONFIG_DIR` relocates settings, session history, and plugins; this makes the CLI mis-target custom-config users. The app's “MCP” flow reads a package-local `mcp.json` only to extract a server name and add it to `settings.enabledMcpjsonServers`; source does not establish transfer of server credentials, `.mcp.json`/`~/.claude.json` ownership, or an external-session dependency graph.
+
+## Security and correctness findings (synthetic isolated probes only)
+
+- README/security docs describe a five-stage security pipeline and claim path-traversal prevention/“production-ready” security. The source verifier performs an optional SHA-256 check (only if an expected hash is supplied), structural checks, and regex-based text scanning. `extractZip()` writes each JSZip entry to `path.join(destDir, entry)` without a containment check; `installPackage()` joins API-provided `selectedPackage.slug` into the content-type root without validating containment.
+- A temporary POC invoked the actual `installPackage()` source with a safe synthetic Skill ZIP, sandbox HOME, and slug `../../../escaped-install`. It returned `/tmp/nm-ay-claude-poc/sandbox/escaped-install` and wrote `SKILL.md` there; the expected `/tmp/nm-ay-claude-poc/sandbox/home/.claude/skills/escaped-install/SKILL.md` did not exist. This proves an untrusted API slug can escape the intended content-type root if the backend allows such a slug; no live AY API or user directory was used.
+- Forward-slash ZIP Slip input `../../escape-forward.txt` was sanitized by the declared JSZip 3.10.1 loader and the actual `extractZip()` wrote it only inside the chosen destination; the sibling escape path remained missing. This positive control is important: do not overstate this standard path as vulnerable on the tested version.
+- However, JSZip 3.10.1 preserves ZIP entry `..\..\settings.json` as that key/`unsafeOriginalName`. A Node `path.win32.join` projection from `C:\Users\sandbox-user\.claude\skills\sample-skill` resolves it to `C:\Users\sandbox-user\.claude\settings.json`, outside the install root. `extractZip()` uses native `path.join` and has no path containment guard. This is a Windows path-traversal risk based on the exact package source plus a Windows-path projection; the ZIP write was not executed on a Windows host. The project advertises Windows support, so require a real Windows regression test and path validation before any adoption.
+- A benign hook fixture `hook.sh` passed through actual `PackageVerifier.verifyPackage()` and was rejected with `{"valid":false,"errors":["Suspicious file detected: hook.sh"]}`. The repository's own `hook-basic` template creates `hook.sh`; this makes a documented built-in hook path incompatible with the verifier.
+- Repository tree has no tracked `tests/` files or `.github/workflows` files. `rtk npm test` exited 127 with literal `sh: vitest: command not found`; dependencies were not installed in the source checkout. `gh run list --limit 5` produced an empty list. Do not claim automated test coverage or CI success.
+- The package-name and ZIP probes wrote only beneath `/tmp/nm-ay-claude-poc`; the temporary `node_modules` symlink was removed, and the source checkout returned clean. No user home, Claude settings, API account, or live marketplace was touched.
+
+## Published npm artifact cross-check
+
+`rtk proxy npm pack @ay-claude/cli@1.0.0 --pack-destination /tmp/nm-ay-claude-poc/npm-pack --ignore-scripts` exited 0. The tarball is `/tmp/nm-ay-claude-poc/npm-pack/ay-claude-cli-1.0.0.tgz` (SHA-256 `96fe009bc35dcfce743f77cbb9324e0c2b73be98d374b8df467249898bf03b6a`, npm-reported SHA-1 `1cad479be459890a3e9724ba18bcb96e7db4efa8`), 155 files. Read-only inspection of its compiled `dist/commands/install.js`, `dist/core/installer.js`, and `dist/core/package-verifier.js` confirms the same `selectedPackage.slug → installPackage`, `join(contentTypeDir, packageName)`, `join(destDir, entry)`, and `.sh` suspicious-extension logic. Thus the key source findings also exist in the published npm 1.0.0 artifact; no npm lifecycle or postinstall code was run.
+
+## Disposition
+
+**Exclude as Nexus Memory's session/project migration engine and do not use against user Claude directories or untrusted marketplace data.** At most retain it as a negative security/usability reference for a Claude Code resource-package UX: its package model is resource-plane-only, its auth/server dependency is proprietary to AY, its config path misses `CLAUDE_CONFIG_DIR`, the slug boundary is unsafe, Windows ZIP entry containment is unverified and likely escapable, and its built-in `.sh` hook template is rejected. It provides no evidence of portable ChatGPT Project/Section/Session semantics and no Claude Desktop mode support. Full source pointers: `https://github.com/walidboulanouar/ay-claude-templates/tree/634b2742dcde12445b45b59f097b70553247707b`.
+
+## Tool/test event ledger
+
+- Dispatcher cloned the exact registry's next unreviewed repository; `git clone` exit 0; origin URL `https://github.com/walidboulanouar/ay-claude-templates`; HEAD `634b2742dcde12445b45b59f097b70553247707b`.
+- `rtk codegraph status <checkout>` first returned exit 0 and “Not initialized,” so a shell `|| codegraph init` did not execute. Corrected by directly running `rtk codegraph init --yes <checkout>` (exit 0), then status (up to date).
+- First `gh repo view --json ...license` emitted `Unknown JSON field: license`; corrected field `licenseInfo` returned repository metadata successfully. The command was chained with later successful GitHub commands, so only the chain's final exit 0 was observed.
+- First `rtk grep -n ... README.md docs src` returned exit 2 (`grep: docs: Is a directory`, `grep: src: Is a directory`); corrected with `rtk proxy grep -R -n ...` exit 0.
+- First TSX POC run returned exit 1 because `/tmp` script was interpreted as CommonJS (`Top-level await is currently not supported with the "cjs" output format`). Added `{"type":"module"}` in the isolated temp POC directory; corrected POC exited 0.

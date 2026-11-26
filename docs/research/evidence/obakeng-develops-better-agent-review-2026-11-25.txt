@@ -1,0 +1,37 @@
+# Source review: obakeng-develops/better-agent — 2026-11-25
+
+## Snapshot and licensing
+
+Reviewed primary candidate #290, local checkout HEAD `95c42d65e7b273d27855ecab9447c168fc755196` (2026-11-20). `pyproject.toml` declares version 0.8.0. Remote tags include v0.8.0; GitHub's Releases page currently has no release entries/assets. The repository page reports 0 stars and 0 forks. No `LICENSE` file is present in the checkout and GitHub did not display a license item, so SPDX status remains `NOASSERTION`; do not reuse or incorporate source code until licensing/permission is clarified. This is a research assessment of public source, not a legal conclusion.
+
+## Implemented behavior (source and fixture tests)
+
+Better Agent (`bta`) is a narrow local-first history index and CLI-to-CLI handoff prototype. Its README claims two source agents: local Claude Code and OpenCode. The adapters read Claude Code JSONL and OpenCode's SQLite store; OpenCode is opened read-only. Imported records go into a local SQLite/FTS index, while source files remain the source of truth. The normalized schema records source/session IDs, project path, branch/title/model/timestamps/token counts and message parts; it does not model ChatGPT Projects, Section Groups, or an equivalent workspace hierarchy (the project field is a path).
+
+`bta switch --to claude|opencode` builds a deterministic context pack and starts the installed native CLI in the source session's project directory. The default pack is capped at 8,000 characters; it carries the old session ID and points back to `bta show` for stored history. Interactive mode previews and confirms before execution; `--yes` bypasses that gate, and `--dry-run` previews. It does **not** import/restore the old native transcript into the destination: it starts a new destination CLI session with a prompt pack. `bta resume` instead reopens a session in its original agent.
+
+The pack's default summary comprises the session metadata, user intent spine, selected tool/command activity, files touched, Git state, last assistant text, and linked-session references. `--full` can include a rendered transcript, but output is still subject to the character cap. The renderer omits thinking and displays tool names/targets rather than full tool results. The Claude adapter filters to user/assistant events plus summary metadata; Claude message parent/sidechain IDs are recorded, while OpenCode parent/fork sessions become typed links. Links include related/continuation/handoff/fork/subagent, but they are loose undirected typed edges rather than a strict parent-controlled session tree. Tool results are truncated by the adapters. These behaviors make it useful for explicit, inspectable handoffs and a local history UI, not lossless migration.
+
+## Fit against confirmed Nexus Memory scope
+
+- ChatGPT/Codex source: no ChatGPT or Codex adapter; source Projects/Sections/Destruction Era hierarchy is not imported.
+- Claude Desktop third-party-gateway Chat: no Desktop Chat reader/writer.
+- Claude Desktop third-party-gateway Cowork: no Cowork task/session/artifact reader/writer.
+- Claude Desktop third-party-gateway Code: no Desktop Code-mode reader/writer.
+- Local/self-hosted Claude Code: local Claude Code CLI history is an input source; a CLI can be launched as a destination, but no native transcript restoration, project/session tree transfer, Skills/MCP/plugin/schedule/memory transfer, or API-key/gateway configuration migration is provided.
+- Only Claude Code and OpenCode are supported. This is pairwise context handoff, not the universal, unattended, cross-Harness migration tool requested.
+
+## Privacy and operational boundaries
+
+The README states data stays local and there are no LLM calls. The code's interactive switch previews the pack before launch, but `--yes` skips preview/confirmation. It does not redact stored messages or handoff-pack content, so packs may contain sensitive user prompts, paths, and work details. `bta switch` passes the pack to the destination CLI as a prompt; treat it as content disclosure to that CLI/provider. No personal session files, provider accounts, API keys, live agent CLI, or gateway were accessed in this review.
+
+## Validation
+
+- Candidate test suite, source checkout with `PYTHONPATH=src` but package not installed: exit 1, 44 passed and 1 failed (`test_version`, `PackageNotFoundError('better-agent')`). Captured stdout is adjacent as `obakeng-better-agent-tests-source-python.stdout`; stderr was empty. This is a test-environment/package-metadata setup failure.
+- Installed `better-agent` and `pytest` only into a disposable venv under `Library/Caches/NexusMemory/test-results/bta290/venv`, with fake `HOME`, `XDG_DATA_HOME`, and `BTA_HOME`; full suite then exited 0: 45 passed in 0.64s, stderr empty. Captured stdout is adjacent as `obakeng-better-agent-tests-installed-venv.stdout`; stderr was empty. Tests use synthetic fixtures/temp directories and mock `os.execvp`; no live source session was read and no agent process was started.
+- Isolated installed CLI `bta --version`: exit 0, stdout `bta 0.8.0`.
+- `uv` was not installed in this environment, so the test was run with a standard disposable Python venv instead.
+
+## Disposition
+
+Keep as a **high-value narrow architecture reference** for deterministic local session search, explicit human-approved pairwise handoffs, prompt-packet receipts, and typed cross-session links. It does not meet the requested universal scope or native-fidelity requirement. Keep source reuse gated on an explicit license grant. Evidence links: https://github.com/obakeng-develops/better-agent and https://github.com/obakeng-develops/better-agent/releases.

@@ -1,0 +1,28 @@
+# GitHub candidate #220 — `stevengonsalvez/reflect-kb`
+
+Review date: 2026-11-23. Nexus target scope remains ChatGPT/Codex Projects, Section Groups and complete `Destruction Era` SessionGraph transfer, targeting Claude Desktop on a third-party provider/API gateway in **Chat, Cowork, Code**, plus local/self-hosted Claude Code.
+
+## Pinned identity and repository state
+
+- Bound checkout: `https://github.com/stevengonsalvez/reflect-kb`, default branch `main`, HEAD `d3375adb9fb403c4f8c657ca5001322d13fd0826`, commit date `2026-05-18T21:35:52+01:00`, subject `archive: remove source files (now lives in agents-in-a-box monorepo)`; local `main...origin/main` clean.
+- Owner archived the repository on 2026-05-18. The pinned tree contains only README, `docs/usage.md`, MIT LICENSE, `.gitignore`, and `.github/workflows/ci.yml`—no `src/`, `pyproject.toml`, tests, package entry point, requirements or session parser. The repo page reports 22 commits, 0 stars/forks, 0 issues, one open Renovate PR, no releases, and 16 workflow runs. The run for the archive/removal commit was cancelled; the previous workflow runs for source commits shown on GitHub were failed. This old checkout is docs-only, so no source install or tests can be run against it. I did not switch to the separate monorepo linked by the README; it is outside the bound repository object.
+- The remaining CI workflow still runs `pip install -e .[dev]` and `pytest -q`, but the current archived tree has no package manifest/source/tests. This is a static mismatch; no claim is made that a current CI job ran after archive.
+
+## What the archived documentation describes
+
+The `docs/usage.md` (marked reflect-kb v0.1.1) describes a local knowledge-base CLI. `reflect init` creates `documents/` and `nano_graphrag_cache/` under `~/.claude/global-learnings/` (or `GLOBAL_LEARNINGS_PATH`) and initializes that directory as a Git repository. `reflect add` ingests Markdown with `title`, `category`, `key_insight`, optional confidence/tags/language; it derives a content-hash `doc_id`, copies the document, creates a heuristic `.entities.yaml` sidecar and indexes it with GraphRAG, optionally syncing a QMD index. `reflect search`, `reindex`, `stats`, `critical-patterns`, `generate-sidecars`, and `metrics stats` act on that document KB. Search offers vector and entity/community graph modes. Metrics are documented separately at `~/.learnings/metrics.jsonl`.
+
+The public README describes an accompanying Claude Code plugin (`reflect@agents-in-a-box`) for orchestration, hooks, statusline and recall, and says the only real consumer was that plugin. README says the KB data stays in `~/.learnings/`, while the versioned usage guide gives `~/.claude/global-learnings/` as the default; treat the path split as unresolved documentation drift. The default/custom-path model is a single Markdown memory corpus; no contract links a note back to a source conversation, message/event ID, parent session, branch, project section, attachment, token ledger or resume ID.
+
+## Fit to Nexus Memory
+
+This can inform a **derived MemoryPlane**: structured learnings, provenance-aware note IDs, entity sidecars, graph/vector retrieval, Git-backed local content, explicit confidence/tags, metrics and a rebuildable index. It is not a lossless archive or SessionGraph. Its `doc_id` identifies a derived note from title/body; it does not preserve source message identity, turn sequence, branching, interruptions, prompt additions, tool-call/result state, source media, cost/tokens, schedules or target-native resume. A shared path via `GLOBAL_LEARNINGS_PATH` could make a single KB readable by other agents only if each harness has a compatible CLI/API/hook and same filesystem; those adapters and scope controls are not present in this pinned repository.
+
+Official current Claude Code documentation distinguishes these objects: `CLAUDE.md` instructions, per-repository auto-memory (`~/.claude/projects/<project>/memory/MEMORY.md` plus topic files), and local session JSONL transcripts (`~/.claude/projects/<project>/<session-id>.jsonl`) are separate. Auto memory is machine-local and not shared across machines/cloud; a session is a resumable conversation tied to a project directory. The reflect docs' `global-learnings` knowledge base is yet another custom store, not the native Auto Memory directory or transcript store. See https://code.claude.com/docs/en/memory and https://code.claude.com/docs/en/sessions.
+
+## Validation limits and disposition
+
+- The checkout has no importable CLI/package or tests after the archive commit; do not report a build/test pass, parser accuracy or a working restore result from this object.
+- Docs describe no ChatGPT/Codex export reader, Project/Section mapper, Claude Desktop 3P Chat/Cowork/Code session adapter, MCP/plugin-auth migrator, or project/session tree conversion.
+- Keep only as a **design reference for derived memory retrieval**, not a core migration candidate. For Nexus, notes must retain immutable source-event references and remain projections that can be regenerated; never replace the canonical source SessionGraph with reflected summaries. A future code review would require an explicit user-approved follow-up on the monorepo, not inference from this archived documentation.
+- No user export, Claude local store, provider credential, plugin cache, or memory folder was read or modified.

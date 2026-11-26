@@ -1,0 +1,61 @@
+# Candidate #104 — stefanvo78/cross-agent-memory
+
+Review date: 2026-11-21
+Pinned HEAD: df69336b661b417752647120e5a7d6c4f6ccff80 (PR #20 security-fix merge).
+Package version: 0.1.0; no GitHub releases; not archived. GitHub snapshot: 2 stars / 0 forks, created 2026-03-05, last pushed 2026-03-06, updated 2026-03-20. package.json declares MIT, but the repository has no LICENSE file and GitHub licenseInfo is null; do not reuse source until licensing is clarified.
+
+## Scope and fit
+
+This is a local-first derived-context memory/handoff service: stop hooks ingest selected local agent transcripts/checkpoints; a heuristic extractor creates a compact summary; local SQLite/FTS/sqlite-vec stores sessions and knowledge; MCP exposes handoff, search, knowledge-write and project-context tools; Git commands share a reduced .agent-memory representation. It is an adjacent memory-plane product, not an archival cross-Harness migration engine.
+
+The schema in src/types.ts and src/db/schema.ts reduces a session to id, agent, projectId, optional project path/start time, end time, reason, summary, completed/pending tasks, modified-file list, decisions, and optional rawCheckpoint. There are no message/event rows, parent/child/fork/subagent links, Section membership, asset/attachment/media objects, token accounting, scheduled tasks, skills/plugins/connectors, or loss/provenance map. ProjectInfo is inferred from a Git remote or local folder name, not imported from a source application.
+
+Only Copilot CLI, local Claude Code and Gemini CLI ingesters are wired by getIngester. AgentType mentions chatgpt but there is no ChatGPT parser/adapter; README marks ChatGPT/Codex as planned. No Cursor or Claude Desktop Chat/Cowork/Code third-party-provider adapter exists. Claude parsing reads ~/.claude/projects/<encoded-cwd>/*.jsonl; it is not a Claude Desktop third-party session-store reader. The product cannot move ChatGPT Projects, Section Groups, or full sessions into any of the three Claude Desktop modes.
+
+## Source-grounded findings
+
+### Ingestion is deliberately lossy, not session restoration
+
+- Claude parses JSONL but only extracts human/assistant text blocks for rawCheckpoint; tool inputs/results, images, attachments, token usage, permission decisions, branching and message UUID/parent edges are not stored as structured records. The parser declares uuid/parentUuid but implementation does not use them. Summary generation keeps only first human text and last assistant text, truncating each to 500 characters; heuristic extraction further condenses content.
+- Claude path encoding replaces slash with hyphen and reverse decoding replaces every hyphen with slash. Tests explicitly document that paths containing hyphens do not round-trip. Current cwd in the transcript often avoids fallback, but recovery without it can misidentify project roots.
+- Claude parseSession computes rawCheckpoint before calling readMemory; it then pushes the returned MEMORY.md text into a local rawParts array that is no longer read. As written, project memory is fetched but is not stored in rawCheckpoint or passed to the ingest pipeline. Existing readMemory tests do not validate a successful read/store path; their comments say they only test null because the HOME-based root cannot be overridden.
+- Copilot reads workspace YAML and only the latest checkpoint; events are scanned only to infer a small file list. Prior checkpoints and full event/turn/tool history are not imported.
+- Gemini reads local JSON session text, but projectPath is never assigned, projectId is detected from process.cwd() rather than session metadata, and fallback findChatsDir scans other project directories and chooses the most recently modified. This can misattribute a session to caller cwd or another project. Tests explicitly exercise the fallback across arbitrary project directories; this demonstrates implemented locator behavior, not correct project attribution.
+- SessionExtractor contains no LLM calls; local ONNX embeddings use Xenova/all-MiniLM-L6-v2. This is an optional derived-memory pipeline, not a canonical lossless event transformer.
+
+### Git sync is a summary handoff format, not a transcript bundle
+
+exportToRepo writes at most 20 recent sessions by default, with session id, agent, timestamp, summary, tasks, files and decisions; it intentionally omits rawCheckpoint, embeddings and absolute paths. importFromRepo reattaches those records to the current detected project, skips any existing session id, silently skips corrupt files, and does not recreate a native session in source or target Harness. There is no multi-agent merge protocol or event-level round trip. The positive design lesson is an opt-in, human-readable derived handoff plane; it must remain separate from Nexus's original-event archive and include an explicit loss manifest.
+
+### Reliability and privacy risks
+
+- SessionStore.insert uses INSERT OR REPLACE; ingestSession then inserts new session_chunk_meta and vector rows. SQLite FK cascade deletes old metadata on replacement, but session_chunks is a separate vec0 table with no delete trigger/cleanup path in the reviewed schema/store. Re-ingesting a session therefore appears to leave orphan vectors; the KNN query chooses a limited vector set before joining metadata, so stale rows may affect recall. This is a source-level risk, not a locally reproduced behavior; the upsert unit test checks the session row but not vector cleanup.
+- setup is not covered by a CLI test suite. Copilot setup writes .github/hooks/hooks.json without reading/merging it; Claude and Gemini setup read existing settings but replace the entire hooks property with only SessionEnd. Running setup can discard a user's other hooks. Do not execute against a real project without backup/merge semantics.
+- Dashboard server.listen(port) omits an explicit loopback host and GET endpoints return session/knowledge content without authentication. CORS has been restricted to localhost, but CORS alone is not an authentication boundary. This is an inferred network-exposure risk from source review; no live server was launched.
+- The DB directory is created mode 0700 only when absent and database file is chmod 0600; existing directory permissions are not hardened. Git-sync summaries and knowledge remain plaintext in .agent-memory and can disclose project details when committed even though raw transcripts and credentials are omitted.
+- Project detection treats any .git path as a project-root marker, but remote parsing then expects .git/config to be a directory. In Git worktrees, .git is commonly a file; this returns local/<dirname> instead of common remote identity. No Section/worktree/task identity exists in canonical model.
+- Exact HEAD includes merged PR #20, which fixed shell command injection in generated Claude/Gemini hooks, dashboard XSS, permissive CORS and prototype-pollution inputs. These fixes are present at pinned HEAD; this review does not claim the historical bugs remain. The same PR marks docs/SECURITY-AUDIT.md ignored. Exact-head CI is green.
+
+## Quality and test evidence
+
+- GitHub metadata: licenseInfo null, 2 stars, 0 forks, not archived; no releases listed. Source package.json has MIT license field but repository LICENSE file was absent.
+- .github/workflows/ci.yml runs npm ci + Vitest on Node 20 and 22, builds with Node 22, and typechecks. GitHub Actions run 22786695786 is completed/success on exact pinned HEAD. PR #20 reports 312 tests passing; README says 310, so counts are not independently reproduced here.
+- Local Node 26.7.0/npm 11.19.0 are available, but checkout has no node_modules. Local tests were not run; package lock has multiple lifecycle-script packages and no dependency install was performed. Do not claim a local test pass. Exact-SHA upstream CI is positive but does not test ChatGPT/Codex import, Desktop modes, hierarchy/attachment fidelity or source-level risks above.
+- Only a local CLI/MCP/dashboard was observed. No user HOME, source session, Desktop profile, third-party gateway or real transcript was read or modified.
+
+## Disposition
+
+Reject as a Nexus Memory session-migration dependency and as evidence of high-fidelity transfer. Retain as a high-relevance adjacent derived-memory/handoff comparison: local hooks, one searchable store, source-agent labels, deterministic summary extraction, MCP retrieval and a deliberately reduced Git-share artifact. Nexus should preserve lossless source events/relations first, then optionally derive a separately labeled memory projection; the handoff layer must be re-generable and must not replace Project/Section/Session/branch/artifact records.
+
+The user's first-phase target remains ChatGPT/Codex source state into local/self-hosted Claude Code and Claude Desktop third-party-provider Chat/Cowork/Code as separate adapters. This candidate adds none of those import writers. No Destruction Era export/account data has been observed or migrated.
+
+Primary sources:
+- Pinned repository: https://github.com/stefanvo78/cross-agent-memory/tree/df69336b661b417752647120e5a7d6c4f6ccff80
+- README: https://github.com/stefanvo78/cross-agent-memory/blob/df69336b661b417752647120e5a7d6c4f6ccff80/README.md
+- Types/model: https://github.com/stefanvo78/cross-agent-memory/blob/df69336b661b417752647120e5a7d6c4f6ccff80/src/types.ts
+- Claude parser: https://github.com/stefanvo78/cross-agent-memory/blob/df69336b661b417752647120e5a7d6c4f6ccff80/src/ingest/claude.ts
+- Session sync: https://github.com/stefanvo78/cross-agent-memory/blob/df69336b661b417752647120e5a7d6c4f6ccff80/src/sync/exporter.ts
+- CLI setup/hooks: https://github.com/stefanvo78/cross-agent-memory/blob/df69336b661b417752647120e5a7d6c4f6ccff80/src/cli/index.ts
+- CI: https://github.com/stefanvo78/cross-agent-memory/blob/df69336b661b417752647120e5a7d6c4f6ccff80/.github/workflows/ci.yml
+- Exact-head CI run: https://github.com/stefanvo78/cross-agent-memory/actions/runs/22786695786
+- Merged security fixes: https://github.com/stefanvo78/cross-agent-memory/pull/20

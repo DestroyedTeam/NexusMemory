@@ -1,0 +1,382 @@
+{
+  "schema": "agent-sweep/harnesses@1",
+  "harnesses": [
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "deleteEnabled": true,
+      "targets": [
+        {
+          "id": "projects",
+          "kind": "session-store",
+          "removable": true,
+          "paths": [
+            "~/.claude/projects"
+          ]
+        },
+        {
+          "id": "todos",
+          "kind": "session-store",
+          "removable": true,
+          "paths": [
+            "~/.claude/todos"
+          ]
+        },
+        {
+          "id": "shell-snapshots",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.claude/shell-snapshots"
+          ]
+        },
+        {
+          "id": "statsig",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.claude/statsig"
+          ]
+        },
+        {
+          "id": "file-history",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.claude/file-history"
+          ]
+        },
+        {
+          "id": "image-cache",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.claude/image-cache"
+          ]
+        },
+        {
+          "id": "paste-cache",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.claude/paste-cache"
+          ]
+        },
+        {
+          "id": "backups",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.claude/backups"
+          ]
+        },
+        {
+          "id": "worktrees",
+          "kind": "worktree",
+          "removable": true,
+          "paths": [
+            "~/.claude/worktrees"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codex",
+      "name": "Codex CLI",
+      "deleteEnabled": true,
+      "targets": [
+        {
+          "id": "sessions",
+          "kind": "session-store",
+          "removable": true,
+          "paths": [
+            "~/.codex/sessions"
+          ]
+        },
+        {
+          "id": "archived-sessions",
+          "kind": "session-store",
+          "removable": true,
+          "paths": [
+            "~/.codex/archived_sessions"
+          ]
+        },
+        {
+          "id": "log",
+          "kind": "log",
+          "removable": true,
+          "paths": [
+            "~/.codex/log"
+          ]
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.codex/cache"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "deleteEnabled": true,
+      "targets": [
+        {
+          "id": "worktrees",
+          "kind": "worktree",
+          "removable": true,
+          "paths": [
+            "~/.cursor/worktrees"
+          ]
+        },
+        {
+          "id": "caches",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/Library/Application Support/Cursor/Cache",
+            "~/Library/Application Support/Cursor/CachedData",
+            "~/Library/Application Support/Cursor/Code Cache",
+            "~/Library/Application Support/Cursor/GPUCache",
+            "~/Library/Application Support/Cursor/DawnGraphiteCache",
+            "~/Library/Application Support/Cursor/DawnWebGPUCache"
+          ]
+        },
+        {
+          "id": "logs",
+          "kind": "log",
+          "removable": true,
+          "paths": [
+            "~/Library/Application Support/Cursor/logs"
+          ]
+        },
+        {
+          "id": "workspace-storage",
+          "kind": "app-cache",
+          "removable": false,
+          "paths": [
+            "~/Library/Application Support/Cursor/User/workspaceStorage"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf / Devin",
+      "deleteEnabled": false,
+      "targets": [
+        {
+          "id": "codeium-windsurf",
+          "kind": "session-store",
+          "removable": false,
+          "paths": [
+            "~/.codeium/windsurf"
+          ]
+        },
+        {
+          "id": "app-support-windsurf",
+          "kind": "app-cache",
+          "removable": false,
+          "paths": [
+            "~/Library/Application Support/Windsurf"
+          ]
+        },
+        {
+          "id": "app-support-devin",
+          "kind": "app-cache",
+          "removable": false,
+          "paths": [
+            "~/Library/Application Support/Devin"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trae",
+      "name": "Trae / Trae CN / SOLO",
+      "deleteEnabled": true,
+      "targets": [
+        {
+          "id": "work",
+          "kind": "session-store",
+          "removable": true,
+          "paths": [
+            "~/.trae-cn/work",
+            "~/.trae/work"
+          ]
+        },
+        {
+          "id": "worktrees",
+          "kind": "worktree",
+          "removable": true,
+          "paths": [
+            "~/.trae-cn/worktrees",
+            "~/.trae/worktrees"
+          ]
+        },
+        {
+          "id": "attachments",
+          "kind": "attachment",
+          "removable": true,
+          "paths": [
+            "~/.trae-cn/attachments",
+            "~/.trae/attachments"
+          ]
+        },
+        {
+          "id": "session-work-dirs",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.trae-cn/session_work_dirs",
+            "~/.trae/session_work_dirs"
+          ]
+        },
+        {
+          "id": "trash-transit",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/.trae-cn/trash-transit",
+            "~/.trae/trash-transit"
+          ]
+        },
+        {
+          "id": "thumbnails",
+          "kind": "thumbnail",
+          "removable": true,
+          "paths": [
+            "~/.trae-cn/.thumbnails",
+            "~/.trae/.thumbnails"
+          ]
+        },
+        {
+          "id": "app-cache-solo-cn",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/Library/Application Support/TRAE SOLO CN/Cache",
+            "~/Library/Application Support/TRAE SOLO CN/CachedData",
+            "~/Library/Application Support/TRAE SOLO CN/Code Cache",
+            "~/Library/Application Support/TRAE SOLO CN/GPUCache",
+            "~/Library/Application Support/TRAE SOLO CN/DawnGraphiteCache",
+            "~/Library/Application Support/TRAE SOLO CN/DawnWebGPUCache",
+            "~/Library/Application Support/TRAE SOLO CN/logs",
+            "~/Library/Application Support/TRAE SOLO CN/Crashpad"
+          ]
+        },
+        {
+          "id": "app-cache-trae-cn",
+          "kind": "cache",
+          "removable": true,
+          "paths": [
+            "~/Library/Application Support/Trae CN/Cache",
+            "~/Library/Application Support/Trae CN/CachedData",
+            "~/Library/Application Support/Trae CN/Code Cache",
+            "~/Library/Application Support/Trae CN/GPUCache",
+            "~/Library/Application Support/Trae CN/DawnGraphiteCache",
+            "~/Library/Application Support/Trae CN/DawnWebGPUCache",
+            "~/Library/Application Support/Trae CN/logs",
+            "~/Library/Application Support/Trae CN/Crashpad"
+          ]
+        },
+        {
+          "id": "work-mode-projects",
+          "kind": "app-cache",
+          "removable": false,
+          "paths": [
+            "~/Library/Application Support/TRAE SOLO CN/ModularData/ai-agent/work-mode-projects"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "copilot",
+      "name": "Copilot CLI",
+      "deleteEnabled": false,
+      "targets": [
+        {
+          "id": "logs",
+          "kind": "log",
+          "removable": false,
+          "paths": [
+            "~/.copilot/logs"
+          ]
+        },
+        {
+          "id": "session-state",
+          "kind": "session-store",
+          "removable": false,
+          "paths": [
+            "~/.copilot/session-state"
+          ]
+        },
+        {
+          "id": "ide",
+          "kind": "session-store",
+          "removable": false,
+          "paths": [
+            "~/.copilot/ide"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "aider",
+      "name": "Aider",
+      "deleteEnabled": false,
+      "targets": [
+        {
+          "id": "home",
+          "kind": "session-store",
+          "removable": false,
+          "paths": [
+            "~/.aider"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "goose",
+      "name": "Goose / OpenCode",
+      "deleteEnabled": false,
+      "targets": [
+        {
+          "id": "goose-data",
+          "kind": "session-store",
+          "removable": false,
+          "paths": [
+            "~/.local/share/goose"
+          ]
+        },
+        {
+          "id": "goose-state",
+          "kind": "log",
+          "removable": false,
+          "paths": [
+            "~/.local/state/goose"
+          ]
+        },
+        {
+          "id": "opencode-data",
+          "kind": "session-store",
+          "removable": false,
+          "paths": [
+            "~/.local/share/opencode"
+          ]
+        },
+        {
+          "id": "opencode-state",
+          "kind": "log",
+          "removable": false,
+          "paths": [
+            "~/.local/state/opencode"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+# Candidate review: Primuez/skill-installer (2026-11-22)
+
+## Snapshot and disposition
+
+- Pinned `Primuez/skill-installer` at `7fa1548d16cc184a96806cc622133dd4c746b6d4` (2026-09-18, commit `legal: update license to Proprietary / Non-Commercial Source-Available to protect IP`). GitHub shows 1 star / 0 forks and 3 commits. No GitHub release, tag, Actions run, test suite or CI workflow exists at this checkout.
+- `LICENSE` is **Proprietary & Non-Commercial Source-Available** and permits only personal, educational and non-commercial evaluation, with commercial use explicitly prohibited absent prior written authorization. `README.md` contradicts it: top badge says Non-Commercial, but the bottom License section still calls it MIT and says personal/commercial use is allowed. `SKILL.md` identifies license `Proprietary / Non-Commercial`. Do not reuse its code in Nexus without written permission/legal resolution.
+- It installs individual `SKILL.md` skill folders to one generic `HERMES_SKILLS_DIR` (default `/opt/data/skills`) and routes backups to a Git repo, private GitHub repo or GWS drive. No ChatGPT Project/Section/Session/transcript/branch/attachment/token graph, no Claude Desktop 3P Chat/Cowork/Code modes, no session/memory/schedule migration and no verified per-harness directory adapter. This is a skill installer only, not the requested migration system.
+
+## Source-level findings and isolated probes
+
+- The security gate has a fail-open branch: when NVIDIA SkillSpector is found but exits nonzero and produces empty/unparseable stdout, `scan_security()` catches JSON parse failure and returns `{safe: true, risk_score: 0, risk_severity: LOW}` unless the raw stdout literally contains `HIGH` or `CRITICAL`. A temporary executable `skillspector` stub that exited 42 with empty stdout reproduced exactly `{'safe': True, 'risk_score': 0, 'risk_severity': 'LOW', 'findings': [], 'scanner': 'NVIDIA SkillSpector'}`. No installation was run in this probe.
+- The remote URL path accepts arbitrary HTTP(S) content but only rewrites GitHub `/blob/` to raw content; it does not handle GitHub `/tree/` repository-folder URLs used by the README example. With `urllib.request.urlopen` monkeypatched to return synthetic GitHub HTML, `install_and_sync("https://github.com/owner/repo/tree/main/skills/docker-deploy", ...)` exited successfully, derived the name `skills`, and installed the HTML page as `SKILL.md`, not the directory's skill. No external URL/network request occurred.
+- Skill `name` frontmatter is not path-validated before `Path(target_dir) / meta["name"]`. In a disposable temporary HOME, an actual `install_and_sync` call with fixture name `../escaped` and backup route forced to local-only passed the fallback security scan and wrote the skill outside its requested `<temp>/skills` root at `<temp>/root/escaped`; the escape remained inside the disposable fixture, which was then deleted. This is a path traversal install flaw.
+- `run_cmd()` uses `subprocess.run(..., shell=True)` and later builds Git/GWS commands by interpolating skill name/path into quoted shell strings. The same unvalidated frontmatter name can therefore reach command construction. The code can auto-create a private GitHub repo and `git push`/GWS-upload installed skill contents; this remote side effect was not executed.
+- The fallback scanner is a small ten-pattern regex list and can miss arbitrary malicious instructions/code. `--force` bypasses both alternatives and a failing security decision. The README's “security-first” posture is not supported by fail-closed implementation/test evidence.
+- License conflict is independently evidenced by the pinned source, local `LICENSE`, and the latest commit diff (which changed LICENSE from MIT to proprietary while leaving README's bottom section claiming MIT).
+
+## Validation at pinned checkout
+
+- No formal tests or CI workflow; `rtk gh run list --repo Primuez/skill-installer --limit 10` → exit 0, stdout `[]`. GitHub Releases page shows no releases; Git tag list empty.
+- Python AST parse of `skill_installer.py` → exit 0. `bash -n bin/skill-installer` → exit 0. Running the wrapper with `--help` in a temporary HOME → exit 0, usage lists `install`, `check`, `scan`, `setup-inspector`.
+- CodeGraph up to date: 1 Python file / 24 nodes / 61 edges. `.codegraph/.gitignore` retained with only the `!.gitignore` self-preserving exception removed. Review checkout status clean after the generated CodeGraph setup.
+- All dynamic probes used synthetic data, no scanner/skill package from the network, no GitHub/Drive backup, no user skill folder, no `gh auth`, no real credential, and no installer run against a user path. Temporary files and `/tmp/skill-installer-temp` created by the isolated installer probe were removed.
+
+## Primary sources checked (2026-11-22)
+
+- Repository: https://github.com/Primuez/skill-installer
+- Pinned license-change commit: https://github.com/Primuez/skill-installer/commit/7fa1548d16cc184a96806cc622133dd4c746b6d4
+- GitHub Releases (none): https://github.com/Primuez/skill-installer/releases
+- GitHub Actions page (no runs surfaced): https://github.com/Primuez/skill-installer/actions
+
+Evidence boundary: pinned code/README/LICENSE, isolated no-network dynamic probes and current GitHub pages. The candidate is not safe or license-cleared for reuse in a commercial Nexus project.

@@ -1,0 +1,46 @@
+# Candidate #140 review evidence — sirrobot01/mnemo
+
+Review date: 2026-11-22  
+Repository: https://github.com/sirrobot01/mnemo  
+Pinned HEAD: `6474642dbf02c6c1dc5858a9bce16888e041f1b8`  
+Pinned candidate checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sirrobot01-mnemo-20261122`
+
+## Repository state and quality signals
+
+- `rtk gh repo view sirrobot01/mnemo --json stargazerCount,forkCount,licenseInfo,updatedAt,pushedAt,defaultBranchRef,isArchived,url` reported 1 star, 0 forks, no GitHub-detected license, `main`, not archived, last push `2026-05-25T20:35:46Z`.
+- HEAD is `6474642dbf02c6c1dc5858a9bce16888e041f1b8` (`update docs`). The v0.1 release tag points to `b3f7c6d69854bee68cd4f39ced9989bb15e04f4e`. `rtk git diff --name-status v0.1..HEAD` showed documentation/website workflow and `.gitignore` moves/changes only; no Go source change since the tagged release.
+- GitHub release workflow run `26256191646` completed successfully at the v0.1 commit (`b3f7c6d69854bee68cd4f39ced9989bb15e`), verified with `rtk gh run view 26256191646 --repo sirrobot01/mnemo --json status,conclusion,headSha,workflowName,createdAt,url`; the workflow's tests therefore apply to the unchanged Go source at current HEAD. This is an inference from the pinned-source diff, not a test run at the exact current documentation HEAD.
+- Local `rtk go test ./...` exited 1: `rtk: Failed to run go test: Failed to spawn process: No such file or directory (os error 2)`; the environment has no `go` executable, so no local Go test/build result is claimed.
+- CodeGraph initialization/status: 99 files, 1,664 nodes, 4,294 edges; status up-to-date. `.codegraph/.gitignore` was kept and only the `!.gitignore` exception was removed. The candidate worktree status was clean after indexing.
+- No install, service launch, database connection, model/API request, real credential, user session-store scan, or target write was performed.
+
+## What it implements
+
+This is a local-first cross-agent session **catalog and handoff/task continuity tool**, not an archive exporter or target-native session importer. Its built-in readers include Claude Code, Codex CLI, Aider, Continue, Copilot, Cursor and Windsurf. The current repository has no ChatGPT export reader and no Claude Desktop third-party-inference Chat/Cowork/Code adapter. An MCP server is a control surface for Mnemo's own memory/tasks; it is not an MCP server/config/credential migration implementation.
+
+The domain schema at `internal/domain/types.go` (pinned source lines 52–122, 124–149, 151–195) contains `Session`, sequenced `SessionEvent`, `Task`, and versioned `WorkingState`. It records source kind/path/external ID/fingerprint, timestamps, branch, commit hash, event type/content/structured value, and a compiled handoff state (goal, done, in-progress, next steps, rejected approaches, decisions, questions, touched files and hypotheses). There is no Project, Section, attachment/media, schedule, parent-session, fork, subtask or event-parent entity in that domain model. `task_sessions` is a many-to-many task/session association, not a native parent/child conversation graph (`internal/storage/interfaces.go`, `internal/storage/postgres/postgres.go`).
+
+`internal/app/tasksvc/service.go` groups sessions by repository + branch + a 45-minute idle window; a pinned active Task overrides branch separation and can attach any still-unthreaded session. This is a heuristic continuity grouping for coding work, not recovery of an explicit source hierarchy. `WorkingState` is compiled derived state, not a verbatim cross-vendor memory archive.
+
+## Reader fidelity observed in pinned source and tests
+
+- Claude Code reader (`internal/sessions/claude/claude.go:235–288`) discovers JSONL under `~/.claude/projects/<encoded-cwd>/`, reads top-level line types, and extracts only `text` blocks from nested `message.content`. A nested `tool_use` block in an assistant message is therefore not retained as a tool-call event or arguments/results; the fixture at `claude_test.go:95–147` includes thinking + text + nested tool-use but asserts only assistant text/system presence. Top-level `isMeta`/`isSidechain` booleans are retained as metadata, but no sidechain parent edge is modeled.
+- Codex reader (`internal/sessions/codex/codex.go:183–339`) scans `~/.codex/sessions/**/rollout-*.jsonl`, maps response-item message/reasoning/function/custom-tool call/result types, and stores tool name where present. Its `itemPayload` struct has only `Type`, `Role`, `Content`, `Summary`, `Text`, and `Name`; it does not bind tool arguments/output fields, so a tool event may retain only its type/name and blank text. It skips `turn_context`, `event_msg` and unknown lines (lines 286–289). The checked tests cover user/reasoning/assistant and metadata, not tool payload or fork fidelity.
+- Continue reader (`internal/sessions/continueide/continue.go:128–202`) reduces messages to string or `{text}` blocks, drops non-text/tool/media payloads, and assigns ingestion-time timestamps (`now`) rather than preserving source event times.
+- Ingestion uses a source path/agent-derived deterministic Session ID, a file mtime+size fingerprint, and deterministic event IDs from sequence. Unchanged files are skipped. Events whose text matches the built-in secret scanner are omitted; this is a useful ingest safeguard but means the stored transcript may be incomplete by design (`internal/app/ingestsvc/service.go:82–149`).
+- SQLite is the local content-bearing store. The PostgreSQL metadata adapter strips absolute source paths to basenames and clears event `Content` and `StructuredValue` before persistence (`internal/storage/postgres/postgres.go:646–663`), an explicit data-boundary pattern worth preserving.
+
+## Disposition for Nexus Memory
+
+Retain only as design evidence for local-first source discovery, deterministic/idempotent ingest, branch-aware Task handoff heuristics, explicit “derived working state” separation, and a metadata-only shared-database boundary. Reject it as a migration dependency or as evidence of accurate ChatGPT/Codex Project/Section/session conversion. A proper Nexus adapter still needs explicit source graph identity/edges and resource/artifact inventory, payload-preserving event parsing, per-Desktop-mode targets, source/target version gates, and a target-native restoration test with a field-by-field loss report.
+
+## Primary source links
+
+- [Repository](https://github.com/sirrobot01/mnemo/tree/6474642dbf02c6c1dc5858a9bce16888e041f1b8)
+- [Domain schema](https://github.com/sirrobot01/mnemo/blob/6474642dbf02c6c1dc5858a9bce16888e041f1b8/internal/domain/types.go)
+- [Claude Code reader](https://github.com/sirrobot01/mnemo/blob/6474642dbf02c6c1dc5858a9bce16888e041f1b8/internal/sessions/claude/claude.go)
+- [Codex reader](https://github.com/sirrobot01/mnemo/blob/6474642dbf02c6c1dc5858a9bce16888e041f1b8/internal/sessions/codex/codex.go)
+- [Task threading](https://github.com/sirrobot01/mnemo/blob/6474642dbf02c6c1dc5858a9bce16888e041f1b8/internal/app/tasksvc/service.go)
+- [Ingest and secret filtering](https://github.com/sirrobot01/mnemo/blob/6474642dbf02c6c1dc5858a9bce16888e041f1b8/internal/app/ingestsvc/service.go)
+- [PostgreSQL sanitization](https://github.com/sirrobot01/mnemo/blob/6474642dbf02c6c1dc5858a9bce16888e041f1b8/internal/storage/postgres/postgres.go)
+- [v0.1 release CI run](https://github.com/sirrobot01/mnemo/actions/runs/26256191646)

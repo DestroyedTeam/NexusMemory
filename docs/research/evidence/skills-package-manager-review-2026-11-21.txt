@@ -1,0 +1,58 @@
+# Evidence ledger — SoonIter/skills-package-manager
+
+Review date: 2026-11-21  
+Candidate source: <https://github.com/SoonIter/skills-package-manager>  
+Clone: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sooniter-skills-package-manager-20261121`  
+Branch/HEAD: `main` / `4d3d216144c493ba4ad4ea2f8fa581304bef3f71`  
+Commit date/message: 2026-06-12 / `test: add cli e2e snapshots (#35)`  
+Current registry inventory before this review: 74/303 reviewed; next row was this candidate.
+
+## Decision
+
+Classify as a **narrow, adjacent Skill asset manager**, not a cross-Harness migration engine. Its useful reference is a manifest/pinned-source workflow and symlink distribution for `SKILL.md` directories. It does not serialize or import Projects, Sections, conversations, Session hierarchy, task/fork links, memory, MCP declarations, plugins, attachments, usage/token ledgers, schedules, or Claude Desktop modes. The user-confirmed Claude Desktop Chat, Cowork and Code modes therefore remain separate targets, not supported merely because the registry contains a `claude-code` skill folder.
+
+## Source and implementation inspected
+
+- `README.md`, package manifests, docs, source, tests, and main implementation were inspected from the pinned local clone; CodeGraph was initialized and verified at 105 files / 1,035 nodes / 2,846 edges. The only CodeGraph `.gitignore` edit was removal of its `!.gitignore` exception, keeping generated index files ignored.
+- `packages/skills-package-manager/src/config/types.ts` models `SkillsManifest` as `$schema`, `installDir`, `linkTargets`, `selfSkill`, `skills`, and `patchedSkills`. `ResolvedSkillEntry` is a source specifier/resolution plus digest and optional patch. No conversation/project/session entity appears in this model.
+- `packages/skills-package-manager/src/cli/agentCompatibility.ts` hard-codes 45 names to skill-directory destinations (e.g. Claude Code `.claude/skills`, Codex `.agents/skills`, Cursor `.agents/skills`/global `.cursor/skills`, OpenClaw `skills`; also Antigravity, Gemini CLI, Copilot, Windsurf, OpenCode, Goose, Kiro, etc.). `linkSkill()` creates one filesystem symlink per skill name at each configured link target. These are static Skill paths, not format converters or history/session adapters.
+- `packages/skills-package-manager/src/specifiers/` and website docs support Git/GitHub refs (including pinned commits/subpaths), npm versions, local paths/links, and local tarballs. The published install flow materializes files into one `installDir`, then links them to `linkTargets`.
+- The main manifest lacks Skill-to-Skill dependency-lock fields. Open PR #36 proposes frontmatter dependencies and lock behavior; open PR #37 proposes install-time manifest bootstrap/adoption. Neither was merged in the inspected state.
+- No source model/adapter was found for ChatGPT/Codex Project or Section groups, session/message trees, active branches, child tasks, turns, interruptions, images/audio/video/links, token/cost usage, MCP servers, plugins, persistent memories, scheduled tasks, or provider Cloud session APIs. Skill path portability is not session-data portability.
+
+## Project and release activity
+
+- GitHub metadata: ISC license, 4 stars, 0 forks, main last pushed 2026-06-12. Latest GitHub release is v0.11.0 (2026-06-05; tag commit `6dc9415`); the local source is 0.11.0.
+- GitHub showed two open PRs, #36 (frontmatter Skill dependencies) and #37 (manifest bootstrap), both opened 2026-06-12. Treat them as proposals, not current released behavior.
+- Official documentation describes `skills.json`, pinned specifiers, `installDir`, `linkTargets`, install, and update; it describes only Skill assets. The website does not claim project/session migration.
+
+## Build and test ledger
+
+Environment: macOS arm64, Node `v26.7.0`, workspace declares pnpm `10.33.0`; the available fallback pnpm launcher reports `11.25.0`.
+
+| Command / input | Exit | Literal result |
+|---|---:|---|
+| `rtk git clone https://github.com/SoonIter/skills-package-manager.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sooniter-skills-package-manager-20261121` | 0 | Clone completed. |
+| `rtk codegraph init --yes /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sooniter-skills-package-manager-20261121` | 0 | `Indexed 105 files`; `1,035 nodes, 2,846 edges`. `rtk codegraph status <same path>`: up to date. |
+| `rtk proxy pnpm install --frozen-lockfile` | 1 | Lockfile up to date; install lifecycle ran schema generation and both Rslib build stages successfully, then stopped with `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: core-js@3.42.0, esbuild@0.27.7, simple-git-hooks@2.13.1` and `Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.` It also inserted placeholder `allowBuilds` entries (`set this to true or false`) in `pnpm-workspace.yaml`; that generated tracked-file edit was discarded with `rtk git checkout -- pnpm-workspace.yaml`. Final clone status is clean. No build permission was approved. |
+| `rtk proxy ./node_modules/.bin/tsx packages/skills-package-manager/scripts/generate-schema.ts` | 0 | `✅ Generated JSON Schema (package): .../packages/skills-package-manager/skills.schema.json`. |
+| `rtk proxy ./node_modules/.bin/rslib build` from `packages/skills-package-manager` | 0 | Rslib build and declaration bundle completed. |
+| `rtk proxy ./node_modules/.bin/rslib build` from `packages/pnpm-plugin-skills` | 0 | ESM and CJS Rslib builds completed (Node emitted a module-type warning). |
+| `rtk proxy ./node_modules/.bin/rstest run` | 0 | 11 test files; 134/134 passed; 0 failed, 0 skipped. Node emitted a module-type warning only. |
+| `rtk pnpm install --frozen-lockfile` and `rtk pnpm run build && rtk pnpm test` | 1 | RTK-filtered attempts exited 1 without useful output; corrected to `rtk proxy`. Subsequent `rtk proxy pnpm run build` still hit the same ignored-build install failure, so the direct schema/build/test binaries above are the valid completed gates. |
+
+## Command corrections and limitations
+
+- An initial `rtk codegraph explore` without `--path` queried the NexusMemory workspace index instead of this clone. Corrected with `rtk codegraph explore --path <clone> ...`; all reported candidate source below was then from this clone.
+- An exploratory CodeGraph query beginning with the literal text `--agent` was parsed as an option and exited 1 (`unknown option`). Re-ran with the query reworded to `agent option targets`.
+- An initial Rslib path `../../node_modules/.bin/rslib` exited 1 (`No such file or directory`). Located workspace symlinks and reran the package-local `./node_modules/.bin/rslib build`; both builds exited 0.
+- No real client account, transcript, API key, gateway, Desktop app, project, user skill directory, or cloud session was touched. No end-to-end migration accuracy was measured; no importer/writer exists here to score.
+
+## Primary evidence links
+
+- Repository / README: <https://github.com/SoonIter/skills-package-manager>
+- Official manifest/specifier docs: <https://skills-package-manager.site/api/specifiers>
+- Official Getting Started (manifest/install/link-target workflow): <https://skills-package-manager.site/getting-started>
+- Releases (v0.11.0, released 2026-06-05): <https://github.com/SoonIter/skills-package-manager/releases>
+- Open PR #36: <https://github.com/SoonIter/skills-package-manager/pull/36>
+- Open PR #37: <https://github.com/SoonIter/skills-package-manager/pull/37>

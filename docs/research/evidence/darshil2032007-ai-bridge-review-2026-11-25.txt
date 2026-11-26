@@ -1,0 +1,37 @@
+# Candidate #277 source review: darshil2032007/AI-Bridge
+
+- Review date: 2026-11-25 (Asia/Shanghai)
+- Repository: https://github.com/darshil2032007/AI-Bridge
+- Pinned HEAD: `86b73bb4eb6b8b728331c482ba3127d87cbe4976` (2026-06-04; `docs: update README with installation guide and screenshots`)
+- Method: isolated shallow clone in `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-darshil2032007-ai-bridge-20261125-followup277`; CodeGraph 28 source files / 185 nodes / 429 edges, up to date. No browser session, private export, API key, authenticated account, or provider request used.
+
+## Implementation findings
+
+- README and MV3 manifest describe a browser extension for ChatGPT, Claude.ai, Gemini, Perplexity and Grok; no desktop app, Codex native storage connector, local Claude Code CLI, or Claude Desktop Chat/Cowork/Code mode connector exists.
+- `src/adapters/ChatGPTAdapter.ts::extractMessages()` scrapes currently rendered DOM into role/content strings; it does not read an export or persist source IDs, timestamps, project membership, branches, files, assets or tool traces. Fallback selectors can produce layout-dependent extraction. `src/types/conversation.ts` permits optional `timestamp`, but this adapter never populates it.
+- `src/context/ContextEngine.ts::generateContextPackage()` truncates conversations to the first and most recent 49 messages above 50. `src/utils/groq.ts::formatMessagesForPrompt()` truncates each message to 2,000 characters. The full text of the retained messages is POSTed to `https://api.groq.com/openai/v1/chat/completions` for a generated summary; parsing coerces absent fields to defaults. ContextPackage includes summary/task/decision/code/file-name strings, not a graph or archive.
+- `src/context/PromptBuilder.ts::buildContinuationPrompt()` creates a prompt; `src/background/background.ts::executeTransfer()` opens a new platform homepage and injects that prompt. It cannot select an existing Project, create/restore target-native history, or retain source event identity.
+- No Skills, MCP, plugin, memory store, schedules, project/section group, subagent/fork graph, attachment-byte, token ledger, or native target import model was found in the reviewed tree.
+- README calls the extension “100% Local” and says it has no backend/database, but source calls Groq's hosted endpoint. Correct interpretation: no AI Bridge-owned server; processing is not local-only. API key is kept under Chrome local storage key `ai_bridge_settings`.
+- README badge claims MIT, but `rtk find 'LICENSE*'` found no license file; registry SPDX stays null. Reuse license is unconfirmed.
+
+## Reproduction
+
+- `rtk npm ci && rtk npm run build`: exit 2. `npm ci` added 167 packages; TypeScript step failed before bundling. Representative diagnostics: repeated TS2451 `Cannot redeclare block-scoped variable 'chrome'` and TS2503 `Cannot find namespace 'chrome'` in `node_modules/@types/chrome/chrome-cast/index.d.ts`, plus TS2451/TS2502 in `src/chrome.d.ts`.
+- `rtk npm run` reports no `test` script; only dev/build/build:fast/preview/type-check.
+- `rtk npm run build:fast`: exit 0, builds popup, background and all five content scripts; emits warning that the CSS `@import` follows Tailwind directives and a stale Browserslist database notice.
+- Commit remained pinned at the same HEAD after review. No runtime browser or target-client verification was attempted.
+
+## Disposition
+
+Reject as a migration engine. Keep only its discoverability/continuation-prompt UX as adjacent prior art; clearly classify it as lossy prompt handoff. It has zero evidence for ChatGPT/Codex Project/Section hierarchy or “Destruction Era” identity, and zero evidence for any of the four user-confirmed Claude gateway/local acceptance tracks.
+
+## Pinned source links
+
+- [README](https://github.com/darshil2032007/AI-Bridge/blob/86b73bb4eb6b8b728331c482ba3127d87cbe4976/README.md)
+- [ChatGPT adapter](https://github.com/darshil2032007/AI-Bridge/blob/86b73bb4eb6b8b728331c482ba3127d87cbe4976/src/adapters/ChatGPTAdapter.ts)
+- [Context engine](https://github.com/darshil2032007/AI-Bridge/blob/86b73bb4eb6b8b728331c482ba3127d87cbe4976/src/context/ContextEngine.ts)
+- [Groq request and summary projection](https://github.com/darshil2032007/AI-Bridge/blob/86b73bb4eb6b8b728331c482ba3127d87cbe4976/src/utils/groq.ts)
+- [Prompt builder](https://github.com/darshil2032007/AI-Bridge/blob/86b73bb4eb6b8b728331c482ba3127d87cbe4976/src/context/PromptBuilder.ts)
+- [Transfer worker](https://github.com/darshil2032007/AI-Bridge/blob/86b73bb4eb6b8b728331c482ba3127d87cbe4976/src/background/background.ts)
+- [Manifest](https://github.com/darshil2032007/AI-Bridge/blob/86b73bb4eb6b8b728331c482ba3127d87cbe4976/manifest.json)

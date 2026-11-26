@@ -1,0 +1,44 @@
+# Candidate #100 review — rcdelfin/agentkit (2026-11-21)
+
+## Identity and disposition
+
+- Upstream repository: https://github.com/rcdelfin/agentkit
+- Exact checked-out HEAD: `f5bb34e7e09799ca3a5191970e66864a96517583` (`main`, clean tracked tree).
+- Current GitHub snapshot: MIT, 2 stars, 0 forks, public; created 2026-07-23, last push 2026-08-28, 30 commits. `gh run list` and `gh release list` returned empty arrays; no `.github/workflows` directory or project test suite was found.
+- Disposition: narrow Instructions + allowlisted Skills linker, not a cross-Harness project/session migrator. Keep only as an adjacent ResourcePlane pattern. The MIT license permits source use with notice, but each included Skill retains its own license; re-check those before selecting any content.
+
+## Scope match to Nexus Memory
+
+The user's confirmed goal includes ChatGPT/Codex Projects, Section Groups, Session/message/branch/subtask/attachment graphs and the Claude Desktop Chat/Cowork/Code third-party gateway modes, alongside local/self-hosted Claude Code. AgentKit only links two global instruction files into detected user homes and optionally links 15 explicitly allowlisted Markdown-only Skills for Pi, Claude Code and Codex. README's supported list names Pi, Claude Code, Codex and Gemini CLI for instruction files; no Cloud/Gateway/API-key routing, MCP configuration transfer, plugin transfer, ChatGPT or Claude.ai import, session transcript, project hierarchy, token usage, schedule, media, or subagent relation exists. It has no native app/package distribution for Windows/macOS; this is a Bash setup script.
+
+## Implementation and synthetic verification
+
+- `setup.sh` canonicalizes instructions in `instructions/`, links them into user-level harness directories, and combines SYSTEM + AGENTS into generated Codex `AGENTS.md`. `--link-skills` validates `skills/portable.txt` and creates symlinks only for that allowlist; `--check-skills` validates paths. No AI/API or session exporter/importer is present.
+- `link()` and `write_file()` remove an existing symlink at a target path without proving it belongs to AgentKit or backing up the symlink itself. `unlink_one()` likewise removes any symlink at a managed-looking path, with no provenance marker.
+- Synthetic isolated-HOME probe (only `/private/tmp/nm-agentkit-poc-20261121`, no real home/session/key touched): a manually created user-owned `~/.claude/CLAUDE.md -> custom.md` symlink was removed by `setup.sh --unlink` (exit 0; `custom.md` content remained). This proves the link itself is lost, not that its destination content is deleted.
+- Another isolated fresh-home probe ran setup then `--unlink`, both exit 0. `SYSTEM.md` and `AGENTS.md` links were removed, but the generated regular `.claude/CLAUDE.md` `@import` wrapper remained because `unlink_one()` removes symlinks/restores `.bak` only; it has no generated-file marker/cleanup path.
+- Positive path: when `.claude/AGENTS.md` and `.claude/CLAUDE.md` started as regular user files, setup backed each to `.bak`; `--unlink` restored the originals, and generated Codex `AGENTS.md` was removed. Thus existing-file backup/restore works, but ownership tracking for links and generated wrapper cleanup are incomplete.
+- `setup.sh --check-skills`: exit 0. `bash -n setup.sh`: exit 0. `--link-skills` in a temporary HOME exited 0 and linked 15 allowlisted entries for each of Pi, Claude and Codex. No real user profile was touched.
+- The Skill orchestration helper's own code only enumerates `pi`, `claude`, `codex`, with project roots `.pi/skills`, `.claude/skills`, `.codex/skills`; it is unrelated to session data and is not a general adapter registry.
+
+## Quality, security and adoption
+
+- Small, understandable shell installer; no package dependencies or build step; README documents idempotence and `.bak` restoration. Static shell syntax and allowlist validation passed.
+- No CI run, release, automated test suite, JSON/session schema, migration/export/import CLI, rollback manifest, mode-specific test fixture, or cross-platform app binary was observed. This is a source-scope check, not an exhaustive upstream security audit.
+- The symlink ownership bug is a concrete safety caveat for broad `--unlink` usage. The leftover `CLAUDE.md` wrapper is an uninstall residue. Do not use the script to manage valuable live homes until those issues are fixed or a user-approved isolated backup workflow exists.
+- No real user data, credentials, API gateway, ChatGPT export or Claude Desktop profile was read.
+
+## Source references
+
+- README and tree: https://github.com/rcdelfin/agentkit/tree/f5bb34e7e09799ca3a5191970e66864a96517583
+- Installer: https://github.com/rcdelfin/agentkit/blob/f5bb34e7e09799ca3a5191970e66864a96517583/setup.sh
+- License: https://github.com/rcdelfin/agentkit/blob/f5bb34e7e09799ca3a5191970e66864a96517583/LICENSE
+
+## Tool/error ledger
+
+- The broad CodeGraph query returned unrelated vendored skill-script symbols; review conclusions were grounded in the README, root `setup.sh`, `instructions/`, allowlist and targeted isolated probes. CodeGraph index is verified current.
+- No project build/test workflow exists to run. No dependencies were installed. All behavior probes were run under temporary HOME directories and cleaned afterward.
+
+## Registry state
+
+After this candidate the 303-row corpus advances to 100 reviewed / 203 unreviewed. The next candidate is computed from the next unreviewed row. Research remains incremental and incomplete.

@@ -1,0 +1,38 @@
+# zavora-ai/macos-zlaunch-manager — MCP / Harness relevance review (2026-11-21)
+
+## Identity, source pin, release, and build evidence
+
+- Repository: https://github.com/zavora-ai/macos-zlaunch-manager
+- Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-zavora-ai-macos-zlaunch-manager-20261121`, default branch `main`.
+- HEAD: `639640e1f7cf643536a16a8e9270e8d5bc8c3df9` (`2026-09-10T12:33:43+03:00`); 16 commits; MIT? GitHub `licenseInfo` reports Apache-2.0. Latest listed release v1.2.0 (2026-07-05); 5 stars / 1 fork; last code push 2026-09-10; repository metadata later updated 2026-11-19.
+- CodeGraph current: 27 files, 579 nodes, 1,132 edges. Source checkout status clean after review/build.
+- Upstream Actions latest observed Release run `28744169225` succeeded 2026-07-05 on older commit `c1e77c6e045a07dc5bfaa4bba0fadc740480d7b5`; the current head was pushed in September and is not covered by that run. Workflow triggers on version tags and builds only CLI + GUI; it neither builds the MCP-server target nor runs tests.
+- Local `swift build --package-path mcp-server -c release`: exit 0. `swift build --package-path cli -c release`: exit 0 (Swift 6.4, arm64 macOS 27.3). `swift test --package-path mcp-server`: exit 1, literal `error: no tests found; create a target in the 'Tests' directory`. No test files/test target were found.
+
+## Product boundary
+
+This is a native macOS launchd service GUI + CLI + stdio MCP server. It exposes 19 tools named `launchd_*` to list, inspect, start/stop/restart/load/unload/enable/disable services; read logs/plists; create/delete/write plists; force-reload services; and open its GUI. A local process-level JSON-RPC smoke using only `initialize` and `tools/list` exited 0 and returned exactly those tools; no session/project/chat/transcript import tool appeared. Source/docs contain no ChatGPT/Codex/Multi-Harness session, Project, Section, memory, token/cost, attachment, branch, or scheduled-task data model. This is an OS-service control MCP, not a Harness migrator or a project/session manager.
+
+The README shows a local `claude_desktop_config.json` stdio config and Kiro config. Its Kiro `autoApprove` example includes only read-only tools, which is the prudent boundary. The server itself does not enforce confirmation: `handleToolsCall` dispatches mutating calls directly. Other MCP hosts could grant these tools broader approval. The server is listed for Claude Desktop and Kiro only; the source does not demonstrate support for Claude Desktop Chat, Cowork, and Code separately, or Claude Code local sessions. All three Desktop modes remain separately in user-confirmed scope.
+
+Current first-party Claude Desktop guidance now directs local MCP installs through Desktop Extensions (`.mcpb`) and an in-app extensions UI; it describes a `manifest.json` and `mcpb pack` conversion flow. This repository has no tracked `.mcpb` or `manifest.json`, and its README only gives a raw JSON config example. Do not treat the README snippet as evidence of current extension packaging or session compatibility; raw-config operation was not independently exercised. Official current reference: https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop.
+
+## Safety and correctness evidence
+
+- MCP `ServiceManager.create()` accepts arbitrary `label` if `label.contains(".")`, then writes to `(domainPath(domain) as NSString).appendingPathComponent("\(label).plist")`; there is no path-containment check. The MCP `launchd_create` schema passes the label directly.
+- A sandboxed source POC compiled the actual MCP `ServiceManager.swift` with only the `user` LaunchAgents root redirected to `/tmp/nm-zlm-poc/home/Library/LaunchAgents`; `create()` itself was otherwise unchanged. Input `label="../../escaped.poc"` passed its only validation and wrote `/tmp/nm-zlm-poc/home/escaped.poc.plist` outside the intended `LaunchAgents` directory. Exit 0. No launchctl call or user path was touched. This is a confirmed file-path traversal in the MCP `launchd_create` path.
+- The MCP server exposes high-impact launchd controls and plist writes without a server-side confirmation/authorization layer. The sample Kiro config narrows auto-approval to read-only tools; do not auto-approve mutators. No real service was started/stopped/created/deleted in this review.
+- `requiresPrivilege(_:)` exists in MCP `ServiceManager.swift` but no call path uses it; MCP methods call `launchctl` directly. The README says system operations require root/standard authorization (GUI/CLI paths); MCP privilege behavior for global/system domains was not tested, so current behavior should not be assumed from GUI/CLI docs.
+- Local compiled MCP handshake: `initialize` and `tools/list` returned 2 JSON-RPC responses; server advertised protocol `2024-11-05` and 19 launchd tools; process exit 0, no mutating tool invoked.
+
+## Disposition
+
+**Screen as a low-relevance false positive for cross-Harness migration. Exclude from Nexus Memory's migration engine and do not use its MCP `launchd_create` with untrusted labels.** It may be a narrow reference for a local stdio MCP process with distinct read/write tools, but it has no conversation/session/resource-export semantics. Before any MCP reuse, require path-safe label validation, server-side confirmation/least privilege, tests, and current Desktop Extension packaging; keep all system-management tools out of auto-approve lists. Full source pointers: `https://github.com/zavora-ai/macos-zlaunch-manager/tree/639640e1f7cf643536a16a8e9270e8d5bc8c3df9`.
+
+## Event ledger
+
+- Atomic dispatcher selected `CONTINUE` from project registry metadata and cloned the pending repo; clone exit 0, origin `https://github.com/zavora-ai/macos-zlaunch-manager`, HEAD `639640e1f7cf643536a16a8e9270e8d5bc8c3df9`.
+- CodeGraph status initially “Not initialized” was handled with direct `rtk codegraph init --yes` (exit 0); status then showed 27 files / 579 nodes / 1,132 edges and current index. Removed only CodeGraph's `!.gitignore` exception; Git worktree was clean after review.
+- MCP server build exit 0; Swift test exit 1 because no Tests target exists. CLI release build exit 0.
+- Read-only JSON-RPC handshake/tool-list probe exit 0; no launchd tool execution.
+- Sandboxed label traversal POC compile exit 0 and run exit 0; actual source path root was redirected only to an isolated temp directory.

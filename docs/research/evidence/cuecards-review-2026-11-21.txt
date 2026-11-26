@@ -1,0 +1,52 @@
+# opencue/cuecards — code, data-model, adapters, and quality review (2026-11-21)
+
+## Identity and disposition
+
+- Public repo: https://github.com/opencue/cuecards
+- Exact candidate checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-opencue-cuecards-20261121`
+- `main` HEAD `6c81ebd0613458726f4d0b7c9b80587af9136789` dated 2026-11-20; `origin/main` resolved to the same hash.
+- Current GitHub snapshot: 9 stars / 1 fork. License: MIT.
+- **Disposition:** high-value adjacent reference for deterministic per-project profiles and one-way Skills/MCP adapters; **not a session/project migration engine**.
+
+## What ships in `cue-ai` and how it works
+
+The npm package is `cue-ai` 0.10.0 (CLI `cue`, Node >=20); npm `latest` is 0.10.0 and its published `gitHead` is `1737340b888b137dd5c03fe838b0c8544cceb50e`, not this review's newer main HEAD. GitHub Releases still marks v0.9.4 (2026-06-12) as Latest. Thus the package and active branch are one version label but not one commit, and the GitHub Releases badge lags the npm dist-tag.
+
+A project can pin one profile name in `.cue.profile`. The YAML profile can define `agents`, `inherits`/composition, recommendations/conflicts, Skills, MCPs, plugins, env, Codex settings, rules, commands, hooks, Claude subagents, persona, playbooks, quality gates, and evals. Cue resolves the directory profile, materializes a content-hashed per-profile runtime under `~/.config/cue/runtime/<profile>/claude or codex`, then dispatches to the native CLI. Its `cue launch` accepts Claude Code or Codex; it does not launch Claude Desktop. This profile selector/inheritance graph is not a ChatGPT Project/Section tree or Session hierarchy.
+
+There are 11 `AgentKind` IDs. Only `claude-code` and `codex` are full native runtimes. The nine other adapters are Cursor, Cline, Windsurf, Gemini CLI, Antigravity, GitHub Copilot, Roo Code, Amp, and Aider. Their `materializeExternalProfile` path writes profile Skills and MCP settings using native adapters; it does not carry the whole profile semantics (plugins, persona, gates, hooks, Codex-only settings, Claude subagents). Aider's adapter explicitly has no MCP writer. Some adapters express Skills as a single instruction/rules file rather than preserving native skill metadata. This is an adapter architecture reference, not evidence of lossless cross-Harness portability.
+
+## Session/history data actually present
+
+Core shipped analytics is a local `~/.config/cue/analytics.jsonl` event ledger with `start`, `end`, `skill_hit`, `skill_invoked`, `skill_miss`, `skill_gap`, profile, agent, cwd, duration, `session_id`, tool-use ID and, for misses, a redacted prompt snippet. It does not model message turns, parent/child/fork topology, tools/results as a transcript graph, attachments, token consumption or restoration. The local transcript ingest feature reads selected native logs to detect Skill calls/misses; it is an analytics input, not an archive export/import.
+
+The repository also contains `evolution/evolution/core/external_importers.py`: a Claude Code `history.jsonl` importer that extracts displayed user text plus project/session/timestamp, Copilot event importer that extracts user/assistant text pairs, and Hermes JSON session importer. They filter selected secret markers and feed relevance-scored examples into train/validation/holdout **skill-evaluation datasets**. They do not write a target native Session, do not cover ChatGPT Projects/Sections or Claude Desktop, and are not in `package.json`'s npm `files` allowlist. The `.claude/` session-state hooks in this repo likewise produce a compact latest.md/archives for this repository's development workflow; those files are not shipped by `cue-ai`.
+
+## Requirement mapping
+
+| Requested Nexus Memory area | Observed Cue behavior | Verdict |
+|---|---|---|
+| Project-associated Skills/MCP | `.cue.profile` selects a profile; inherit/compose; native Claude/Codex runtime, plus nine partial output adapters | High-value design reference; not a source config importer or lossless universal adapter. |
+| Plugins/persona/playbooks/gates | Rich in profile schema and native materializer; only Skills/MCP reach external adapter path | Partial, capability-dependent. |
+| ChatGPT Project, Section, Section Group | No parser/model/writer found | Not supported. |
+| ChatGPT/Claude Desktop Chat/Cowork/Code session migration | No Desktop adapters or API-key session writer | Not supported. |
+| Session graph, branch/fork, parent/child, event/tool results, attachments, tokens | Local usage events are summary analytics; no portable transcript archive/writer | Not supported; no round-trip fidelity tests. |
+| Provider API-key / third-party gateway | No provider endpoint/API-key session integration found; marketplace token publishes profile assets, not model sessions | Not supported. |
+
+## Quality and verification
+
+**Upstream CI:** the current main HEAD has no visible standard CI run. The latest visible standard CI is #653 on `c09d9c6` (2026-11-18), **Failure**. GitHub annotates `Grader sandbox failed to start` at `evals/agent-eval/skill-ab/local.ts:139`; runs #648 (2026-11-15) and #650 (2026-11-15) report the same failure. The workflow's normal root suite runs `bun test --timeout 30000`; it also installs submodules and separately runs web tests, critical coverage, packaging, and profile validation. Do not claim the current full matrix passed.
+
+**Isolated local setup:** obtained Bun 1.3.13 only under `/tmp` from the official `@oven/bun-darwin-aarch64` npm package with lifecycle scripts disabled; project `bun install --frozen-lockfile --ignore-scripts` exited 0 and installed 18 packages. Environment had temporary HOME/XDG/CUE/Codex paths and PATH excluded real `claude`, `codex`, and `gemini` executables; no API keys, login, or model calls were present.
+
+- Targeted tests: `src/lib/cwd-resolver.test.ts`, `src/lib/agent-adapters.test.ts`, `src/lib/profile-loader.test.ts`, `src/lib/runtime-materializer.test.ts`, `src/lib/agent-scoping.test.ts` — exit 0, **171 passed, 0 failed, 553 assertions**.
+- Targeted eval test: `evals/agent-eval/skill-ab/local.test.ts` — exit 1, 8 passed, 1 skipped, 1 failed; it reproduced the upstream `Grader sandbox failed to start` at `local.ts:139`. The optional real Codex sandbox test was skipped; the failing run uses a synthetic fake Codex and made no model/API call.
+- This is not a full suite result. Three Git submodules remain uninitialized; full CI parity would require them and the separate `web/` dependency install.
+
+**Additional release/adoption caveat:** `package.json` version is MIT 0.10.0; npm dist-tag confirms 0.10.0 while the GitHub release landing page's latest marker is v0.9.4. Prefer the active source plus npm metadata for version identity; no package was installed globally and no `cue setup`/native config write was run.
+
+## Nexus Memory decision
+
+Retain Cue as a high-value **profile/schema/adapter-pattern** reference. Reuse the explicit capability-oriented adapter approach (native runtime vs partial external config writer), directory-scoped asset bundles, and clear data-plane separation. Do not claim it migrates ChatGPT Projects/Sections, Claude Desktop modes, or Sessions. Its repo-only text extractors may inform optional future parser research, but are not a shipped import component. Model a future NexusMemory adapter's read/write capabilities and lost fields explicitly; never infer session compatibility from profile/Skill/MCP support.
+
+Primary sources: [repository at reviewed HEAD](https://github.com/opencue/cuecards/tree/6c81ebd0613458726f4d0b7c9b80587af9136789), [CI #653](https://github.com/opencue/cuecards/actions/runs/44274234338), [CI workflow](https://github.com/opencue/cuecards/blob/main/.github/workflows/ci.yml), [npm package](https://www.npmjs.com/package/cue-ai), [GitHub releases](https://github.com/opencue/cuecards/releases).

@@ -1,0 +1,31 @@
+Nexus Memory candidate evidence — beautyfree/skiller
+Review date: 2026-11-20
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/beautyfree/skiller
+- Latest remote/default `main` and local HEAD: `019d1ab13ecbb194dc4b6052f22e1db249f9d932`, commit 2026-10-23 (`chore(main): release 0.3.8 (#75)`); clean checkout. GitHub Releases lists latest stable v0.3.8, published 2026-10-23; live page snapshot 57 stars / 6 forks.
+- Root package version 0.3.8; Electron/React desktop app; `apps/desktop/agents/*.toml` contains 49 native agent definitions.
+- LICENSE text: Sustainable Use License Version 1.0; SPDX metadata is `NOASSERTION`. The grant permits only own internal business or personal/noncommercial use; distribution to others only for free, noncommercial purposes. Treat as reuse-restricted, not MIT/Apache/BSD.
+
+SOURCE REVIEW / SCOPE
+- Product: manage AI-agent skills; shared `~/.agents/skills` canonical library, read-only Skills CLI v3 lock discovery, per-agent installations, project-local Skills under `.agents/skills`, marketplace search/install for skills.sh and ClawHub, and dotagents-backed sync. The README and source are Skills-specific.
+- `ProjectEntryJson` = `{path,name,group?,added_at?,last_used_at?}`. `ProjectSkillJson` = `{enabled?,id,name,description?,path}`. `listProjectSkills` scans only `<project>/.agents/skills` and `<project>/.agents/skills-disabled` for folders with `SKILL.md`; `setProjectGroup` sets a plain UI folder label and stores the folder name in settings. This is project-scoped skill placement, not a hosted conversation Project/Section Group.
+- `SyncManifest` = `{profile:{id,mode}, agent_policy, skills}`; `SyncSkill` variants are bundled, immutable repository-reference, or skills.sh source. Sync profiles capture skill source/hash and target agent policy, not Sessions, messages, MCP server definitions, plugin lists, scheduled jobs, provider credentials or ChatGPT/Claude Cloud histories.
+- Marketplace proxy is for skill catalog/search/file previews; `dotagents` sync and project install functions manipulate skill packages. No chat-session import/export or transcript writer was found in the shared RPC schema, main handlers or sync manifest. Codex appears as an agent target for Skills, not a Codex-rollout reader; no ChatGPT session provider.
+- UI is a native cross-platform Electron app. This meets the form factor category, not the requested migration semantics.
+
+TESTS / VALIDATION
+- Bun 1.4.5 installed into `/private/tmp/nm-bun-runtime-20261120`. Ran `bun install --frozen-lockfile --ignore-scripts`; exit 0.
+- Targeted command: `rtk proxy env HOME=/private/tmp/skiller-test-home-20261120 /private/tmp/nm-bun-runtime-20261120/node_modules/.bin/bun test apps/desktop/src/main/project-toggle.test.ts apps/desktop/src/main/project-comparison.test.ts apps/desktop/src/main/sync-dotagents.test.ts apps/desktop/src/main/sync-conflict-preview.test.ts apps/desktop/src/main/sync-profile-check-state.test.ts apps/desktop/src/main/skill-pack-transfer.test.ts apps/desktop/src/main/skills-cli-compat.test.ts apps/desktop/src/main/dotagents-discovery.test.ts apps/desktop/src/main/dotagents-json.test.ts apps/desktop/src/main/sync-external.test.ts`
+- Exit 0: 45 passed, 0 failed, 206 expect calls across 10 files in 3.83s. Tests cover per-project skill toggles and comparisons, dotagents publish/clone/restore/conflicts, lockfile compatibility, skill pack transfer and external update provenance; they do not test Sessions or Cloud history. No user library, credentials, or marketplace account was used.
+
+FINAL CLASSIFICATION
+- `SKILLS_PLANE_REFERENCE_ONLY_SUL_REUSE_RESTRICTED_NO_SESSION_MIGRATION`. Useful public pattern for the Skills subresource and desktop UX, but not an implementation dependency for Nexus's cross-harness Session/Project migration. If Nexus is distributed commercially, do not derive or copy from SUL-1.0 without separate permission.
+- Research registry snapshot: 303 repositories total; 34 reviewed / 269 unreviewed after this addition. User's corrected target name remains Destruction Era.
+
+PRIMARY SOURCES
+- Repository/release: https://github.com/beautyfree/skiller and https://github.com/beautyfree/skiller/releases/latest
+- Project and project-skill schema: https://github.com/beautyfree/skiller/blob/019d1ab13ecbb194dc4b6052f22e1db249f9d932/apps/desktop/src/shared/rpc-schema.ts
+- Project scope implementation: https://github.com/beautyfree/skiller/blob/019d1ab13ecbb194dc4b6052f22e1db249f9d932/apps/desktop/src/main/projects.ts
+- Sync profile: https://github.com/beautyfree/skiller/blob/019d1ab13ecbb194dc4b6052f22e1db249f9d932/apps/desktop/src/main/sync-profile.ts
+- License: https://github.com/beautyfree/skiller/blob/019d1ab13ecbb194dc4b6052f22e1db249f9d932/LICENSE

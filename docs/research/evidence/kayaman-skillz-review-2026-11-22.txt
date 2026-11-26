@@ -1,0 +1,43 @@
+# kayaman/skillz — candidate #129 review
+
+Date: 2026-11-22. Candidate #129 in the primary 303-repository search corpus. Scope remains ChatGPT Projects/Sections/Destruction Era sessions and related resources to local/self-hosted Claude Code and Claude Desktop Chat/Cowork/Code. No target app, user account, session store, key, global skills directory, or user data was accessed; probes were restricted to temporary roots.
+
+## Identity and maturity
+
+- Repository: https://github.com/kayaman/skillz ; Apache-2.0; one star. Pinned local HEAD `2ed2f245d25315ba1ebe4cbbc63a4486b6821757`, dated 2026-03-15, commit `feat: initial skillz CLI — agent skills package manager`. The repository has one commit, no Git tags, no GitHub release, and no checked-in workflow directory in this checkout; the GitHub Actions tab showed no run list. Package `skillz` is 0.1.0, requires Python >=3.12, and is published with `uvx` / `uv tool` instructions.
+- This is a Python sibling/near-parallel to candidate #128 (`kayaman/agentskills`, Rust), with the same author, `.agents/skills` layout, v3 `.skill-lock.json`, CLI command set, supported-agent marker list and overall source/install/update design. It is not an independent session-migration architecture.
+- CodeGraph: 27 files / 225 nodes / 518 edges; index up to date. `rtk git status --short` was empty after testing/probes.
+
+## Capability and adapter boundary
+
+- `skillz add/list/remove/update/init/find` works with local directories and shallow-cloned GitHub Skills. The only project/global install destinations are `<cwd>/.agents/skills` and `~/.agents/skills`; `detect_primary_agent()` prints the first marker but `installer.py` does not use the detected agent to choose a native directory. The README’s eight “supported” markers therefore do not represent eight tested path serializers.
+- The `.agents/skills` convention is documented by current Codex, Cursor, Copilot, and OpenCode locations, but current Claude Code docs specify `.claude/skills`; Claude Desktop Chat/Cowork account-enabled skills are separate. No Claude Desktop mode writer, ChatGPT export reader, Project/Section graph, transcript/session/events, attachments/token data, MCP/plugin/memory/schedule support was found.
+- The v3 lock entry contains repository, source URL, skill path, folder hash and timestamps, but not the parsed Git ref/commit. `update` reconstructs `owner/repo@skill`, so it falls back to `main`. The folder SHA-256 ignores every dotfile and concatenates relative-path bytes with file contents without framing.
+
+## Build and test evidence (isolated venv)
+
+- `rtk proxy python3 -m venv /tmp/nm-review-kayaman-skillz-20261122-venv` and `pip install -e . pytest ruff mypy` → exit 0; editable build succeeded. The temp environment is outside the user environment. Pip emitted `typer 0.29.2 does not provide the extra 'all'` for the project's `typer[all]` dependency.
+- `rtk proxy /tmp/nm-review-kayaman-skillz-20261122-venv/bin/python -m pytest -q` → exit 0; **32 passed in 0.59s**.
+- `ruff check src/` → exit 0, `All checks passed!`; `ruff format --check src/` → exit 0, `19 files already formatted`.
+- `mypy src/skillz` → exit 1, one error: `src/skillz/commands/find.py:25` passes `dict[str, object]` for HTTPX `params`, incompatible with the current HTTPX `QueryParams` value types.
+- Installed `skillz --help` → exit 0. No live Claude/Cursor/Codex/Copilot/OpenCode target was launched.
+- A first probe wrapper used system `python3` instead of the temp venv and printed `ModuleNotFoundError: No module named 'skillz'`; corrected by running the probe under `/tmp/nm-review-kayaman-skillz-20261122-venv/bin/python`.
+
+## Isolated failure and integrity probes
+
+1. **Remove path traversal.** With an existing disposable `.agents/skills` parent and sibling temp directory, `skillz remove ../../../victim` exited 0, stdout `ℹ Removing skill '../../../victim'...`, stderr `⚠ Removed '../../../victim' directory but it was not in the lockfile.`, and deleted the sibling victim sentinel. The resolved victim was `/private/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-kayaman-skillz-probes-xr5halj_/victim`.
+2. **Failed overwrite loses old contents and leaves stale lock.** First `skillz add ./demo --yes` exited 0 with old `SKILL.md`. A second install with new content and a dangling symlink exited 1 after `shutil.rmtree(dest)` followed by failed `shutil.copytree`. The destination remained partially recreated with `# new`, the old `# old` content was lost, and the lock hash remained the old value `571b0fc6f2e50e66ef03ca8d8d2cd09bbad28897d1736833e56df5719dbfd52e`.
+3. **Dotfile omission and hash framing collision.** Different `.private` contents hashed identically to `b8076aef1d6e7fff009d97a39f8d9e581483c133dbf0848fb47f9c20cb3d972d`. Distinct file layouts (`a`=`bc` versus `ab`=`c`) produced the same `1971e4d30c53a0f541391a8f6861bb674307eaa3a3f98013a1cce4e146a12f3e`.
+4. **Failed upstream update is reported as success.** A fake `git` executable returned 128 (`fatal: forced fixture failure`). `skillz update demo` nevertheless exited 0, stdout `ℹ Checking 'demo'...
+ℹ All skills are up to date.`, stderr `✗ git clone failed: fatal: forced fixture failure
+⚠ Failed to update 'demo': Failed to clone https://github.com/owner/no-such-repository.git: fatal: forced fixture failure`; the installed skill remained.
+5. **Failed lock write leaks fetched temp state and still returns success.** A fake `git clone` created a new remote Skill, while the synthetic project `.agents` directory and lock file were made read-only after a valid lock was written. `skillz update demo` returned exit 0 and printed `Checking`, `has changes, updating`, `Updating existing skill`, then `All skills are up to date.` Its stderr reported `Permission denied` writing `.skill-lock.json`; the installed Skill had already changed to `# new` while the recorded hash remained `oldhash`. Because `cleanup_temp(tmp_path)` occurs after installation rather than in `finally`, one `skillz-*` directory remained under the probe’s explicitly isolated `TMPDIR` (`/tmp/.../tmp/skillz-ml3gskjw`). All temporary files, permissions and directories were removed/restored after the test.
+
+## Disposition
+
+This is a narrow, low-maturity Skills ResourcePlane tool and near-duplicate of the Rust sibling, not a SessionGraph or migration engine. Retain only the shared `SKILL.md`/v3-lock vocabulary as a reference; do **not** reuse its path handling, replacement, update status, cleanup or hash semantics. It has no ChatGPT Projects/Sections, Claude Desktop modes, transcript/session graph, MCP/plugin/memory/schedule migration. Full test/source/probe evidence is local; no target host was invoked.
+
+## Primary sources checked
+
+- Repository and README: https://github.com/kayaman/skillz
+- Current supported-path references: https://developers.openai.com/api/reference/cli ; https://code.claude.com/docs/en/skills ; https://cursor.com/docs/skills ; https://docs.github.com/en/copilot/concepts/customizations/agent-skills ; https://opencode.ai/docs/skills/

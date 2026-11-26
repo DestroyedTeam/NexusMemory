@@ -1,0 +1,40 @@
+# Candidate #105 — thesmart/install
+
+Review date: 2026-11-21
+Pinned HEAD: 91f5092e6adec840361875a72b0022d3290f94e2; VERSION v1.0.1.
+GitHub metadata: 2 stars, 0 forks, no CI runs or releases observed; pushed 2026-03-28, last updated 2026-08-03, not archived. CodeGraph initialization completed but indexed zero files because the repo is an Agent Skill with prose/reference data and shell scripts rather than supported source languages.
+
+## Product fit
+
+This is an Agent Skill that tells an AI assistant how to detect the current OS/package managers and choose commands for install, update, remove, search and list operations. It enumerates 19 managers across Linux, macOS, Windows, FreeBSD and cross-platform environments. It is not a Harness memory, Project, Section, Session, transcript, MCP/plugin, attachment, or scheduled-task migrator. It has no ChatGPT/Codex or Claude Desktop Chat/Cowork/Code session adapter, and no target-specific data store.
+
+The most reusable idea is a short, deterministic action policy with an explicit user-consent gate and a platform inventory. The SKILL.md requires recent explicit package/action intent, asks when manager choice is ambiguous, checks for already-installed versions, and says not to execute commands requiring sudo/admin. That is a useful independent safety pattern but not a conversion engine.
+
+## Source and safety review
+
+The Skill tells the agent to evaluate the output of bin/detect-platform to import the PLATFORM_* assignments. That script interpolates PLATFORM_SHELL into a single-quoted shell assignment without escaping embedded single quotes. PLATFORM_SHELL derives from the caller-controlled SHELL environment variable. This turns the documented eval into command execution if SHELL contains shell syntax.
+
+Harmless isolated probe, run only in a disposable directory under /private/tmp:
+- Environment SHELL value: a shell name followed by an unescaped single quote, command substitution that touches a file named probe, and a closing quote.
+- Shell action: eval the output of the checked-in bin/detect-platform script, as the reference instructs.
+- Observed result: exit 0, marker_created=true, stdout empty, stderr empty. The probe directory and marker were removed immediately. No package manager, install/update/remove command, user HOME or system path was modified.
+
+Other accuracy/quality notes:
+- The package-manager reference advertises the command go search <query> as available on Go 1.24+. The current official Go 1.27.4 command documentation enumerates commands such as bug/build/clean/doc/env/get/install/list/mod/run/test/tool/version/vet, but no search command. The documented Go search command is therefore invalid for current Go; package discovery belongs on pkg.go.dev or another tool. Source: https://go.dev/cmd/go/.
+- The Skill advertises update as a supported task, but the per-manager reference mostly presents install/remove/search/list; it lacks a consistent explicit upgrade/update operation for many managers, leaving updates to inference from generic install/version-pin instructions.
+- The README and SKILL say the product is licensed under PolyForm Internal Use 1.0.0. The checked-in LICENSE permits internal business use, prohibits distribution and sublicensing, and restricts creating/distributing derivative works. Do not copy, bundle or redistribute this Skill or its code with Nexus Memory without permission.
+- The repo has no test directory or test target, no GitHub Actions workflows, and rtk gh run list returned an empty array. sh -n passed for bin/detect-platform, vendor/set-skill-version and vendor/semver. A direct read-only run of bin/detect-platform on the current macOS arm64 environment exited 0 and reported Darwin/arm64 plus brew, npm, cargo and pip. No package operation was run.
+
+## Disposition
+
+Reject as a Nexus Memory implementation/dependency: it does not model or move any requested memory/session data; it contains a confirmed eval-injection flaw and a documented package command error; and the internal-use license forbids redistribution. Retain only the abstract principle that any destructive or system-changing action needs explicit current consent and that platform detection should be machine-readable without eval. Do not include its code or Skill text in a public/commercial Nexus bundle.
+
+The confirmed first-phase scope remains ChatGPT/Codex source state into local/self-hosted Claude Code and Claude Desktop third-party-provider Chat/Cowork/Code as separate adapters. No user export, account, app profile, or session was accessed or migrated.
+
+Primary sources:
+- Pinned repo: https://github.com/thesmart/install/tree/91f5092e6adec840361875a72b0022d3290f94e2
+- Skill instructions: https://github.com/thesmart/install/blob/91f5092e6adec840361875a72b0022d3290f94e2/SKILL.md
+- Detection script: https://github.com/thesmart/install/blob/91f5092e6adec840361875a72b0022d3290f94e2/bin/detect-platform
+- Package-manager reference: https://github.com/thesmart/install/blob/91f5092e6adec840361875a72b0022d3290f94e2/reference/package-managers.md
+- Internal-use license: https://github.com/thesmart/install/blob/91f5092e6adec840361875a72b0022d3290f94e2/LICENSE
+- Official Go command reference: https://go.dev/cmd/go/

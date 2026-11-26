@@ -1,0 +1,48 @@
+# Candidate #110 — zongwu233/skillctl (2026-11-22)
+
+## Disposition
+A compact local Skills/resource-plane CLI; useful for inventory, scope labels, approximate description-budget reporting, dry-run cleanup, and as a testable install-gate example. It is not a Nexus Memory Session/Project migrator and is not safe to adopt unchanged. Do not promote its green tests or its external scanner label into session-fidelity evidence.
+
+## Identity, license, and execution
+- Repository: https://github.com/zongwu233/skillctl
+- Pinned checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-zongwu233-skillctl-20261122
+- HEAD: 2abe39b2e24b6a641be7bd324b10b38011d5ea5e; branch main; status clean (## main...origin/main).
+- GitHub API snapshot: MIT, 2 stars, 0 forks, not archived; created 2026-09-10, pushed 2026-09-10, updated 2026-11-11. No release, Actions run, open issue, or open PR was observed. No .github CI workflow or committed design docs were present.
+- Source is Python (21 indexed files; CodeGraph 269 nodes / 618 edges, index up to date). Root LICENSE is MIT.
+- Installed editable into disposable /tmp Python 3.12.10 venv using PyYAML 6.0.3 and pytest 9.1.1. uv was not present in the review environment (rtk uv --version exit 127); system Python had no pytest (rtk python3 -m pytest --version exit 1). The disposable venv install succeeded (exit 0); full local suite: pytest -q, 57 passed, 0 failed in 0.25 seconds. Tests use temporary HOME and a fake Skillspector executable.
+- Actual Skillspector is not installed in the review environment; the external scan dependency was not run. No real skill installation or user config was touched.
+
+## Functional scope and model
+Commands inventory SKILL.md directories, rank textual skill-description overlaps against a task, compute a description-token budget, apply enable/disable profiles, run an install scanner, copy a selected Skill, and prune broken links/duplicate inode links/empty directories (dry-run by default).
+The directory inventory covers Claude Code, Codex (including a labeled Codex .system scope), OpenCode, Pi recursive collections, and OMP. It models a skill's name/path/runtime/scope/enabled state/description/body lengths/frontmatter flags. Project detection is filesystem-root based; it searches configured global/project paths. It has no ChatGPT, Claude Desktop Chat/Cowork/Code adapter, Section Group structure, Conversation/Session/event/branch/subtask graph, attachment/media store, native session restore, model/token usage history, MCP/plugin import, independent memory, or schedule model.
+Token accounting is explicitly heuristic: len(text)//4 and counts skill descriptions against a description-token threshold. Body handling reports words/lines and a per-Skill redline; it is not a tokenizer nor per-session consumption measurement.
+
+## Source-level strengths worth retaining independently
+- YAML parsing uses safe_load with a simple fallback and normalizes underscore/hyphen frontmatter keys.
+- Inventory separates user/project/system/source scopes, detects broken links, deduplicates same-inode entries, and defaults prune to dry-run.
+- The gate distinguishes a valid DO_NOT_INSTALL from CAUTION, displays a caution warning, and requires --force for a valid DO_NOT_INSTALL recommendation.
+- The test suite is useful for local synthetic skill inventory, budget, profile, and CLI happy/failure paths.
+
+## Reproduced implementation and safety findings (all in disposable temp directories)
+1. Codex profile scope leaks to user scope. Running use <profile> --project for a Skill discovered only under a temp repository's .codex/skills returned 0 but wrote the rule to the temp HOME/.codex/config.toml; it created no repository .codex/config.toml. Code filters records by project_only but set_codex_config always targets HOME/.codex/config.toml.
+2. Codex settings rewrite discards existing skill blocks. Starting with model = "gpt" and a disabled [[skills.config]] path="/keep-disabled", set_codex_config([], ["/new-disabled"]) preserved model but replaced the full skills.config array with only /new-disabled. README profile example says names not listed are left untouched; current behavior contradicts that statement and may re-enable/forget prior disabled skills. Existing test_codex_blocks_roundtrip asserts this replacement, so the suite encodes rather than catches it.
+3. Malformed Claude settings are overwritten. _read_json treats JSONDecodeError as an empty object; a synthetic partially-written settings.json passed to set_claude_overrides was replaced by a valid object containing only skillOverrides. The operation has no backup/atomic replacement path.
+4. Scanner output fails open for malformed JSON plus exit 0. A temporary fake scanner wrote non-JSON text and exited 0; run_gate returned ok=true / SAFE with no error. The real Skillspector was unavailable, so this is a wrapper behavior probe, not a claim about Skillspector's own output.
+5. Install follows a symlink outside the source root. A temp Skill with a relative symlink to a sibling synthetic file was copy-installed; the destination entry became an ordinary file containing the target bytes. shutil.copytree(..., symlinks=False) dereferences rather than rejects such links.
+6. --force is delete-first, not transactional. With an existing destination marker in a temp tree, an injected copytree OSError after the force removal left both the destination and marker absent. The probe verifies operation ordering and failure-state loss; the copy error was injected, not an OS-level disk-full simulation.
+7. SkillSpector is an unpinned external executable configured by name/path. Missing scanner is an error; no actual scan verdict is claimed here.
+
+These are local probes against pinned source, not upstream CI and not live Harness data. Workaround ideas for Nexus must be implemented independently: preserve unmanaged config blocks, make scope-aware writers, stage-and-verify before replacing, reject symlink escape, validate scanner output fail-closed, and record exact source/version/digest.
+
+## Nexus Memory relevance
+This is an adjacent Skills ResourcePlane reference only. Keep it separate from the user's source object Destruction Era and from Claude Desktop's three separate modes plus local/self-hosted Claude Code. Candidate #110 does not move ChatGPT Projects, Section Groups, Sessions, tasks, attachments, or context history. No actual user export, Skill directory, app config, or target session was inspected.
+
+## Error and correction ledger
+- Three initial CodeGraph explore calls passed unsupported --repo and exited 1; corrected by running from the candidate checkout working directory, after which targeted exploration succeeded.
+- Initial gh repo view requested unsupported JSON field license and exited 1; corrected to gh api ... with license.spdx_id, which returned the metadata above (exit 0).
+- uv command was unavailable (exit 127); system Python lacked pytest (exit 1); corrected by creating an isolated venv, installing editable package plus locked PyYAML/pytest versions and running the suite.
+- A first combined probe encoded literal backslash-n in synthetic shell/TOML fixture strings; the fake scanner returned Exec format error and profile produced invalid TOML. Corrected fixtures use actual newlines; the corrected probe returned exit 0 and produced the findings above. The first malformed fixture is not used as evidence.
+- A first Codex profile probe used the same literal-backslash-newline mistake and appeared to preserve the old block. Corrected real-newline probe exited 0 and confirmed the existing block is removed.
+
+## Inventory update
+Primary query corpus now 110/303 reviewed and 193 pending. The supplemental catalog still contributes 177 net-new pending candidates; combined primary + supplemental pending count is 370, excluding the separately tracked 11 manual additions. Next primary candidate: zzj1965186613/agentforge. Research remains incomplete.

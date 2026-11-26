@@ -1,0 +1,32 @@
+# Candidate #233 — zuhabul/yo-code documentation and provenance screen (2026-11-24)
+
+## Identity and current public state
+
+Pinned shallow `main` / `origin/main` at `6f5495a5dd0dd98be099b4dbcb9402cc3a283a5a` (2026-04-01, “feat: add provider account auth flow”); local status clean. Public GitHub page snapshot: 1,054 commits in the imported history, 0 stars, 0 forks, 0 open Issues, 4 open Pull Requests (Dependabot updates), 11 Actions runs with several CI failures, and no Releases. The primary search inventory marks `license_spdx: NOASSERTION`; `package.json` is version `0.2.0`, `private:true`, Bun 1.3.9, and declares `SEE LICENSE IN LICENSE`.
+
+## Provenance and legal screening — stop gate
+
+The repository's own README calls this a working repository for a recovered CLI source tree, and `SOURCE_PROVENANCE.md` says the imported tree came from a nested `claude-code-custom` checkout. The checked-in `LICENSE` claims that the code originated from an `@anthropic-ai/claude-code` sourcemap leak, identifies the original source as Anthropic proprietary material, and restricts commercial use, deployment and competing products based on that code. These are the repository's public assertions; this review did not independently adjudicate their accuracy. They are sufficient to exclude the source from Nexus implementation and to stop deeper reverse-engineering for this competing migration-product goal. Do not reuse, adapt, copy or base Nexus design decisions on the imported implementation. Any future reconsideration requires clean-room provenance and independent legal review. The only use recorded here is a high-level screen of the repository's own published docs and license/provenance statements.
+
+## Publicly documented product boundary (not a runtime-verified claim)
+
+The README describes a local Bun/TypeScript CLI with agents, Skills, hooks, rules, MCP/plugin features and “cross-harness workflows.” Its new API-key setup is a local account login for Anthropic-compatible endpoints: README/docs describe `YO_CODE_API_KEY`, an account label, optional base URL, and a local account file under `~/.claude/yo-code-accounts.json`; they also describe optional account rotation after HTTP 429. The same docs explicitly say the runtime remains built around the Anthropic message/protocol contract rather than a provider-agnostic API.
+
+The public docs describe a rebrand/recovered CLI, not a ChatGPT/Codex-to-Claude migration operation. They do not document import/export of ChatGPT Projects, Section Groups, conversation events, parent/fork/subagent structure, images/files/links, MCP/plugin dependencies, schedules or session resume into the new CLI. Because of the provenance stop gate, this is a **documentation-only scope finding**; no claim is made that every internal proprietary source module was examined to prove feature absence. API-key login is not itself a session/project migration adapter.
+
+## Maintainer-reported maturity and environment evidence
+
+The README says the full CLI currently fails to boot because recovered runtime modules are missing under `src/tools/` and related generated surfaces; `typecheck:full` is a backlog command for missing upstream modules. Those are maintainer disclosures, not failures reproduced by this review. `bun --version`, `bun run check`, and `bun run typecheck` each exited 127 with `[rtk: No such file or directory (os error 2)]` because Bun is unavailable here. No Bun install, dependency install, package lifecycle, CLI boot, API-key import, provider request, MCP server, migration, or user-data access was attempted. There is no `test` script in `package.json`; Actions page shows recent CI failures and four open dependency-bump PRs. GitHub currently has no Release.
+
+## Disposition
+
+**Screen out as a Nexus implementation candidate.** The public docs make it superficially relevant to the confirmed local Claude Code API-key destination, but do not document migration or session hierarchy transfer, and the repository's own provenance/license explicitly disallows the competing-product reuse this project would require. Do not use this repo's leaked implementation or code-derived details to design Nexus. Track only the public fact that API-key login exists in this repo's stated direction; treat its maturity and interoperability as unverified. The actual Nexus API-key implementation must be independently designed from lawful, official provider documentation and clean-room tests. No key, profile, conversation, Project, Session, account or external API was accessed.
+
+## References
+
+- [Pinned repository tree](https://github.com/zuhabul/yo-code/tree/6f5495a5dd0dd98be099b4dbcb9402cc3a283a5a)
+- [Pinned README](https://github.com/zuhabul/yo-code/blob/6f5495a5dd0dd98be099b4dbcb9402cc3a283a5a/README.md)
+- [Pinned LICENSE](https://github.com/zuhabul/yo-code/blob/6f5495a5dd0dd98be099b4dbcb9402cc3a283a5a/LICENSE)
+- [Pinned SOURCE_PROVENANCE.md](https://github.com/zuhabul/yo-code/blob/6f5495a5dd0dd98be099b4dbcb9402cc3a283a5a/SOURCE_PROVENANCE.md)
+- [Pinned public auth documentation](https://github.com/zuhabul/yo-code/blob/6f5495a5dd0dd98be099b4dbcb9402cc3a283a/docs/AUTH.md)
+- [Issues](https://github.com/zuhabul/yo-code/issues), [open pull requests](https://github.com/zuhabul/yo-code/pulls), [Actions](https://github.com/zuhabul/yo-code/actions), [Releases](https://github.com/zuhabul/yo-code/releases)

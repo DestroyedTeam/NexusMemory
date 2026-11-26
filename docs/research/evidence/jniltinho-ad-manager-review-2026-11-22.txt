@@ -1,0 +1,24 @@
+# jniltinho/ad-manager — unrelated Active Directory MCP false positive
+
+Date: 2026-11-22. Candidate #125 of the 303-name primary GitHub corpus. The requested product is cross-Harness migration of ChatGPT Projects/Sections/Destruction Era sessions and associated context/Skills/MCP/plugins/memory/schedules to local/self-hosted Claude Code and Claude Desktop Chat/Cowork/Code. This candidate is a standalone Active Directory/Samba administration suite, not an AI Harness connector or migration project.
+
+## Pinned identity and current status
+
+- Repository: https://github.com/jniltinho/ad-manager (MIT), pinned checkout HEAD `4254151bd119bd201e8f0642a34fc77a1ea3d524`, release v0.30.0, commit date 2026-11-02. GitHub showed 300 commits, 1 star, 0 forks; v0.30.0 was marked Latest when checked. The repo describes a Go web panel/desktop app/CLI, MCP server, and Samba file-server agent for AD.
+- Dispatcher clone: `rtk git clone https://github.com/jniltinho/ad-manager.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-jniltinho-ad-manager-20261122` → exit 0; Git status remained clean after review. CodeGraph initialized/verified current: 850 files, 22,578 nodes, 72,699 edges.
+
+## Source-level disposition
+
+- `README.md` says the product administers Windows Server/Samba 4 Active Directory: users, groups, OUs, computers, policies, DNS, shares, NTFS ACLs, backups, migrations, SSH and account operations. The `ad-manager mcp` process exposes AD tools under that same account/audit boundary. CodeGraph inspection of `cmd/mcp.go` and `internal/server/server.go` shows MCP functions operating on `ad.Conn`/directory methods for users/groups/OUs/computers/GPO/DNS/policy; these are not agent transcript import/export APIs.
+- The word `session` here is overloaded: `internal/server/server.go` uses an in-memory cookie-backed session for the signed-in AD operator (the password is held in memory), and `internal/shares/sessions.go` defines SMB clients connected to a file server. The desktop Rust views named “Sessions” display SMB sessions/open files, not LLM chat conversations. UI “migration” moves Active Directory/Samba directory data, not Harness state. The source’s `.agents/commands/opsx` and `.claude/skills/create-release` folders are repository maintainer/development assets, not adapters for importing user skill stores or sessions.
+- No source/target Harness registry, ChatGPT export reader, Claude Desktop/Code session writer, Project/Section tree, conversation/event/media codec, MCP configuration importer for other agents, or continuity/fidelity evaluation was found in this source-focused relevance screen. No build or full test suite was run: after source and directory inspection this repository is clearly outside the migration task, and its AD admin/container/credential behaviors were not launched.
+
+## Disposition
+
+Screen as **unrelated Active Directory/MCP software** and pass from the Nexus Memory candidate shortlist. The only superficial overlaps are its MCP protocol server, administrative data migration, and two unrelated session concepts; none implement Harness portability. No user AD, credentials, service, container, or account was accessed.
+
+## Primary sources
+
+- Repository/README and v0.30.0 release: https://github.com/jniltinho/ad-manager ; https://github.com/jniltinho/ad-manager/releases
+- Pinned MCP tool registry: https://github.com/jniltinho/ad-manager/blob/4254151bd119bd201e8f0642a34fc77a1ea3d524/cmd/mcp.go
+- Pinned AD session/auth handler and SMB session model: https://github.com/jniltinho/ad-manager/blob/4254151bd119bd201e8f0642a34fc77a1ea3d524/internal/server/server.go ; https://github.com/jniltinho/ad-manager/blob/4254151bd119bd201e8f0642a34fc77a1ea3d524/internal/shares/sessions.go

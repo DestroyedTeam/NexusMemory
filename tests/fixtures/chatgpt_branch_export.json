@@ -1,0 +1,77 @@
+[
+  {
+    "id": "fixture-chatgpt-001",
+    "title": "Synthetic branching conversation",
+    "project_id": "fixture-project-7",
+    "project_name": "Synthetic Project",
+    "section_id": "fixture-section-2",
+    "section_name": "Synthetic Group",
+    "create_time": 1760000000,
+    "update_time": 1760000100,
+    "current_node": "assistant-leaf-a",
+    "mapping": {
+      "root": {
+        "id": "root",
+        "parent": null,
+        "children": ["user-1"],
+        "message": null
+      },
+      "user-1": {
+        "id": "user-1",
+        "parent": "root",
+        "children": ["assistant-a", "assistant-b"],
+        "message": {
+          "author": {"role": "user"},
+          "create_time": 1760000001,
+          "content": {"content_type": "text", "parts": ["Begin branch test."]}
+        }
+      },
+      "assistant-a": {
+        "id": "assistant-a",
+        "parent": "user-1",
+        "children": ["assistant-leaf-a"],
+        "message": {
+          "author": {"role": "assistant"},
+          "create_time": 1760000002,
+          "content": {"content_type": "text", "parts": ["First branch."]}
+        }
+      },
+      "assistant-b": {
+        "id": "assistant-b",
+        "parent": "user-1",
+        "children": ["assistant-leaf-b"],
+        "message": {
+          "author": {"role": "assistant"},
+          "create_time": 1760000003,
+          "content": {"content_type": "text", "parts": ["Second branch."]}
+        }
+      },
+      "assistant-leaf-a": {
+        "id": "assistant-leaf-a",
+        "parent": "assistant-a",
+        "children": [],
+        "message": {
+          "author": {"role": "assistant"},
+          "create_time": 1760000004,
+          "content": {"content_type": "text", "parts": ["First branch complete."]}
+        }
+      },
+      "assistant-leaf-b": {
+        "id": "assistant-leaf-b",
+        "parent": "assistant-b",
+        "children": [],
+        "message": {
+          "author": {"role": "assistant"},
+          "create_time": 1760000005,
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Second branch complete.",
+              {"type": "image", "asset_pointer": "fixture-image-pointer"}
+            ]
+          }
+        }
+      }
+    }
+  }
+]

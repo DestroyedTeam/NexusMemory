@@ -1,0 +1,18 @@
+KENDEX REVIEW EVIDENCE — 2026-11-20
+Repository: https://github.com/vanillagreencom/kendex
+Bound review checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-vanillagreencom-kendex-20261120
+Source HEAD: 260b6492363b47d84ba1f893c5223120ad6a9f4a
+Remote refs/heads/main observed: 260b6492363b47d84ba1f893c5223120ad6a9f4a
+Cargo package version: 1.22.2; Cargo.toml rust-version: 1.96
+License: MIT
+Official release: v1.22.2, 2026-11-18; current main is newer (2026-11-20).
+GitHub counters observed: 92 stars, 37 forks (point-in-time only).
+CodeGraph: 58,072 nodes; 224,756 edges; current index. Top-level system is Rust/Tauri/React, eight coding harness adapters, manifest/capability table and per-project/user scopes.
+Session review:
+- pi-session-manager reads Pi saved session files and supports current/all Pi project scopes, related-session tree, search, resume, rename/delete; no external harness converter.
+- pi-session-bridge is local Pi process connection; event history retains bounded recent events; raw payloads are only spilled for events during an attached subscriber with spill enabled; raw sidecar is removed at session shutdown.
+- pi-qol schedule records custom schedule/cancel/delivery events in the current Pi session branch and restores timer state from that branch.
+- pi-claude-bridge uses Claude Agent SDK with a logged-in Claude Code account; its persisted marker is restored only after matching Pi session id, cwd, message fingerprint, existing Claude session. It is not generic ChatGPT/Codex export and not an API-Key-only bridge.
+Relevant source/docs: docs/architecture/harnesses.md; docs/adapters/README.md; pi-extensions/pi-session-manager/README.md and extensions/actions.ts; pi-extensions/pi-session-bridge/README.md and extensions/event-history.ts; pi-extensions/pi-qol/README.md and extensions/qol/schedule.ts; pi-extensions/pi-claude-bridge/README.md and src/session-persistence.ts.
+Test limitation: rtk proxy bun --version exited 1: rtk: Failed to execute command: bun: No such file or directory (os error 2). rtk proxy rustc --version reports 1.95.0, below required 1.96; no kendex cargo test was run. No tests claimed as passing.
+No ChatGPT/Codex account data, session export or API credentials accessed.

@@ -1,0 +1,56 @@
+# ebenhzr1/agent-smith — source, installer and distribution review
+
+Date: 2026-11-22. Candidate #119 in the 303-name primary corpus. Scope remains ChatGPT Projects / Section Groups / Destruction Era Session graph to local/self-hosted Claude Code and Claude Desktop Chat/Cowork/Code as separate targets. No user harness, real session, API key, home-directory data or installed target was accessed; behavior probes used temporary HOME/cwd and a loopback fixture registry only.
+
+## Source pin and project health
+- Repository: https://github.com/ebenhzr1/agent-smith
+- Dispatcher clone command: `rtk git clone https://github.com/ebenhzr1/agent-smith.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ebenhzr1-agent-smith-20261122`; exit 0.
+- Pinned main HEAD `821e9442266fa256df781626cebd45499236c8c7`, commit date `2026-06-13T15:06:51+07:00`; message says v0.2.2. `package.json` instead says 0.2.1; README badge says 0.1.0. Local git tag list is empty. GitHub page shows one star, zero forks, eight commits, no published releases; official registry repo has zero stars and one commit. This is an early/low-adoption codebase with notable version/distribution inconsistency.
+- MIT license. CodeGraph indexed 24 files, 198 nodes, 449 edges, up to date. Retained `.codegraph/.gitignore` and removed only `!.gitignore`; generated data ignored, checkout status clean after probes/build steps.
+
+## Claimed behavior vs implementation
+- README/spec pitches a cross-platform AI Skill package manager for Claude, OpenAI, Gemini, Cursor and generic agents, with registry, install, update and publish.
+- The actual installer stores every item only under `~/.agent-smith/skills/<name>`. It does not inspect the `agent-smith.platforms` list, use the configured `installDir`, or write Claude/Codex/Gemini/Cursor native Skill roots. There is no session/project/section/event importer, MCP/plugin/resource installer or Harness-specific adapter. Its custom required `skill.json` + `SKILL.md` format is not itself a destination integration.
+- Remote registry contains five metadata rows and has `updatedAt=2026-06-13`; registry README says community `skills/` files are “coming soon”. The CLI fetches registry JSON but `findSkillSource()` checks only bundled `built-in-skills/`, current cwd and cwd root. For any remote skill not already present locally, `installSkill()` writes generated metadata and a stub `SKILL.md` saying “Documentation coming from registry”; it never fetches the `repository` URL. `update` uses the same installer, so remote content cannot be updated. `publish` writes metadata under `~/.agent-smith/published/` only; it does not push to the remote registry or create a PR despite saying others can install it.
+- The repo README instructs `npm install -g @agent-smith/cli`, but direct NPM metadata lookup reports `@agent-smith/cli@0.0.124` from `https://github.com/lynxai-team/agent-smith` (“Agent Smith: terminal client for language model agents”), an unrelated package. `npm view @agent-smith/cli@0.2.1 version repository.url` returned E404. Therefore the documented unversioned install command installs another product, not this repo; this checkout is not verified as a published npm package.
+- Possible narrow reference: explicit skill metadata, semver, tags, cache/registry abstraction. Do not adopt as a Skill or Session migrator.
+
+## Reproduced behavioral gaps/security issue (temporary fixtures only)
+1. **Remote install becomes a stub and ignores installDir.** A loopback HTTP fixture served a registry entry pointing `repository` to `/remote-skill/` with separate remote skill content. In a fresh temporary HOME and empty cwd, `agentsmith install remote-skill` exited 0. Literal probe output:
+```
+exit= 0
+stdout= '\n  📦  Location: /var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-agent-smith-install-pjbqp7_7/home/.agent-smith/skills/remote-skill\n  📄  Run agentsmith info remote-skill for details\n  🗑️   Run agentsmith uninstall remote-skill to remove\n\n'
+stderr= '- Installing remote-skill...\n✔ ✓ Installed remote-skill@1.0.0\n'
+http_requests= ['/registry.json']
+installed_path= /var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-agent-smith-install-pjbqp7_7/home/.agent-smith/skills/remote-skill exists= True
+configured_installDir_exists= False
+installed_SKILL_md= '# remote-skill\n\nRemote source fixture\n\n## Usage\n\nThis skill is installed. Documentation coming from registry.\n\n## Source\n\nhttp://127.0.0.1:50713/remote-skill/\n'
+```
+Only `/registry.json` was requested; no request reached the skill content. The generated local stub is not equivalent to the remote Skill.
+2. **Publish is local-only.** A valid temporary skill was published from temp cwd/temp HOME; CLI exit 0 created `~/.agent-smith/published/fixture-skill@1.0.0.json` and printed `Published ... to local registry` plus the remote registry URL; source code performs no network write. This is local metadata staging, not community publication.
+3. **Symlink escape through the install sandbox.** In an isolated temp HOME, I pre-created `~/.agent-smith/skills/code-reviewer` as a symlink to a separate sibling temp directory, then ran the bundled `agentsmith install code-reviewer`. Literal output facts:
+```
+exit= 0
+install_target_symlink= True
+outside_SKILL_md_created= True
+outside_files= ['SKILL.md', 'skill.json']
+```
+The installer followed the target symlink and wrote skill files outside the declared `~/.agent-smith` sandbox. No user files were touched. `safePath()` only applies lexical `resolve`/`normalize` prefix checks and never resolves/rejects existing symlink components; `copySkillFiles()` follows the destination symlink. This contradicts SECURITY.md’s claim that symlinks are normalized and all writes stay within sandbox.
+
+## Test/build/lint evidence
+- `rtk proxy env HOME=/tmp/nm-agent-smith-test-home npm ci --ignore-scripts --no-audit --no-fund && rtk proxy env HOME=/tmp/nm-agent-smith-test-home npm test` → exit 0; npm ci added 119 packages; tests 28 passed, 0 failed, 0 skipped. Temporary HOME isolated storage. Registry tests only cover five metadata rows/search; no tests call `installSkill`, `publishHandler`, or `updateHandler` end-to-end. Security tests exercise lexical name checks but not symlink escapes.
+- CI smoke commands run with `HOME=/tmp/nm-agent-smith-ci-home`: `--version` → `0.2.1`; `doctor`, `search code`, and `list` all exited 0. Doctor found 5 registry skills.
+- Manual `eslint src/ bin/` exited 1: 120 errors and 22 warnings, mostly `no-undef` for Node globals (`console`, `process`, `fetch`, `AbortSignal`) plus unused imports/curly warnings. `prettier --check 'src/**/*.js' 'bin/**/*.js'` exited 1: 14 files flagged. The GitHub workflow appends `|| true` to both lint and prettier steps, so they cannot fail CI.
+- `publish` and remote install probes used local/temp fixtures only. No public registry write, package publish, GitHub mutation or user-data write was attempted.
+
+## Disposition
+Do not adopt this codebase or its named format as Nexus Memory’s cross-Harness migration implementation. It neither restores user sessions nor actually installs remote skill bytes into destination Harnesses. The documented npm command resolves to a different package, the registry lacks payload assets, publication is local-only, and an isolated symlink probe escaped its advertised write sandbox. Keep only the generic idea of versioned skill metadata, subject to a separate true destination adapter and a non-following, realpath-validated installer.
+
+## Primary sources
+- Pinned GitHub README: https://github.com/ebenhzr1/agent-smith/blob/821e9442266fa256df781626cebd45499236c8c7/README.md
+- Pinned installer, registry and publish implementation: https://github.com/ebenhzr1/agent-smith/tree/821e9442266fa256df781626cebd45499236c8c7/src
+- Pinned security model/spec: https://github.com/ebenhzr1/agent-smith/blob/821e9442266fa256df781626cebd45499236c8c7/SECURITY.md ; https://github.com/ebenhzr1/agent-smith/blob/821e9442266fa256df781626cebd45499236c8c7/spec/SPEC.md
+- CI workflow: https://github.com/ebenhzr1/agent-smith/blob/821e9442266fa256df781626cebd45499236c8c7/.github/workflows/ci.yml
+- Official registry repository and raw data: https://github.com/ebenhzr1/agent-smith-registry ; https://raw.githubusercontent.com/ebenhzr1/agent-smith-registry/main/registry.json
+- NPM package name collision/current owner: https://www.npmjs.com/package/@agent-smith/cli
+- GitHub current page/releases: https://github.com/ebenhzr1/agent-smith ; https://github.com/ebenhzr1/agent-smith/releases

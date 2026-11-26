@@ -1,0 +1,12 @@
+# fabiomartino/shroud-layer review — 2026-11-23
+
+## Source availability and verified identity
+
+- Repository from the primary discovery inventory: <https://github.com/fabiomartino/shroud-layer> (description snapshot: “Shroud — overlay lifecycle manager for AI coding agents (CLI + API + TUI)”; topics include `overlay-filesystem`, `rust`, `mcp`; inventory license and language were null).
+- Controller ran `rtk git clone --depth 1 https://github.com/fabiomartino/shroud-layer.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-fabiomartino-shroud-layer-20261123`; exit 0, but Git emitted `warning: You appear to have cloned an empty repository.` The checkout is on `main`, remote is the expected `https://github.com/fabiomartino/shroud-layer.git`, `rtk ls -a` lists only `.git/`, and `rtk git status --short` is clean.
+- `rtk proxy git rev-parse HEAD` exited 128 with literal error: `fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.` There is no commit to pin, README, LICENSE, source, tests, build configuration, or runnable target. CodeGraph was not initialized because there are no source files.
+- GitHub's official repository page states “This repository is empty.” Its Releases page has no releases. The Actions page presents the setup prompt rather than a project workflow. REST API pages were inaccessible through the browser tool, so no API metadata is inferred from them. The visible repository page is sufficient to confirm emptiness.
+
+## Disposition
+
+The discovery description and tags are not evidence of a functioning overlay, API, TUI, MCP server, session manager, or migration capability. No code/license/test assessment is possible. Exclude as `EMPTY_REPOSITORY_NO_SOURCE_REVIEW_POSSIBLE`; do not recommend or include in any implementation dependency shortlist unless actual source is later published and reviewed. No test command, application, session, credential, or user data was run or accessed. Verified source: <https://github.com/fabiomartino/shroud-layer> · <https://github.com/fabiomartino/shroud-layer/releases> · <https://github.com/fabiomartino/shroud-layer/actions>.

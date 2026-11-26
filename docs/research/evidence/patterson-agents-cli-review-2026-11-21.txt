@@ -1,0 +1,47 @@
+# Candidate #99 review — patterson-agents/cli (2026-11-21)
+
+## Identity and disposition
+
+- Upstream: https://github.com/patterson-agents/cli
+- Exact checked-out HEAD: `fca318f1dc775c017129cbf1856b96b7d1cfbcf4` (main).
+- Current GitHub snapshot: public repo, 2 stars, 0 forks, 5 open issues; 49 commits; no GitHub releases. Current HEAD's exact-commit Gate push run `31654277707` is successful (2026-08-13; 23 seconds); job steps Set up Bun, install, typecheck, test and lint all report success. This is an upstream CI observation, not a local test run.
+- LICENSE is `LicenseRef-Patterson-Internal` (GitHub metadata `Other`): confidential/proprietary, internal-use only, prohibits copying/distribution outside Patterson without prior written authorization. **Do not copy/reuse its source or bundled content in Nexus Memory without explicit permission.**
+- Verdict: well-engineered adjacent configuration/resource manager and architecture reference, not a Project/Section/Session importer. Reject as an implementation dependency; retain only independent design observations (typed IR, coverage gaps, drift-safe writes) subject to clean-room reimplementation and legal review.
+
+## User-confirmed target scope cross-check
+
+The confirmed target remains local/self-hosted Claude Code plus Claude Desktop Chat, Cowork and Code via the third-party inference gateway. Patterson's own target list/README covers Claude Code, GitHub Copilot, opencode, VS Code, Zed, devcontainers/Codespaces and GitHub Actions. It does not expose Claude Desktop Chat or Cowork, and has no third-party gateway/session import adapter. The `claude-code` emitter writes configuration assets (settings, instructions, `.mcp.json`, Skills, agents, hooks/plugins), not transcript/session history.
+
+## Model and import-surface review
+
+- `packages/core/src/ir/project.ts:PattersonProjectSchema` is a strict **agent-project configuration IR**: name, target ids, instructions, skills, agents, commands, MCP, policy, models, hooks, marketplaces, extensions, environment and devops. It has no conversation/session/event/attachment/usage/memory/schedule graph.
+- `packages/cli/src/commands/init.ts` has `--import` for adopting local config. Its detection set is exactly `.mcp.json`, `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json`; output counts only imported MCP servers/instructions. This is config lifting, not ChatGPT data import or native history rehydration.
+- `packages/mcp/src/server.ts` projects the same command registry over stdio. It does not act as a transcript import/export server.
+- Targeted scan of executable TS/JS under `packages/core/src`, `packages/cli/src`, `packages/mcp/src`, and `packages/emitters/*/src` found only three unrelated `session` occurrences: resumable wizard state, a wizard interactivity comment, and a Zed setting. No first-party Conversation/Transcript/Attachment record was found. This is source-scope evidence, not proof about every vendored template.
+- The MCP/Skills/resource layer is materially useful as a comparison: the core uses typed `SecretRef`, separate target-specific emitters, explicit `CoverageGap`s, a FileOp-only emitter contract, and one write engine with a never-write guard. Skills CLI invocations use pinned `skills@1.5.21` via `Bun.spawn(argv)` and run a lockfile backup guard first.
+
+## Quality and test evidence
+
+- Root requires Bun `1.3.14`; `bun.lock` is the sole lockfile. GitHub's Gate workflow pins Bun 1.3.14 and runs `bun install --frozen-lockfile`, `bun run typecheck`, `bun run test`, `bun run lint`.
+- Exact HEAD CI run `https://github.com/patterson-agents/cli/actions/runs/31654277707` passed all Gate steps. No local suite was run: `rtk proxy bun --version` exited 1 (`bun: No such file or directory`). The repository Constitution IV requires Socket scoring before any package install; `rtk proxy socket --version` also exited 1 (`socket: No such file or directory`). To honor the repo's safety gate, dependencies were not installed and no local test status is claimed.
+- `docs/dep-scores.md` records direct dependency scores from 2026-07-31; these are not a substitute for current Socket CLI scores. Candidate declares no build step; GitHub CI's tested gate is typecheck/test/lint.
+- GitHub says no release; README markets “v1 feature complete,” but root/workspaces remain private with an internal-use license. Adoption and maintainability signals are therefore low, regardless of the good test gate.
+
+## Static safety notes
+
+- Strong design: emitters return pure `FileOp[]`; the core owns writes, provenance and drift handling; non-interactive changes preserve hand edits; `.claude/settings.local.json` and foreign Skills lockfiles are guarded.
+- Configuration scope is not Session scope. Its `patterson.config.ts` can centralize MCP/skills/instructions but cannot preserve ChatGPT Projects/Section Groups, message branches, attachments, token/usage events, per-turn context, subagent/session ancestry, schedules, or target client history.
+- No user exports, account credentials, private session data, provider requests, or target application state were used.
+
+## Tool/error ledger
+
+- `rtk bun --version` passed through to a missing Bun executable (exit 1); no install was attempted.
+- `rtk proxy socket --version` found no Socket CLI (exit 1). The Constitution's pre-install package gate was honored; no dependencies were installed.
+- `rtk gh api ...` initially failed through the RTK GitHub wrapper (`No such file or directory`); corrected to `rtk proxy gh api ...`, which returned exact-commit check-run and release evidence.
+- A first `rtk read .github/workflows/gate.yml` used a nonexistent path; corrected to `.github/workflows/ci.yml`.
+- A broad CodeGraph search on “session/conversation/chat” returned unrelated vendored design-template source. Conclusions were then grounded in exact `PattersonProjectSchema`, `init` importer, MCP server nodes and targeted first-party TS/JS scan.
+- `rtk codegraph node isNeverWritePath` returned “symbol not found”; corrected by inspecting the actual `assertWritable` symbol. No source edits resulted.
+
+## Registry state
+
+Candidate #99 changes the 303-row registry to 99 reviewed / 204 unreviewed. Next candidate is computed from the following unreviewed registry row. Survey and Harness coverage remain incomplete.

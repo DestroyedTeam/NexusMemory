@@ -1,0 +1,38 @@
+NEXUS MEMORY CANDIDATE REVIEW — interrupted-sh/murk
+Review date: 2026-11-21 (Asia/Shanghai)
+Disposition: adjacent SecretPlane/least-privilege reference; not a Project, Session, or transcript migration tool.
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/interrupted-sh/murk
+- Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-interrupted-sh-murk-20261121
+- Exact main HEAD: 8e884703eceb63bf6f1102535ff60da20ddbcc23 (commit 2026-11-19); GitHub latest release v0.15.2 was published 2026-11-19 21:45Z. Repo pushed 2026-11-20; public, 2 stars, 0 forks. Cargo metadata is dual MIT OR Apache-2.0; GitHub classifies the dual license as Other. Pre-1.0, README says not independently audited.
+- Rust workspace package version 0.15.2; rust-toolchain pins 1.100.0. CodeGraph current: 142 files, 4,262 nodes, 19,169 edges. The local `.codegraph/.gitignore` self-exception `!.gitignore` was removed; candidate source checkout remained clean.
+
+WHAT IT ACTUALLY DOES
+- murk is an encrypted secrets manager, not a chat/harness store. It keeps one `.murk` vault in a repo: age-encrypted secret values with readable names/schema, per-recipient encryption, private/group layers, a keyed BLAKE3 integrity MAC, signatures/trust pins, Git merge support, and key recovery. Key names/metadata and recipient list are visible in the header; values are encrypted.
+- It offers directory-scoped `murk exec`/direnv, `murk agent plan`, time-bounded scoped agent grants, `murk agent exec`, an MCP stdio server, and `murk agent connect` to write MCP client config. A grant can be limited to named keys/tags; `agent exec` requires `--only`, clears most inherited environment, removes the operator key, and masks exact injected values in stdout/stderr. `murk mcp` requires a grant and MURK_AGENT; `murk_exec` is off by default.
+- `murk import`/`murk export` deal with environment-variable secrets, not conversation/session archives. There is no ChatGPT/Codex Projects or Section importer, conversation/session/branch graph, attachment/tool-call history importer, usage/token ledger, or scheduled-task converter.
+- Compatibility: it stores/encrypts secret resources and can inject keys for local commands/API clients, but it does not configure a Claude Desktop account plugin or migrate sessions. The MCP connector is a secret service, not a cross-harness MCP-resource converter.
+
+SECURITY / SCOPE LIMITS
+- The separate scoped grant model is a strong reference for Nexus Memory’s `SecretReference`/SecretPlane: never put raw keys into a transferable session bundle by default; issue a per-agent/per-run grant and expire it. The local CLI/MCP can be used by a caller with its grant, but it does not tie a grant to a conversation ID or revoke a transcript already created.
+- The project explicitly labels agent grants, `agent exec`, MCP and policy experimental/guardrail, not a security boundary. Under the same OS user, an agent can read the owner key file or unset MURK_AGENT/MURK_STRICT to trigger stored-key lookup; genuine isolation requires a separate OS user/container or hardware interaction. Grant expiry is enforced by murk, not age; leaked grant keys and old Git history remain decryptable unless affected credentials are rotated.
+- MCP `murk_get` returns raw values to the model’s tool result/context. Prefer `murk_exec` or `agent exec` when possible; output masking covers byte-identical values on stdout/stderr only, and cannot stop a command writing values to files/sockets, transforming/partial-outputting them, or accessing the filesystem/network. The exec process runs as the user and is not a sandbox.
+- No built-in read audit log; Git history records vault changes. Keyless header commands are unauthenticated. The threat model documents these limits; use for team secret handling only with explicit trust/OS-boundary assumptions.
+
+TEST / CI EVIDENCE
+- Exact local command: `rtk proxy cargo test --locked --workspace --all-features`; exit 0. All reported Rust unit/integration targets passed; 4 tests were marked ignored. The run included the CLI, agent-grant, process/environment masking, MCP client/server interoperability, trust/signature, tamper, policy and adversarial tests. It built the Python/Node workspace components as enabled by all-features; no user secret/provider call was involved. Rust toolchain was the repo-pinned 1.100.0.
+- `rtk proxy cargo fmt --check` exit 0; `rtk proxy cargo clippy --all-features --all-targets -- -D warnings` exit 0. Cargo emitted one non-fatal manifest warning that `homepage` duplicates `documentation`; no Clippy error.
+- Exact-HEAD GitHub CI run 44669046917 (commit 8e884703eceb63bf6f1102535ff60da20ddbcc23) passed Linux/macOS/Windows tests, MSRV, lint, coverage, install smoke, reproducible builds, VHS rehearsal and builds. Exact commit checks also show advisories (#44764889791), fuzz suites (#44748021800), access/trust invariants (#44757476733), CodeQL, Scorecard, docs and code-quality workflows successful.
+
+FIT / RECOMMENDATION
+- Keep as an adjacent SecretPlane reference, not as Nexus Memory’s migration engine. It illustrates how a local API key can be kept out of prompts while a CLI process gets only a narrow environment; it does not carry the context or history needed to resume a ChatGPT/Codex Session in Claude Code.
+- Do not mistake an agent grant for conversation scoping or a sandbox. For Nexus Memory, link explicit secret-reference metadata to a source Session and destination runtime only with consent; keep secrets outside archives, define access/revocation lifetime separately from transcript fidelity, and require process isolation when an agent must not reach the owner’s wider vault.
+
+SOURCES
+- Pinned source/README: https://github.com/interrupted-sh/murk/tree/8e884703eceb63bf6f1102535ff60da20ddbcc23 ; https://github.com/interrupted-sh/murk/blob/8e884703eceb63bf6f1102535ff60da20ddbcc23/README.md
+- Threat model and agent guidance: https://github.com/interrupted-sh/murk/blob/8e884703eceb63bf6f1102535ff60da20ddbcc23/THREAT_MODEL.md ; https://github.com/interrupted-sh/murk/blob/8e884703eceb63bf6f1102535ff60da20ddbcc23/docs/ai-agents.md
+- Exact-HEAD CI: https://github.com/interrupted-sh/murk/actions/runs/44669046917 ; advisories: https://github.com/interrupted-sh/murk/actions/runs/44764889791 ; fuzz: https://github.com/interrupted-sh/murk/actions/runs/44748021800
+
+CORPUS STATE
+- Before this review: 92/303 reviewed, 211 pending. After review: 93/303 reviewed, 210 pending; next `jnMetaCode/skillet`. Research and the secure migration prototype remain active/incomplete.

@@ -1,0 +1,32 @@
+CANDIDATE #293 — ozankasikci/agent-browser-manager — reviewed 2026-11-25
+
+IDENTITY / LICENSE
+Repository: https://github.com/ozankasikci/agent-browser-manager
+Disposable checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ozankasikci-agent-browser-manager-20261125-followup293
+HEAD `147f6c91694095d0fec3b5906421d70b5e10e115` (2026-11-02); version 0.1.0; MIT in `Cargo.toml`, local LICENSE, and the official GitHub repository page. The shallow checkout has no version tags. CodeGraph is initialized only in this disposable clone: 11 Rust files, 276 nodes, 1,048 edges; status current. `.codegraph/.gitignore` is retained without its `!.gitignore` exception, and `rtk git status --short` is empty.
+
+WHAT IT TRANSFERS
+This is a macOS-only Rust CLI/stdin MCP manager for named, persistent local Chrome user-data profiles and session-owned browser tabs. Explicit `profile export`/`profile import` transfers one **ABM-managed Chrome profile** between Macs; it is not a Harness conversation/session/project migrator.
+
+- Export can capture available cookies from the managed Chrome profile directories, including session cookies with explicit `--stop`; it leaves the source browser stopped. The passphrase-protected `age` archive contains persistent browser files such as bookmarks, history, preferences, local/session storage, IndexedDB, service worker and extension data, plus available portable cookies. A user’s regular Chrome profile is neither adopted nor read.
+- The archive is gzip/tar inside authenticated age encryption (scrypt work factor 18). Export streams without a plaintext archive or cookie sidecar, refuses overwriting and manager-runtime paths, and checks ignored/untracked destinations inside Git repos. Import uses private 0700/0600 staging, authenticates/extracts before publishing, rejects traversal/links/special files/duplicates and expansion bombs, and restores portable cookies via destination Chrome so that Chrome re-encrypts them for the destination OS. It refuses existing profiles. Source security checks and archive parsing are substantive, not just README claims.
+- It is Mac-to-Mac only. Cookies are not proof of login; device-bound sessions, Keychain passwords, passkeys, MFA, expiry/revocation, and site risk checks can require reauthentication. Incognito/page-memory state is not transferred. The encrypted password database files may copy as browser data, but their OS-protected password contents are not made portable and no Keychain keys are extracted. Real accounts and physical second-Mac transfer were not tested.
+- It does not transfer ChatGPT/Codex project/session objects, Claude conversations, Projects/Section Groups, message trees, subtasks, token usage, Skills, plugins, memories, schedules, API keys, or MCP settings. It only prints `claude`/`codex`/`antigravity` MCP config snippets for manual merge; it does not edit agent settings. It explicitly excludes manager records, tab grants, registry, machine-specific native messaging registrations and Chrome runtime links.
+- Its MCP session is a browser-control identity (open/list/navigate/read/click/type/close) bound to one process/browser run, not a conversational Session. CDP is unauthenticated local control: the documented boundary protects cooperating clients, not against another process running as the same user. It is not an OS sandbox or network/SSRF boundary.
+
+TESTS / VERIFIED OPERATIONS
+No user Chrome profile, real login, Keychain, account, API key, or personal data was accessed. The only browser operations were the repository's opted-in tests, which use temporary signed-out profiles, synthetic cookies, and a localhost HTTP fixture. All build artifacts and Cargo downloads stayed under `~/Library/Caches/NexusMemory/test-results/abm293`.
+- `cargo fmt --check`: exit 0, stdout/stderr empty.
+- `cargo clippy --all-targets --locked -- -D warnings`: exit 0, no warnings.
+- Final default `cargo test --locked`: exit 0; 28 unit tests + 4 profile-CLI tests passed; 2 Chrome-related unit tests and 2 live Chrome integration tests were ignored by default. Captured full stdout/stderr: `ozankasikci-abm-cargo-test.stdout` / `.stderr`.
+- `cargo test --locked -- --test-threads=1`: exit 0; same default suite, serial execution.
+- `./scripts/verify.sh --chrome`: exit 0. It reran formatting, Clippy and default tests, then the 2 Chrome-related unit tests passed and both `tests/live_chrome.rs` integration cases passed. The integration tested three managed profiles/MCP tab ownership and a synthetic compressed age archive round-trip for persistent/session cookies, local storage, IndexedDB and ordinary profile files. Captured opt-in ignored-test stdout/stderr: `ozankasikci-abm-chrome-tests.stdout` / `.stderr`.
+- After the live verification, `rtk proxy lsof -nP -iTCP:9222-9224 -sTCP:LISTEN` exited 1 with empty stdout/stderr (no listeners remained).
+
+RUNNER CORRECTION / FLAKINESS RECORD
+- The first `./scripts/verify.sh` run exited 101 in `removal_refuses_locks_and_keeps_other_named_profiles` with `profile port is occupied; stop the browser before removing the profile`. A subsequent `lsof` check found no listener on 9222–9224, the focused test passed, a serial full suite passed, a later default full suite passed, and the complete `./scripts/verify.sh --chrome` passed. The initial owner was not identified; treat it as transient fixed-port/runner contention, not a proven source defect. The verification script uses reserved local ports, so users should verify them free first.
+
+DISPOSITION
+Retain as **high-value adjacent prior art for isolated browser identity, safe MCP tab ownership, and encrypted browser-state transfer**, not as a core Harness migrator. This could inform an optional, explicitly sensitive Browser Context adapter, but it is a distinct data plane: moving Chrome cookies/site storage is not moving the Harness conversation or project hierarchy. The actual Chrome test verifies a synthetic source→new profile round trip on this machine; physical Mac-to-Mac transfer and real-site login acceptance remain unverified.
+
+Nexus Memory's source target remains **Destruction Era**. User-confirmed targets remain separate: Claude Desktop third-party-gateway Chat, Cowork, Code, plus local/self-hosted Claude Code.

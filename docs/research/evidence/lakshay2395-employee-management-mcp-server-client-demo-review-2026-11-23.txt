@@ -1,0 +1,22 @@
+# Employee Management MCP Server & Client Demo review — 2026-11-23
+
+Upstream: https://github.com/lakshay2395/employee-management-mcp-server-client-demo/tree/7bc698c446d0167eb49f3144490b62fbe96a2ad7
+Pinned HEAD / refs/heads/main: 7bc698c446d0167eb49f3144490b62fbe96a2ad7; 2025-12-21T20:47:00+05:30. Source checkout clean. CodeGraph: 2 Python files, 33 nodes, 53 edges. No LICENSE file, requirements file, dependency lock or tests discovered; README calls it educational/demo but grants no reuse license.
+
+## What it implements
+
+server.py uses FastMCP and mysql.connector pooling to expose employee profile as an MCP Resource, employee CRUD as MCP Tools, and promote_employee as an MCP Prompt. agent.py uses LangChain with Google Gemini 2.5 Flash and langchain-mcp-adapters to connect over SSE, initialize an MCP ClientSession, dynamically load tools, discover resources/prompts, and invoke them. This is a concrete MCP protocol example for one HR/MySQL application, not a universal resource or state migration format. Its ClientSession is the live MCP transport/session handshake, not a durable chat transcript/session-history model; the loop does not persist cross-turn conversation or parent/branch/task graph.
+
+No ChatGPT/Codex Projects/Sections, SessionGraph/turn/branch/subtask import, attachments, token accounting, schedules, durable memory, Skill/plugin portability, Claude Desktop Chat/Cowork/Code adapter, or Claude Code API-Key gateway workflow. The product has two files and no generic harness inventory/serializer.
+
+## Verification and safety boundary
+
+Command rtk proxy env PYTHONPYCACHEPREFIX=/private/tmp/nm-followup189-pycache python3 -m py_compile server.py agent.py exited 0; stderr empty. This proves syntax only, not imports/dependencies/behavior. No Python packages were installed; the server was not started, no port opened, no MySQL contacted, and no Google API/model call made.
+
+The source sets MySQL host localhost/user root/password empty/database employee_db and calls mcp.run(transport="sse",host="0.0.0.0",port=8000). No auth or authorization layer is present in the demo source. agent.py assigns the placeholder YOUR_GOOGLE_API_KEY in source. Parameterized SQL is used for CRUD statements, which is positive, but insufficient for network-safe handling of HR/salary data. Treat as unsafe tutorial code; never use with real HR data or external network as supplied.
+
+Pinned sources: README https://raw.githubusercontent.com/lakshay2395/employee-management-mcp-server-client-demo/7bc698c446d0167eb49f3144490b62fbe96a2ad7/README.md ; server https://raw.githubusercontent.com/lakshay2395/employee-management-mcp-server-client-demo/7bc698c446d0167eb49f3144490b62fbe96a2ad7/server.py ; agent https://raw.githubusercontent.com/lakshay2395/employee-management-mcp-server-client-demo/7bc698c446d0167eb49f3144490b62fbe96a2ad7/agent.py .
+
+## Decision
+
+Keep as a low-value, concept-level MCP Resource/Tool/Prompt and SSE handshake reference, separate from harness migration candidates. License and safety gaps prevent code reuse or real deployment.

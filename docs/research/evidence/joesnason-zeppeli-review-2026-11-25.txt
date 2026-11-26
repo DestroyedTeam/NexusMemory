@@ -1,0 +1,36 @@
+NEXUS MEMORY CANDIDATE REVIEW #286 — joesnason/Zeppeli
+Date: 2026-11-25 (Asia/Shanghai)
+Pinned checkout: eb191939e96dec774a2caaf865388f9d83b42a94 (2026-11-17, "Add MIT License to the project").
+Repository: https://github.com/joesnason/Zeppeli
+
+SUMMARY / DISPOSITION
+Zeppeli is a local-first AI coding-agent CLI with local Ollama and OpenAI-compatible cloud/self-hosted inference through LiteLLM. It records its own process-local sessions, a structured history JSON and a separate append-only event log. It is not a cross-Harness importer/exporter: there are no source adapters, destination writers, file import, archive export, session resume/restore, ChatGPT Projects/Sections, Claude Desktop third-party-gateway Chat/Cowork/Code surfaces, or Destruction Era project graph. Retain as a valuable native local-history/event schema reference, not as a migration implementation.
+
+REPOSITORY / OBSERVED VALIDATION
+- GitHub API on 2026-11-25: public, MIT, main, 0 stars/forks, 0 open issues, not archived; pushed_at 2026-11-17T05:25:13Z. Pinned shallow checkout HEAD matches eb191939e96dec774a2caaf865388f9d83b42a94 (2026-11-17T13:25:13+08:00). gh run list and gh release list both exit 0 with empty stdout; no release or recent run was observed.
+- CodeGraph initialized and verified for this checkout: 43 Python files, 1,105 nodes, 2,582 edges; the index files are Git-ignored. Checkout source status is clean.
+- Installed requirements in a disposable venv outside the checkout; observed LangChain Core 1.8.4, LangChain-Ollama 1.2.0, LangChain-LiteLLM 0.11.2, LiteLLM 1.111.0, pytest 9.2.0. Full pytest -q -rs: exit 0, 328 passed, 2 skipped (both tests/test_run_bash.py; direnv is not installed). These tests validate Zeppeli's internal behavior, not cross-Harness import/export or resume.
+- cli.py --help exit 0 exposes only permission modes, one-shot prompt, base URL, model, API key and image input; no session list/import/export/resume option. No Ollama server, cloud endpoint, key, Slack account, or user session was used.
+- An initial rtk pytest tests could not spawn pytest (RTK PATH error); direct base Anaconda pytest then failed collection because langchain_ollama was absent. After installing the declared requirements in the isolated venv, the full suite passed as above.
+
+NATIVE SESSION / EVENT DATA MODEL
+- Every process creates one new UUID/session; it writes ~/.zeppeli/sessions/session-<first-8-UUID-chars>.json and ~/.zeppeli/logs/log-<full-UUID>.jsonl. No session reader/restore path is implemented; docs explicitly say a restarted process begins a fresh session and cannot recover prior context.
+- Version-1 JSON fields: id, cwd, title (cwd basename), createdAt/updatedAt, provider, model, ollamaUrl/lmStudioUrl, history[], runs[]. History roles are user/assistant/tool with content and a persistence timestamp; tool calls/results are paired in the history. Runs carry UUID, timestamps, running/completed/failed state and usage statistics (duration, hop count, tool calls, input/output tokens when available). The run array is a flat sequence within one process session, not a parent/child task graph or branch tree.
+- SystemMessage is deliberately skipped from history. Session history conversion reduces multimodal message content through extract_text(), which keeps only text blocks. A synthetic probe with a fake data-URL image confirmed that only "inspect this image" is stored and the image bytes are not. No attachment payload/checksum registry exists.
+- core/eventlog.py writes separate events (session_started, run_started, model_activity, run_completed, cli_error). A run event includes a 200-character prompt preview, full answer, per-hop model activity, full untruncated tool outputs and (when supported by local Ollama) raw reasoning_content. Files are plain JSON/JSONL under the user's home directory; no encryption, retention policy, redaction layer, or cross-file manifest was observed. Thus this is rich, sensitive local diagnostic state, not a portable/sanitized interchange archive.
+- Session metadata declares provider as "ollama" unconditionally even when CLI flags configure a cloud/self-hosted LiteLLM endpoint; model is saved, but the base URL and API key are omitted. This prevents reconstructing the actual cloud provider/gateway deployment from the session while also avoiding key persistence.
+- Project identity is only cwd and derived title; there is no Project/Section/Section Group object, session-to-project membership table, branch/fork ancestry, MCP/plugin manifest, scheduler, or memory snapshot. Skills are read from ~/.zeppeli/skills/ and <cwd>/.zeppeli/skills/; skills/system instructions are not included in session history. Slack threads are keyed in an in-memory ThreadRegistry; thread mapping/context clears at process restart even though local session/event files remain. The Slack bot is an integration, not a general plugin/migration plane.
+- One synthetic probe: append_history_from_messages() on a user content list containing text plus a fabricated image data URL produced one history entry with content "inspect this image"; IMAGE_PAYLOAD_PERSISTED=False; system instructions were also omitted. No real image or user content was used.
+
+COMPATIBILITY / DESIGN VALUE
+- Useful concepts: separate resumable-ish conversation history from a more granular append-only run/event ledger; preserve full tool outputs even where model-visible tool output is truncated; explicit run status/stats; FIFO/nonblocking persistence; provenance about cwd/model; tests for serialization/atomic writes.
+- Required gaps for Nexus: external-source schema adapters, stable full source IDs, typed multimodal/attachment references and content hashes, Project/Section/task/branch graph, provider endpoint provenance (without persisting secrets), session resume/reopen semantics, retention/security controls, and target-native import/export/verification. Its own schema is not a standard and does not demonstrate migration accuracy.
+
+PRIMARY SOURCES
+- GitHub: https://github.com/joesnason/Zeppeli
+- Pinned source: https://github.com/joesnason/Zeppeli/blob/eb191939e96dec774a2caaf865388f9d83b42a94/core/sessions.py
+- Session schema docs: https://github.com/joesnason/Zeppeli/blob/eb191939e96dec774a2caaf865388f9d83b42a94/docs/sessions.md
+- Event log docs: https://github.com/joesnason/Zeppeli/blob/eb191939e96dec774a2caaf865388f9d83b42a94/docs/logging.md
+- CLI docs: https://github.com/joesnason/Zeppeli/blob/eb191939e96dec774a2caaf865388f9d83b42a94/README.md
+
+Next primary-corpus candidate after #286: Luodian/tmux-autoname-agent-sessions. Review is source-level/automated-test evidence only, no real Harness import/export or user-data test.

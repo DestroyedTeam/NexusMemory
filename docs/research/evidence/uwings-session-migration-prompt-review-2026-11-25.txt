@@ -1,0 +1,27 @@
+# Candidate #263 review — uwings/session-migration-prompt (2026-11-25)
+
+## Decision
+**Manual, AI-produced context-summary prompt and Hermes skill; not a session migration implementation.** It may inform an explicitly lossy “handoff summary” fallback, but must not be marketed as transferring full sessions, projects, sections, assets, tools or provider state. No importer, exporter, parser, API, desktop app or target writer exists in the reviewed repository.
+
+## Provenance and licensing
+- Public repository https://github.com/uwings/session-migration-prompt; checkout `main` and remote main match `3165f73e58c3b99f2db0acf47d2f1eba659e7070` (2026-04-20, `feat: add User Attachments section for migration customization`). GitHub displays three commits, one star, zero forks; no release/tag is published in this snapshot.
+- Actual tracked content is three text files: `README.md`, `SKILL.md`, `LICENSE`. No runtime/package manifest, executable code, test directory or fixture set exists.
+- **License conflict:** README's final License section says **Apache-2.0**, while the shipped `LICENSE` is the standard **MIT License**. GitHub's repository metadata identifies MIT. Do not assume Apache grant or copy/adopt content at scale until the author resolves which license governs the README/SKILL. No third-party source is embedded beyond its claimed inspiration; the cited Hermes template/version is not pinned in the repo.
+
+## Actual behavior and fidelity
+- README's quick start is to copy a prompt into the current conversation and ask its AI to classify work as exploration/execution/validation, then write six free-form sections: goal, confirmed decisions, rejected approaches, progress, constraints, concrete information. It is manual, depends on the source model to summarize correctly, and the receiving model must interpret the prose; there is no deterministic parser or target-specific restore.
+- SKILL.md packages the same workflow for Hermes installation / compatible skill hosts, adds trigger guidance and a quality checklist, and says to append `附加要求` when user attachments are provided. That section asks for extra instructions; it does not copy attachment bytes, links, images or tool state.
+- The six sections can preserve a useful human-readable outline of decisions, disconfirmed approaches, open tasks, file paths, parameters and constraints. They do not preserve ordered exact turns, user interruptions/revisions as events, assistant tool calls/results, branch/parent IDs, Project/Section hierarchy, attachments, token/model/timestamp metadata, schedules, Skills/MCP/plugins, memory state or destination-specific session identity. “Multi-task task lines/files” in the summary are prose, not an object graph.
+- “Any AI tool” means the prompt text can be pasted manually; it does not prove provider compatibility, imported files, connector access, or that Claude Desktop Chat/Cowork/Code or Claude Code API-key/gateway sessions can be reconstructed. There is no test that runs a transfer.
+
+## Unverified evaluation claims
+README says three real conversations of 228/145/43 messages were compared on five dimensions and supplies score rows (for example 3.2 to 4.55 in one scenario). The repo contains no corpus, rubric, scoring criteria, anonymized fixtures, scripts, results file or independent evaluator. Treat those numbers as author-reported and **not independently reproducible or verified**; do not record them as migration accuracy/fidelity benchmarks.
+
+## Nexus Memory disposition
+Keep as a **summary-only human handoff template / skill-design reference**. Nexus Memory can offer a clearly labeled fallback packet when a target cannot natively import history, with preview and explicit omissions; the canonical migration artifact remains a structured, source-linked SessionGraph with project/section relationships, ordered events/content blocks, assets and per-target capability/loss manifest. Never equate this prompt with complete or lossless migration. Resolve the Apache/MIT metadata conflict before adapting or redistributing its prompt text.
+
+## Primary sources
+- https://github.com/uwings/session-migration-prompt
+- https://github.com/uwings/session-migration-prompt/blob/main/LICENSE
+- https://github.com/uwings/session-migration-prompt/blob/main/SKILL.md
+- https://github.com/uwings/session-migration-prompt/releases

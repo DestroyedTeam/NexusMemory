@@ -1,0 +1,41 @@
+# GitHub candidate source/build review — bl1nk-bot/skills-cli
+
+Reviewed: 2026-11-21. Local checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-bl1nk-bot-skills-cli-20261121`. Default branch `main`, pinned HEAD `5c62e991ffa94818a747fbe3badca92e178ecbd3`; `git ls-remote origin refs/heads/main` returned the same SHA during review. This is a source/build inspection, not a user-data or provider migration test.
+
+## Identity / activity and source boundaries
+
+- Repository snapshot: 3 stars, 0 forks; metadata language says Python, but the inspected project is Rust. `Cargo.toml` says package `bl1nk-cli`, version `0.1.0`, MIT; GitHub metadata's SPDX field was null. GitHub Releases has no published release. The default branch's reviewed HEAD is dated 2026-09-23; an open Dependabot PR #6, observed 2026-11-21, proposes `zip` 0.6.6 → 9.0.0 and is not part of main.
+- README advertises a universal skills manager: project `./skills` overlaying `~/.agents/skills`, arbitrary agent names, install/uninstall all, update/relink, and combined listings. The inspected `src/main.rs` command enum instead exposes `Init`, `Onboard`, `Check`, `Version`, `Install`, `Uninstall`, `List`, `Agents`; no README-style update/all command surface was found. `List` reports the global `.agents/skills` store rather than the promised merged project+global listing. README executable examples use `skills` / `skills-cli`, while Cargo package is `bl1nk-cli`, Clap names the command `bl`, and integration tests request `skills-cli`.
+- `src/converter/c2g.rs` and `g2c.rs` are Claude Code ↔ Gemini extension conversion prototypes; source is not wired into `src/lib.rs` or `src/main.rs`, and no converter command/tests were found. `registry/` is a separate unfinished stub (hard-coded Google search; MCP ping/connection message, not tools).
+- `.blink/sessions/<id>/state.json` tracks local execution metadata only; `src/core/acp.rs::SessionState` is a process event buffer. The future Session language in `docs/` describes BL1NK execution/worktree state, not provider conversation history. No ChatGPT Project/Section/group, message/turn/branch/subtask, user correction/interruption, media/attachment, tool event, token/cost ledger, memory, schedule, or import/export model was found.
+- There is no Claude Desktop Chat, Cowork, or Code adapter; no Claude Desktop 3P gateway session writer; and no local/self-hosted Claude Code transcript importer. The user's explicitly confirmed scope (local/self-hosted Claude Code plus Claude Desktop client session management through a third-party inference gateway; all Desktop Chat/Cowork/Code modes separately) remains unsupported by this repository.
+
+## Build/test and quality gates
+
+1. `rtk cargo test --locked` → exit 101: Cargo reports the lock file would need updating while `--locked` is set.
+2. Backed up the checkout root `Cargo.lock` to `/tmp/nm-skills-cli-review-Cargo.lock.bak`; `rtk proxy cargo test` without `--locked` updated the lock temporarily, then exited 101 on `src/lib.rs:41` (`expected item after doc comment`: dangling module doc comment at EOF). The original lock was restored byte-for-byte; the final checkout status is clean.
+3. A disposable binary-only compile harness (no product modifications) also exited 101 and exposed further errors in `src/main.rs`: missing `anyhow!` import, nonexistent `console::Color::BrightMagenta/BrightCyan`, unavailable `.color()` method, use of `.chunk()` on `reqwest::blocking::Response`, plus resulting unsized `[u8]` diagnostics. No CLI runtime or migration accuracy trial could be run.
+4. `rtk proxy cargo check --manifest-path registry/Cargo.toml` → exit 101: unresolved `tokio_stream` import and Axum SSE stream item mismatch (`Event` supplied where `Result<Event, _>` is required).
+5. GitHub scheduled Clippy runs may show successful Actions status, but pinned `.github/workflows/rust-clippy.yml` sets `continue-on-error: true` on `cargo clippy`; treat that green status as non-gating. Current PR #6 and the Releases page were checked separately; no PR behavior was attributed to main.
+6. `tests/installer.rs::safe_extract_blocks_traversal_via_real_zip` only creates a ZIP containing `../../evil.txt` and asserts the archive exists; it does not call `safe_extract` or exercise the CLI.
+
+## Static safety findings (not exploit claims)
+
+- `safe_extract` checks `dest.join(file.name()).starts_with(dest)` lexically. A joined path retaining `..` components can still start with the destination lexically yet resolve outside it. The named test does not test this behavior. This is source analysis only; no exploit was run.
+- `agent_dir` interpolates an arbitrary agent string into a filesystem path, and uninstall joins the caller-supplied skill name before `fs::remove_file` without a containment/name check. No destructive command was run against user data.
+- The Windows fallback calls `fs::copy` with a directory source, although Rust's `fs::copy` is a file-copy API; platform runtime was not tested.
+
+## Disposition
+
+**Not a Nexus Memory migration-engine candidate.** At most, retain the broad idea of separating shared Skill assets from agent-specific install paths as a low-confidence `ResourcePlane` design note; do not adopt the code as-is. Compilation fails, its advertised vs actual commands diverge, its converter/registry/session pieces are not functioning migration adapters, and the tested scope contains no conversation/session import/export. No migration accuracy percentage is applicable because no source/target transcript writer exists. Search-candidate triage remains incremental, not a completeness claim.
+
+## Primary source links
+
+- Repository/README: https://github.com/bl1nk-bot/skills-cli
+- Pinned manifest: https://github.com/bl1nk-bot/skills-cli/blob/5c62e991ffa94818a747fbe3badca92e178ecbd3/Cargo.toml
+- Pinned CLI source: https://github.com/bl1nk-bot/skills-cli/blob/5c62e991ffa94818a747fbe3badca92e178ecbd3/src/main.rs
+- Pinned library root: https://github.com/bl1nk-bot/skills-cli/blob/5c62e991ffa94818a747fbe3badca92e178ecbd3/src/lib.rs
+- Pinned ineffective traversal test: https://github.com/bl1nk-bot/skills-cli/blob/5c62e991ffa94818a747fbe3badca92e178ecbd3/tests/installer.rs
+- Pinned clippy workflow: https://github.com/bl1nk-bot/skills-cli/blob/5c62e991ffa94818a747fbe3badca92e178ecbd3/.github/workflows/rust-clippy.yml
+- Open dependency PR #6: https://github.com/bl1nk-bot/skills-cli/pull/6
+- Releases (none observed): https://github.com/bl1nk-bot/skills-cli/releases

@@ -1,0 +1,38 @@
+# Candidate #222 — sunven/skills-box
+
+Review date: 2026-11-24. Bound checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sunven-skills-box-20261124-followup222. Default branch main, pinned HEAD 9ab4b1e15ba99fb7297423266d4b409dc4f931ce (2026-11-23T14:43:33+08:00, “fix: resolve six code review findings”), origin/main matched and checkout clean. GitHub currently reports public, 0 stars, 0 forks, 243 commits, no declared license. Version 0.1.9 is released; the main checkout pins a later commit than the release commit.
+
+## Product and relevant pieces
+
+Skills Box is a macOS-first Tauri 2 / React 19 desktop app for inventorying, discovering, installing, updating, detaching and uninstalling globally and project-scoped Agent Skills. It delegates package writes to the skills CLI and bundles a vendored Vercel skills agent catalog at source commit a80e4c9d12d607631249d4d7d059f835d4b2f13a, version 1.7.4, with 79 agent definitions. The inspected entries include Codex at ~/.agents/skills and Claude Code at ~/.claude/skills. Project scope means a locally registered filesystem project, represented by a local Project UUID and scoped skill directories, not a ChatGPT/Codex hosted Project or Section Group.
+
+Adjacent ResourcePlane features include source discovery/checks, global versus local-project scope, a native plugin manager for the Claude and Codex CLIs, operation previews, strict skill-id/path checks, backups, diagnostics and an app-data cleanup surface. The native plugin host enum contains only Codex and Claude; operations delegate to their native CLI/plugin marketplace contracts. OperationRecord persists the latest plugin operation per host; it is not a conversation transcript or session archive. No MCP server config import/export is present.
+
+## Fit against Nexus Memory
+
+No parser/writer exists for ChatGPT/Codex Projects, Section Groups, conversations, parent/child or fork edges, messages, user corrections, interruptions, tool events, links/media, attachment bytes, token/cost data, memory lineage, schedules or target session-resume identifiers. Skills Box does not define a cross-harness archive interchange format. Its local “Project” scope is not a semantic project migration. Its plugin management concerns native Claude/Codex CLI plugin operations, not a converter across Claude Desktop 3P Chat, Cowork and Code; no Desktop 3P mode adapters or transcript store support were found. It is not a ChatGPT-to-Claude importer.
+
+## Source / safety review
+
+CodeGraph indexed 342 files, 8,222 nodes, 41,871 edges; after removing only .codegraph/.gitignore's !.gitignore exception, status is up to date and Git remains clean. Source paths examined include src-tauri/src/agents/catalog.json, scope.rs, scope_layout.rs, security.rs, tasks/install.rs, tasks/uninstall.rs, backup.rs, native_plugins/model.rs, native_plugins/mod.rs, native_plugins/hosts/{claude,codex}.rs and the frontend API.
+
+The code validates Skill IDs as single directory names and rejects separators, dot/traversal, NUL, hidden names and overlong values. Install planning validates the source/target and the scope before invoking the CLI; project writes are constrained to the registered project root. Install/uninstall actions take snapshots and verify postconditions. However, the README explicitly says snapshot restoration is not included. Native plugin removal warns that the host may delete plugin data, options and keys and offers no automatic rollback. GitHub tokens are stored as plaintext in app settings with Unix mode 0600 and are not returned by the read API or forwarded to CLI subprocesses; account-managed native host credentials remain host-owned.
+
+## Build, tests and audit evidence
+
+- pnpm test: exit 0; 52 files passed, 540 tests passed.
+- pnpm build: exit 0; TypeScript and Vite production build succeeded (2,305 modules). Vite warns the main JavaScript chunk exceeds 500 kB.
+- src-tauri cargo test: first full run reported 860 passed, 1 failed, 23 ignored; failing test was app_update::tests::installed_restart_retry_does_not_download_or_install_again, which hit AppUpdateBusy. Isolated rerun passed 1/1; a second full run passed 896 with 31 ignored. Record the nondeterministic first failure rather than claiming every invocation was green.
+- pnpm audit defaulted to https://registry.npmmirror.com and failed because its advisory endpoint is unimplemented. Rerun with --registry=https://registry.npmjs.org: production audit had no known vulnerabilities; full development audit found one high GHSA-93q8-gq69-wqmw in ansi-regex 5.0.0 via @testing-library/dom / pretty-format. This is dev-only in the observed dependency tree.
+- cargo audit exited 2: 2 vulnerable crate records in 527 dependencies (cookie 0.18.2, RUSTSEC-2026-0594; url 2.5.8, RUSTSEC-2026-0592), plus 8 warnings (unmaintained/unsound/yanked dependencies). Reachability or exploitation in the production app was not assessed. Advisory links: https://rustsec.org/advisories/RUSTSEC-2026-0594 and https://rustsec.org/advisories/RUSTSEC-2026-0592.
+- Test dependencies install under pnpm v11.25.0 in this environment; lockfile policy check reported 282 entries current. No files were committed to the candidate checkout.
+
+## Distribution and documentation drift
+
+GitHub metadata reports no license. The GitHub v0.1.9 release succeeded on 2026-11-23, but its uploaded application assets are Skills.Box_0.1.9_aarch64.app.tar.gz and Skills.Box_0.1.9_aarch64.dmg, plus signature/updater JSON—Apple Silicon macOS only. There is no verified Windows EXE or Intel build in the release assets. The product remains macOS-first; do not infer cross-platform release support from Tauri bundle targets.
+
+docs/releasing.md contains a stale note saying the repo returned 404 on 2026-11-04, while the public repo and v0.1.9 release now exist. It also says the local updater signing key did not match the committed public key and local artifacts failed signature validation; those local notes are dated, and no private signing key or current update-signature validation was run in this review. GitHub Actions release run #9 for v0.1.9 succeeded in 17m44s. The default npm mirror audit error was corrected via the official npm registry; no audit data was modified.
+
+## Disposition
+
+Keep only as a useful adjacent ResourcePlane/UI reference for multi-agent Skill scope, local project registration, preview/verify operations, host-CLI plugin management and diagnostics. Do not treat it as a full Nexus Memory migrator, session archive, cross-harness interchange format, Claude Desktop 3P adapter, MCP migrator, or source code donor (no declared license). Primary inventory advances to 222/303 reviewed, 81 pending; next candidate is suqiangqiang2012-dot/agent-skill-manager. No user stores, real skills, private account, key or app session were accessed.

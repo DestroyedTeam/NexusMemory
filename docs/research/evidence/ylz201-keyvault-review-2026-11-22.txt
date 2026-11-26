@@ -1,0 +1,55 @@
+# Candidate #143 — ylz201/keyvault: secret management, not Harness session migration
+
+Review date: 2026-11-22  
+Main checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ylz201-keyvault-20261122`  
+Main HEAD: `b6ac537c511f5670ab07a0c7334bf49e8fe9274e`  
+License: MIT  
+Observed GitHub metadata: 1 star, 0 forks; main last pushed 2026-09-24.  
+Disposition: **adjacent SecretPlane design reference only; not a Nexus migration dependency or Claude Desktop 3P adapter.**
+
+## Scope and product fit
+
+The current `main` checkout is a local encrypted secret vault with a CLI, Python SDK, and stdio MCP server. It imports/exports `.env`, injects secrets into a process environment, scans `.env` candidates, and supports global/project scopes. It contains no ChatGPT export parser, Project/Section/Session graph, conversation event/media/token serializer, hierarchy-preserving archive, Claude Code transcript writer, or Claude Desktop Chat/Cowork/Code session writer. A Claude Desktop `claude_desktop_config.json` example only installs this MCP server; it does not move or resume conversations.
+
+Current-main MCP policy is restrictive by default: list/get/set/delete/global/all-scopes/all-keys are false; project scope is required unless explicitly relaxed; arbitrary keys require `KEYVAULT_MCP_ALLOWED_KEYS` or `KEYVAULT_MCP_ALLOW_ALL_KEYS=1`. If `secrets_get` is deliberately enabled, it returns the plaintext secret as MCP text. This is a secret-provisioning interface and must not be confused with migration of a credential reference or session.
+
+The vault encrypts values and metadata with Fernet (AES-128-CBC plus HMAC-SHA256); it uses an OS keyring when available and otherwise `~/.keyvault/master.key`, with owner-only directory/key/database permissions. The code blocks silent master-key regeneration when data is present. This is an adjacent local SecretPlane pattern, not a transfer format.
+
+## Current main vs open PR #1
+
+GitHub PR #1, “KeyVault 0.2 — independent Agent Credential Gateway,” remains **open and unmerged**. Its head is `a515e4fbb3d83f7815c9fe21acd0f8b93e8a0956`; it must not be attributed to current main. Current main removes the gateway implementation/docs/tests present on that PR branch, including `keyvault/gateway/*`; it also has no `.github` workflow directory. The passing historical PR Actions run applies to the PR synthetic merge commit, not current main.
+
+The unmerged PR is a POSIX local reference gateway, not a general inference gateway or a migration engine. Reviewed branch design:
+
+- A separate administrator/client boundary over bounded authenticated Unix-domain RPC; client tokens are hashed in state, client/workspace identities are checked, and state files are owner-only with symlink rejection.
+- Administrators register immutable fixed HTTPS GET operations and grant a specific client bounded, expiring, revocable use. Agent requests cannot choose a URL, method, headers, body, or shell command.
+- Credentials are resolved server-side by exact project/key lookup. Grant state is bound to a credential revision; changed credentials invalidate the grant rather than silently following a rotation.
+- SQLite commits a request UUID and quota reservation before making the external request. Replays do not re-send; an interrupted/ambiguous operation is `EFFECT_UNKNOWN` and cannot be retried with a new use automatically.
+- Transport validates public DNS answers, connects to the selected numeric address with hostname-verified TLS, rejects redirects and proxy environment use, bounds response size/time, and projects a small allowlisted typed output. The agent receives projected fields, not the upstream secret.
+- The interface is fixed GET / narrow returned data; it is not a Claude Desktop inference gateway, does not provision Desktop's `inferenceGatewayBaseUrl` / `inferenceGatewayApiKey`, and does not restore a session.
+
+Upstream reports the PR CI matrix passed 95 tests each on Python 3.10, 3.12 and 3.13, including a real MCP stdio round-trip; the CI target was synthetic merge commit `54bba0e52da150d4a457b1acc1aaa6c2e517c255` for PR head `a515e4f...` against unchanged main `b6ac537...`. The PR author also reports 94 local tests passed while excluding the optional-MCP wire test. These results are not a release or a test of the current-main checkout. PR limitations explicitly include alpha/POSIX reference deployment, OS isolation being operator-enforced, fixed GET only, and no real vendor-client or production-credential test.
+
+## Current-main verification and corrected tool errors
+
+- `rtk pytest tests/` exited 1 with three `ModuleNotFoundError: No module named 'keyvault'` discovery failures because the shortcut did not provide the checkout import path. Corrected by creating isolated `/tmp/nm-keyvault-venv` with test/runtime dependencies, omitting OS keyring and optional MCP SDK to avoid host keychain access, then running `rtk proxy env PYTHONPATH=. /tmp/nm-keyvault-venv/bin/python -m pytest -q tests/`: **11 passed**, exit 0. Scope is the current-main suite under the file-backed key backend; it does not test keyring or MCP transport.
+- `rtk read .github/workflows/ci.yml` exited 1 because the current-main path is absent. Corrected with `rtk ls -a` plus GitHub Actions inspection: no `.github` directory/current-main workflow was present; the successful visible run is the separate open PR run.
+- `rtk codegraph node keyvault/config.py` and `rtk codegraph node keyvault/cli.py:scan_env` found no indexed node. Corrected with targeted `rtk codegraph explore` and `rtk codegraph node` calls to `keyvault/mcp_policy.py`, `keyvault/mcp_server.py`, `keyvault/crypto.py`, and the matching scan source; the conclusions above use those actual current sources.
+- An initial root `rtk git status --short` exited 128 because `/Users/vincentadamnemessis/NexusMemory` itself is not a Git checkout. Correct status location is the pinned candidate clone, whose main checkout remained clean at the reviewed HEAD.
+
+CodeGraph on the pinned main checkout: 18 files, 201 nodes, 479 edges, up-to-date. `.codegraph/.gitignore` was retained and its self-preserving exception was removed. No user key, keychain, project data, or session store was accessed.
+
+## Nexus recommendation
+
+Keep credentials external to the canonical migration bundle. Store an opaque credential locator/reference and required target-side re-link action if useful; never copy source API keys, OAuth tokens, MCP auth or permission grants into a destination transcript or session. A SecretPlane may optionally learn from the *design intent* of isolated credentials, revision-bound grants, least privilege and no-secret audit outputs, but candidate implementation is current-main local vault code plus an unmerged alpha PR and is neither an inference gateway nor a transcript importer. Do not advertise its PR as a released capability.
+
+## Primary source links
+
+- Current project: https://github.com/ylz201/keyvault
+- Current-main pinned source: https://github.com/ylz201/keyvault/tree/b6ac537c511f5670ab07a0c7334bf49e8fe9274e
+- Open, unmerged PR #1: https://github.com/ylz201/keyvault/pull/1
+- PR CI at the PR head (not current main): https://github.com/ylz201/keyvault/actions/runs/35996950989
+- Current-main MCP source: https://github.com/ylz201/keyvault/blob/b6ac537c511f5670ab07a0c7334bf49e8fe9274e/keyvault/mcp_server.py
+- Current-main crypto source: https://github.com/ylz201/keyvault/blob/b6ac537c511f5670ab07a0c7334bf49e8fe9274e/keyvault/crypto.py
+- Claude Desktop 3P gateway config reference (target owns gateway URL/key): https://claude.com/docs/third-party/claude-desktop/configuration
+- Claude Code gateway surfaces: https://code.claude.com/docs/en/llm-gateway-connect

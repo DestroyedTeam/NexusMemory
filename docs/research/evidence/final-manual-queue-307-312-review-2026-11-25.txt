@@ -1,0 +1,45 @@
+NEXUS MEMORY — FINAL MANUAL QUEUE CLOSURE (#307–#312)
+Date: 2026-11-25
+
+Summary
+All 6 remaining manually queued candidates have been checked on 2026-11-25, closing 100% of the 23 manual review additions (alongside 303/303 primary GitHub API candidates = 326 source-audited entries). None of the 6 provides ChatGPT Projects/Sections or Claude Desktop 3P (Chat/Cowork/Code) cross-Harness migration, but several provide high-value design patterns directly incorporated into Nexus Memory v1.0.
+
+1. Candidate #307 — leofmarciano/agentctl
+- Repository: https://github.com/leofmarciano/agentctl (9 stars, 3 forks, pushed 2026-10-11, not archived)
+- Commit: 7997916508dd31e1c3643204c00d1cc19d08986e (2026-07-12)
+- License: MIT (verified locally in root LICENSE and Cargo.toml)
+- Architecture: 9-crate Rust workspace (cli, core, transcript, provider-codex, provider-claude, workspace, storage, telemetry, plugin-protocol). Local session bridge moving a coding session between native Claude Code CLI and Codex CLI without replacing their REPLs. High-value reusable concepts: ReceiptKey/IdempotencyLedger, ExportManifest with events_checksum + ExportBlob digest/media_type + redacted flag, workspace one-writer lock, fail-closed `doctor`.
+- Verification: `cargo +stable test --workspace --quiet` in isolated temp HOME (preserving RUSTUP_HOME/CARGO_HOME): `agentctl` binary crate ran 96 tests — 95 passed, 1 failed (`native::tests::unix::native_nonzero_exit_is_preserved` failed with `EIO: I/O error` in non-TTY environment when handing terminal control via tcsetpgrp).
+- Nexus gap: Zero ChatGPT, zero Claude Desktop 3P (`Chat`/`Cowork`/`Code`), zero Projects/Sections/branch DAGs, zero Skills/MCP/plugins/memory/schedules.
+
+2. Candidate #308 — contextberg/agent-history
+- Repository: https://github.com/contextberg/agent-history (5 stars, 1 fork, pushed 2026-05-30, not archived)
+- Commit: 5329fe876b442dd50a2b5c5a6dfdab77c17c5e33 (2026-05-24)
+- License: MIT (verified locally in root LICENSE and package.json v0.1.15)
+- Architecture: TypeScript local-first reader + git-commit knowledge extractor + read-only MCP server across 6 sources (claude-code, cursor, openclaw, codex, hermes, copilot). No automated unit test script in package.json (typecheck/lint/build only).
+- Nexus gap: Read-only transcript/commit-linkage + MCP handoff; zero ChatGPT export/Projects/Sections, zero Claude Desktop 3P or Cowork, zero target session writers or resource-plane migration.
+
+3. Candidate #309 — LinnkLabs/AgentHistory
+- Repository: https://github.com/LinnkLabs/AgentHistory (1 star, 0 forks, pushed 2026-11-25, not archived)
+- Commit: 79b940b387bef946fac19df0eca311b46a185644 (2026-11-25)
+- License: MIT (verified locally in root LICENSE)
+- Architecture: Node service + VS Code extension + CLI providing a local task board, FTS librarian, redaction helper (`redact.mjs`), origin attribution (`origin.kind`), and same-vendor resume across Claude Code (`~/.claude/projects`), legacy standard Claude Desktop Cowork (`~/Library/Application Support/Claude/...`), and Codex (`~/.codex/sessions`). Outlives Claude Code 30-day transcript pruning by indexing locally.
+- Verification: `node --check` passed on all service `.mjs` files.
+- Nexus gap: Read-only indexing + same-vendor resume only; zero cross-Harness session conversion/writer, zero `Claude-3p`, zero ChatGPT export/Projects/Sections, zero Skills/MCP/plugins/memory/schedules.
+
+4. Candidate #310 — xingkongliang/skills-manager
+- Repository: https://github.com/xingkongliang/skills-manager (7,776 stars, 626 forks, pushed 2026-11-22, not archived)
+- Commit: 8bce085df8c209923a1dd79dc5777d5ca8a1cf5d (2026-11-22)
+- License: MIT (verified locally in root LICENSE, package.json v1.45.0, src-tauri/Cargo.toml)
+- Architecture: Mature Tauri/Rust/React desktop app + CLI managing and syncing Agent Skills across 50+ coding tools. High-value Skills-plane engineering patterns: `path_guard.rs` (`sanitize_name` + canonical `is_path_safe`), per-tool copy-vs-symlink strategy (notably commit `8bce085df8`: deploying Antigravity skills as copies where symlinks are ignored; Codex `~/.codex/skills`; avoiding Claude plugin marketplace paths), 3-way merge engine (`core/merge/`), `auto_backup`, `audit_log`, `repo_lock`, `content_hash`, `log_sanitize`.
+- Nexus gap: Skills-plane only; zero session/conversation history, zero Projects/Sections/branch DAGs, zero ChatGPT/Claude Desktop 3P session migration.
+
+5. Candidate #311 — nikships/skills-registry
+- Repository: https://github.com/nikships/skills-registry (25 stars, 3 forks, pushed 2026-10-28, not archived)
+- Commit: d72d3f701be7f7e9bb12a656752870dc96c4c2df (2026-10-28)
+- License: Apache-2.0 (verified locally in root LICENSE)
+- Architecture: Go CLI/TUI + Swift `mac-app/` + npm wrapper managing personal GitHub-backed Skills via an on-demand gateway `SKILL.md` pattern across 56 known agent dot-folders (`cli/internal/agents/agents.go`). Go compiler is not installed on this host, so Go tests were not executed (static source audit only).
+- Nexus gap: Skills-plane only; requires `gh`/GitHub; zero session/Project/Section/MCP/Claude Desktop 3P migration.
+
+6. Candidate #312 — Exaggarate/skillpkg
+- Status: Unavailable on GitHub on 2026-11-25 (`gh repo view` returned `Could not resolve to a Repository with the name 'Exaggarate/skillpkg'`; `git clone` returned `remote: Repository not found`). Classified as `unavailable_repo_not_found_2026-11-25`.

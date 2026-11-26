@@ -1,0 +1,39 @@
+# Candidate #151 — arynull/skillden (2026-11-22)
+
+## Identity and source
+
+- Repository: https://github.com/arynull/skillden
+- Default branch `main`; isolated shallow checkout HEAD `23104d439ccfc169ad310076f73c46443125e47c`.
+- GitHub snapshot: MIT; 0 stars / 0 forks; 25 commits. Latest release shown is v0.5.1, and Actions run #10 on the same commit passed.
+- CodeGraph indexed 11 files, 196 nodes, 544 edges; the generated `.codegraph/.gitignore` was retained with only its `!.gitignore` self-preserving exception removed. Final candidate `git status --short` was empty.
+
+## What the implementation actually does
+
+`skillden` is a local Python package manager for packaged Agent Skills. It registers user-supplied `skill.json` + bundle directories in a local SQLite registry, hashes bundle contents, copies Skills to configured folders, supports dependency resolution, `skillden.lock`, per-project `.skillden/pins.json`, `.skills/`, sync/unpin, and a regex-based pre-install scanner. It does not discover/import ChatGPT or Codex project/session exports, preserve Section Groups/session branches/messages/attachments/tokens, migrate MCP/plugins/schedules/memory, or create Claude Desktop 3P plugin/marketplace packages.
+
+The actual target adapter map in `src/skillden/agents.py` contains only `claude-code`, `cursor`, and `generic`. The Claude target is only `~/.claude/skills`; there are no Desktop Chat/Cowork/Code adapters and no Codex/DeepSeek/other harness adapters. Its project “pin” is a Skill asset manifest, not a Project/session graph. Treat it as an adjacent ResourcePlane design/fixture, not a Nexus migration engine.
+
+## Checks and reproduced defects
+
+- `pip install .` in a disposable Python 3.12.4 virtual environment — exit 0. No user directories or credentials were used.
+- Ruff from an isolated temporary venv: `ruff check src/` — exit 0, literal stdout `All checks passed!`; `ruff format --check src/` — exit 0, literal stdout `10 files already formatted`.
+- No repository `tests/` directory. Upstream `.github/workflows/ci.yml` runs Ruff plus CLI smoke tests only. Latest Actions run #10 for this exact HEAD is green, but it is not a unit/security regression suite. Reproduced the CI add/search/info/install/list/uninstall and project pin/sync/unchanged-sync/unpin smoke path locally against a temporary registry/bundle; all 12 commands exited 0 and final assertions passed.
+- Version drift: package metadata and `skillden.__version__` say `0.5.1`, but the installed `skillden --version` prints `skillden 0.4.0` (exit 0). The CLI hard-codes the stale value in `build_parser`; the CI only invokes it and does not assert the version.
+- `info` metadata defect: on the valid synthetic `acme/demo` record (manifest description, author, MIT license present), `skillden info acme/demo` printed blank Description/Author/License because `_cmd_info` reads these fields from the top-level version row rather than its decoded nested `manifest`. It still printed the version and returned exit 0, so upstream smoke passed.
+- Namespace collision POC, only in `TemporaryDirectory`: register/install `acme/demo`, then register/install `other/demo` to `generic` **without `--force`**. Both installs exit 0 to `.skills/demo`; the second silently replaces the first file. `skillden list` then lists both identities at that same destination. `agents.skill_dir()` and project destinations use only the last path component, so `owner/name` namespaces collide. This is a data-loss/ownership-integrity defect.
+- Project-unpin traversal POC, only in `TemporaryDirectory`: with a synthetically edited `.skillden/pins.json` containing `author/..`, and a pre-existing `.skills/installed/SKILL.md` (the condition that makes `.skills/..` resolve), run `skillden unpin author/..` from a nested project directory. Exit 1 with an uncaught `FileNotFoundError` traceback in `shutil.rmtree`; the project sentinel, pins file, and installed Skill file had all been removed. The source checks only that resolved `dest` is *within or equal to* project root; equality permits deleting the project root. No real project was touched.
+- `_install_bundle()` validates/scans a temporary extraction but deletes an existing destination before `os.replace`; no rollback backup exists if the replacement fails (static source risk, not separately fault-injected). The regex scanner is a heuristic, not a sandbox or proof of Skill safety; `--allow-risky` explicitly overrides blocking findings.
+
+## Disposition and relevance
+
+Keep as a low-priority Skill ResourcePlane fixture for local registry, content hashing, project pinning and lockfile concepts. Do not reuse its current installer/deletion behavior without redesign: namespace collisions can overwrite content, unpin can delete a project through crafted pin metadata, and replace is not rollback-safe. It is far from the requested cross-Harness migration scope; no ChatGPT/Codex project, Section Group, session hierarchy, MCP/plugin, memory or scheduler fidelity is demonstrated.
+
+## Primary sources
+
+- Repository: https://github.com/arynull/skillden
+- Release v0.5.1: https://github.com/arynull/skillden/releases
+- Actions: https://github.com/arynull/skillden/actions
+- Pinned `project.py`: https://github.com/arynull/skillden/blob/23104d439ccfc169ad310076f73c46443125e47c/src/skillden/project.py
+- Pinned `installer.py`: https://github.com/arynull/skillden/blob/23104d439ccfc169ad310076f73c46443125e47c/src/skillden/installer.py
+- Pinned `agents.py`: https://github.com/arynull/skillden/blob/23104d439ccfc169ad310076f73c46443125e47c/src/skillden/agents.py
+- Pinned `cli.py`: https://github.com/arynull/skillden/blob/23104d439ccfc169ad310076f73c46443125e47c/src/skillden/cli.py

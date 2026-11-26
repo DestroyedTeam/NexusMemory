@@ -1,0 +1,36 @@
+# Candidate review — nathfavour/anyisland (2026-11-21)
+
+## Identity and provenance
+
+- Repository: https://github.com/nathfavour/anyisland
+- Checked-out branch/ref: `master`, exact HEAD `71a4b571adb076a1285f89ad137948d3e01a90f0`; remote `refs/heads/master` matched that SHA.
+- Pinned commit: 2026-08-20, “docs: document single-command target hook distribution and add integration agent skill.”
+- Live GitHub metadata query (`rtk gh api repos/nathfavour/anyisland`) returned 2 stars, 0 forks, 20 open issues, no recognized license, not archived, and one published release `v0.0.0` dated 2026-08-20. The repository was created 2026-02-02 and the API reported last push 2026-09-13.
+- `.github/workflows` contains only `release.yml`; it gates a GoReleaser publish on presence of `run.yes`. No test/CI workflow or LICENSE file was found. The checked-in `run.yes` contains `yes`; it is a release workflow marker, not an install-plan confirmation.
+- CodeGraph status for this exact checkout: 54 files, 626 nodes, 1,286 edges; index up to date.
+
+## Product fit and source findings
+
+- README and architecture identify AnyIsland as a Go package/tool manager: its SQLite registry tracks installed tools, and `anyisland.json` describes tool name/version/dependencies/build/runtime. The `.agents/skills/integration/SKILL.md` is an integration recipe for publishing/installing binaries; neither file defines Harness Project, Section, conversation, session, branch, attachment, memory, or scheduled-task interchange.
+- It is therefore an adjacent package/asset-management reference only, not a ChatGPT/Codex → Claude Desktop or Claude Code migration implementation. No source or writer for the user's Destruction Era project/session hierarchy was found.
+- The architecture/security docs promise redacted, encrypted E2EE shell history. In the source, `CryptoManager.Encrypt` is explicitly a mock that returns `AES256(<plaintext>, KEY:<first three key characters>...)`; there is no matching decrypt implementation. `HistoryManager.GetHistory` returns the raw stored bytes as one string. Tests that pass validate this placeholder shape, not confidentiality. This is a security blocker for adoption or storing any credentials/transcripts.
+- `HistoryManager.SyncCommand` redacts and appends a `history.log`, but the indexed production tree exposes no shell-hook/broker caller for it; the reviewed implementation is not evidence of an automatically wired, secure cross-device shell-history collector. The fallback heuristic only masks commands containing `KEY`, `PASSWORD`, or `SECRET` when an `=` is present.
+- Build/install manifests can request shell steps. `Ingestor.Build` executes `Toolchain == "shell"` entries with `bash -c`. The CLI prints “Proposed Build Plan” then proceeds to “Executing build...” without a distinct approval prompt in the reviewed command path, contrary to architecture/security text saying users approve first. The default config sets `Update.AutoUpdate=true`; update/heal paths can rebuild tools. Do not run ingestion from an untrusted manifest without an isolated review/sandbox.
+
+## Local validation
+
+- Host probe `rtk proxy go version` failed with exit 1 because `go` is not installed on the normal `PATH`.
+- Downloaded the official Go 1.27.4 macOS arm64 archive to `/private/tmp/go1.27.4.darwin-arm64.tar.gz`; observed SHA-256 `91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4`, matching the Go downloads page. Extracted only under `/private/tmp`; isolated `GOCACHE`, `GOMODCACHE`, and `GOPATH` were also under `/private/tmp`.
+- `rtk proxy env GOCACHE=/private/tmp/nm-anyisland-gocache GOMODCACHE=/private/tmp/nm-anyisland-gomodcache GOPATH=/private/tmp/nm-anyisland-gopath GOPROXY=https://proxy.golang.org,direct /private/tmp/go/bin/go test ./...` — exit 0. Stdout: `cmd/anyisland` and examples plus registry/TUI/visual/discovery/IPC report no test files; `internal/agent`, `internal/cli`, `internal/crypto`, `internal/deps`, `internal/history`, `internal/pal`, and `pkg/packagemanager` all pass. The checked suite validates the mock crypto implementation and does not test real encryption.
+- Matching `go vet ./...` command with the same temporary environment — exit 0, empty stdout/stderr.
+- No test, binary, command, or GUI was run against user data; all code checks used the pinned public checkout.
+
+## Tooling error and correction ledger
+
+- `rtk git status --short` from `/Users/vincentadamnemessis/NexusMemory` returned exit 128 (`fatal: not a git repository`). This workspace copy is not the source checkout; subsequent project edits target the active disposable snapshot `/private/tmp/nm-next-agent-sessions-review-20261120/candidate/project` and candidate code reads use the exact clone above.
+- A guessed path `rtk read internal/agent/build.go` returned exit 1 (file absent). Corrected by querying CodeGraph and reading the actual `internal/agent/agent.go` source.
+- The host `go` executable was missing (exit 1); corrected with the checksum-verified temporary official toolchain above.
+
+## Disposition
+
+Reject as a migration dependency. Keep at most its typed package manifest/registry concept as an adjacent ResourcePlane comparison, and only after independent schema/security review. It has no measured session fidelity or migration accuracy; README stars, package-management features, Skills hookup, and passing Go tests do not establish any Project/Section/Session transfer capability.

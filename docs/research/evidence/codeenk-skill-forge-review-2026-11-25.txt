@@ -1,0 +1,53 @@
+# Candidate #274 — Codeenk/Skill-Forge (2026-11-25)
+
+## Decision
+**Adjacent Skills orchestration/package-manager prototype; not a session, project, or cross-Harness history migrator.** It can scan `SKILL.md` folders, create a composite phased Skill, install that bundle into selected Skills roots, and hash/verify source-Skill drift. It does not ingest session data, translate proprietary Skill formats, preserve conversation state, or connect to remote Harness services. It is relevant only to the Skills/workflow-orchestration subproblem. Direct safety and validation probes found blockers to reuse as-is.
+
+## Identity and provenance
+- Repository: https://github.com/Codeenk/Skill-Forge
+- Pinned clone HEAD: `86e61e176b0a19324d0cf16a19bccff511f7f7d5`; commit `2026-08-27T21:20:04+05:30`, message `chore: production-grade repo polish`; tag `v1.2.0`; MIT; Python 3.9+, stdlib runtime.
+- Review checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-codeenk-skill-forge-20261125-followup274`.
+- CodeGraph: 8 files, 96 nodes, 178 edges; current. `.codegraph/.gitignore` retained with only `!.gitignore` removed; candidate `git status --short` is clean.
+- No actual Skills directory, cloud account, API key, session, or provider was used. Synthetic execution tests ran only under `/tmp`; resolver networking was monkeypatched off.
+
+## What the source actually does
+1. `scan` walks a hard-coded matrix of project/home Skills paths plus `FORGE_EXTRA_ROOTS`, looking for one directory level containing `SKILL.md`. It emits a JSON inventory with description, paths, short content hash (`sha256:` plus 16 hex characters), optional git revision/tree hash, and whether scripts/references directories exist. `--project` means project-local paths only; it is not remote/cloud discovery.
+2. The Skill prompt asks an AI agent to ask for team intent, choose 2–8 roster members, derive phases, synthesize a new Skill, and write a sidecar. The CLI does not itself derive or validate semantic compatibility of source Skills; the LLM performs roster selection and workflow composition.
+3. Generated bundles instruct the agent to read original Skills by path at phase start and pass artifacts via `.team/artifacts/`. The source Skills are dependencies, not embedded content; installing the composite on another machine does not transfer missing owner Skills.
+4. `install` copies or symlinks a Skill bundle to detected roots; `verify` checks the sidecar's source-Skill hashes. This is local filesystem distribution, not a source/target session importer.
+5. `resolve` claims to fetch missing capabilities. In actual source, no-result paths create a placeholder Skill; it prints that it is re-scanning but never calls `cmd_scan` or updates the manifest/lock. A safe synthetic invocation with `subprocess.check_output` network access disabled exited 0, staged a stub under `.forge/vendor/<need>`, and left `.team/manifest.json` absent.
+
+## Fit against Nexus Memory requirements
+| Requirement | Candidate behavior |
+|---|---|
+| ChatGPT/Codex App Projects and Section Groups | No readers, project/section model, or restore path. `~/.codex/sessions`-style entries are not ChatGPT Projects. |
+| Destruction Era session hierarchy, branches, subtasks, interrupted turns | No conversation/session importer, native session writer, DAG, parent-child mapping, or replay contract. Filesystem phases model a newly synthesized workflow, not historical chat ancestry. |
+| Claude Desktop third-party-gateway Chat/Cowork/Code | No desktop modes, session store, third-party gateway, or cloud remote API. |
+| Local/self-hosted Claude Code via API key/gateway | Reads Skills directories; does not read/restore Claude Code JSONL session history or test API-key gateway semantics. |
+| Skills portability | Partial adjacent value: recognizes `SKILL.md` in hard-coded roots and mirrors a generated composite into selected local roots. It does not convert non-SKILL.md formats, copy source Skill dependencies into the bundle, or establish that every listed cloud Harness has shared filesystem semantics. |
+| MCP, plugins, memory, attachments, schedules, token/cost usage | No migration/read/write support. |
+
+Portability claim is limited: generated text uses a common Skills format and filesystem instructions, but the team still requires an AI runtime to select/read skills and perform phases. The bundle can reference `~/.../SKILL.md`; those files may not exist on a second machine or in a remote cloud workspace. It does not satisfy the requested “no AI involvement” universal adapter goal.
+
+## Source/test quality and reproducible probes
+### Security / installer
+The CLI `install` does not call `lint`, validate the frontmatter name, canonicalize its destination, or keep the path inside `--into`. Synthetic POC: bundle `name: ../victim` correctly failed `lint` (exit 1), but direct `install --into /tmp/.../skills --force` exited 0 and installed to `/tmp/.../skills/../victim`; it deleted the sibling sentinel directory outside the requested Skills root before copying the bundle there. Sentinel changed from present to absent; no user file was touched. Do not run direct installation on real homes until fixed.
+
+### Audit / resolver / evaluator
+- `cmd_audit` is regex-based, not AST analysis. POC script containing `curl` printed one network finding but returned exit 0; a Python `subprocess.check_call(["npx", ...])` network operation was not flagged. Because findings do not cause nonzero status, callers that abort only when `cmd_audit(...) != 0` do not get a blocking audit gate.
+- `cmd_eval` creates a trace stub with `phases: []` and `status: PASS`; it does not execute the team's phases. It generates lightweight JSON Schema-like files but checks fixtures only with `json.load`. POC emitted a schema with `required:["alpha"]` for declared shape `alpha,beta`, then accepted `{}` as `OK JSON` and returned `eval: PASS` with zero phases.
+- `cmd_resolve` POC (network disabled) created an “Auto-vended stub” rather than a downloaded skill, reported a rescan, but produced no manifest. It should not be counted as skill discovery or a verified package transfer.
+
+### Tests and CI
+- A disposable venv with pytest 9.2.0 ran the repo's 6 tests successfully. They are not meaningful coverage of compiler behavior: e.g. `test_hash_determinism` is `assert True`, `test_no_dag_loop` regex-matches a literal sample without invoking lint, and `test_artifact_uniqueness` asserts Python set behavior on a hard-coded duplicate list. Initial environment had no pytest; workflow `setup-python` does not explicitly install it.
+- CI-style copy named exactly `Skill-Forge` reproduced root `python3 scripts/forge.py lint ./` exit 1 because frontmatter name is `skill-forge` and linter requires case-sensitive directory equality. The checked-in CI invokes this root lint command; this strongly suggests the standard case-preserving GitHub checkout will fail unless the job uses a lowercase working-directory. Actual GitHub Actions run status was not queried.
+- `lint ./examples/design-review-team` exit 0 with four warnings; `lint ./examples/saas-dev-team` exit 1 (CI masks it with `|| true`). The example-embedded `scripts/forge.py` copies are both 374 lines / identical hash, while the root compiler is 706 lines / different hash; examples are stale snapshots.
+- `rtk pytest tests/` could not spawn pytest (exit 1); `python3 -m pytest tests/` likewise initially failed with `No module named pytest` (exit 1). Installing pytest only in `/tmp/nm-skillforge-review-venv` enabled 6/6 pass. No live Harness/Cloud runtime test was performed.
+
+## Reuse recommendation
+- **Do not reuse the installer, resolver, auditor, or evaluator for Nexus Memory** before path-containment, exit semantics, real package provenance, schema validation, side-effect boundaries, and actual end-to-end tests are fixed.
+- Retain as low-to-medium-value design prior art only: Skills-root inventory, source hashes/provenance, and explicit filesystem artifact contracts for coordinating skills that already exist on the same host.
+- Treat it as **0/5 for the requested session/project migration**, **2/5 for local Skills discovery/distribution**, and **3/5 as a workflow-contract idea**. It is not evidence that Skill/MCP compatibility implies session/project compatibility.
+
+## Sources
+Pinned primary sources: [README (raw)](https://raw.githubusercontent.com/Codeenk/Skill-Forge/86e61e176b0a19324d0cf16a19bccff511f7f7d5/README.md), [compiler source](https://github.com/Codeenk/Skill-Forge/blob/86e61e176b0a19324d0cf16a19bccff511f7f7d5/scripts/forge.py), [CI workflow](https://github.com/Codeenk/Skill-Forge/blob/86e61e176b0a19324d0cf16a19bccff511f7f7d5/.github/workflows/ci.yml), [test file](https://github.com/Codeenk/Skill-Forge/blob/86e61e176b0a19324d0cf16a19bccff511f7f7d5/tests/test_compiler.py), [team schema](https://github.com/Codeenk/Skill-Forge/blob/86e61e176b0a19324d0cf16a19bccff511f7f7d5/references/team-schema.md), [runtime matrix](https://github.com/Codeenk/Skill-Forge/blob/86e61e176b0a19324d0cf16a19bccff511f7f7d5/references/runtime-paths.md), [security policy](https://github.com/Codeenk/Skill-Forge/blob/86e61e176b0a19324d0cf16a19bccff511f7f7d5/SECURITY.md), [MIT license](https://github.com/Codeenk/Skill-Forge/blob/86e61e176b0a19324d0cf16a19bccff511f7f7d5/LICENSE).

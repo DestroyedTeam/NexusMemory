@@ -1,0 +1,41 @@
+# Candidate #178 — huqiwei123/agentkit (Agent Repo)
+
+Review date: 2026-11-23. Isolated checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-huqiwei123-agentkit-20261123-followup177. Local HEAD and origin refs/heads/main both equal 4a963eaa8b4a880d5e9042920f0c2877b8d63056; commit timestamp 2026-05-20T22:28:28+08:00; source git status clean after CodeGraph setup. GitHub page showed one commit, zero stars/forks at review time; package metadata says @lucashu/agentkit 0.1.0 and MIT, but clone has no LICENSE file. Treat low public maturity as a signal, not as the quality conclusion by itself. CodeGraph current: 20 files, 130 nodes, 320 edges.
+
+## Disposition
+
+**Reject as a Nexus Memory migration product and do not install untrusted resource repositories with this implementation. Retain only its simple ResourcePlane manifest/profile idea.** The program is a small Python CLI that stores reusable resource files and copies them into Codex or a generic .claude tree. The data model contains Resource and InstallPlan, while profiles are flat lists of resource IDs. It does not model ChatGPT/Codex Projects, Section Groups, sessions, parent/child/fork/subtasks, transcripts, images, files, links, tokens, schedules, persistent memory, or migration lineage. It is not a Claude Desktop third-party-gateway writer; it has no separate Chat/Cowork/Code modes or local/self-hosted Claude Code session importer.
+
+## What it actually supports
+
+- The CLI exposes list, validate, doctor, sync, add, and install. The manifest describes id/name/type/description/supports/files/tags/variables/templates/source/version. A profile simply selects resource IDs; it is not a nested project/session graph or cross-Harness canonical archive.
+- Current adapter registry is exactly codex and claude. Both copy skills/agents/commands/hooks/roles into generic directories. Codex additionally renders a codex_config template into config.d/*.toml. ClaudeAdapter has no MCP handling. The sample Postgres MCP is marked codex-only; a disposable install wrote five Codex files including config.d/sample-postgres-mcp.toml, versus four Claude files and no Claude MCP config. This is copy/installation, not semantic conversion or round-trip preservation.
+- The npm entrypoint shells out to Python; source supports a resource repository and manifest/profile workflow, not session-store export/import. There is no uninstall command, no transaction, no backup, no install diff/rollback, and no version lock or source digest. README itself says uninstall and richer safeguards are future recommendations.
+
+## Reproduced correctness defect — built-in profile is broken
+
+The shipped profiles/bootstrap.yaml refers to sample-skill, sample-reviewer, and sample-postgres-mcp. The actual repository contains firecrawl rather than sample-skill. agentkit validate and doctor both returned success (doctor reports six resources and Validation: OK) because Repository.validate checks resource manifests/files/templates but not profile references. Running the documented bootstrap profile returned exit 1 with an uncaught ValueError: unknown resources: sample-skill. The project test test_profile_expands_to_resources uses a valid temporary fixture and does not catch the broken shipped profile.
+
+## Reproduced install security/atomicity problems (temporary synthetic fixtures only)
+
+1. Path escape: a disposable manifest with resource id ../../outside and a synthetic SKILL.md was installed into a temporary target directory via the shipped Node/npm CLI entrypoint. The command returned exit 0 and wrote SKILL.md to a sibling outside directory, not beneath the selected target. The escaped file stayed inside the dedicated temporary probe tree; no user paths or data were touched. Source uses target / resource-type-directory / resource.id / file_name without path-containment checks. If a user installs a repository containing an untrusted manifest, this is an arbitrary write outside the chosen agent root.
+2. Partial write: a synthetic two-file skill was installed with a pre-existing regular file blocking the second file's parent directory. The command printed both WRITE actions, then exited 1 with FileExistsError; the first file remained installed and there was no rollback. Both conflict and leftover were under the temp probe directory.
+3. Profile reference validation and path-containment tests are absent. The install plan is applied directly, sequentially and without backups; target files may also be overwritten by writes.
+
+## Verification
+
+- Full suite: rtk proxy python3 -m unittest discover -s tests -v — exit 0; 16 tests passed, 0 failed.
+- Node CLI smoke tests: list, validate and doctor each exit 0; validate prints OK, doctor reports 6 resources, 1 profile, adapters claude/codex. The repository reports only 6 resources (firecrawl, sample-reviewer, sample-postgres-mcp, sample-sync, sample-hook, sample-architect).
+- Built-in bootstrap install: exit 1, stderr traceback ends ValueError unknown resources: sample-skill, even though doctor/validate succeed.
+- Explicit valid resource install to temporary paths: Codex without DATABASE_URI exits 2 and prints Missing variables: DATABASE_URI; with a synthetic URI Codex exits 0 and installs 5 files including the MCP TOML template. Claude exits 0 and installs 4 files without any MCP file. No real credential was supplied; the only value was synthetic://not-a-real-credential.
+- Path traversal POC: exit 0; printed a destination containing target/skills/../../outside/SKILL.md and the synthetic file existed at the resolved sibling outside target.
+- Partial install POC: exit 1; first synthetic file persisted, second blocked by the pre-existing synthetic file. Exact outputs and paths are in the transaction verification ledger.
+- No user .codex/.claude directory was used; no GitHub token, API key, real environment variable, session, provider, Cloudflare, MCP server, or external agent service was contacted. Only temporary directories were written.
+
+## Sources
+
+- Repository overview: https://github.com/huqiwei123/agentkit
+- Pinned README: https://github.com/huqiwei123/agentkit/blob/4a963eaa8b4a880d5e9042920f0c2877b8d63056/README.md
+- Pinned CLI: https://github.com/huqiwei123/agentkit/blob/4a963eaa8b4a880d5e9042920f0c2877b8d63056/agentkit/cli.py
+- Pinned adapter writes: https://github.com/huqiwei123/agentkit/blob/4a963eaa8b4a880d5e9042920f0c2877b8d63056/agentkit/adapters/base.py
+- Pinned shipped profile: https://github.com/huqiwei123/agentkit/blob/4a963eaa8b4a880d5e9042920f0c2877b8d63056/profiles/bootstrap.yaml

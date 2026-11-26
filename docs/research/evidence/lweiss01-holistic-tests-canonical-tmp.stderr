@@ -1,0 +1,9 @@
+Holistic: refusing to send session data to non-loopback host evil.example. Set ANDON_ALLOW_REMOTE=1 to override.
+Holistic: refusing to send session data to non-loopback host collector.example.com. Set ANDON_ALLOW_REMOTE=1 to override.
+Holistic: refusing to send session data to non-loopback host 10.0.0.5. Set ANDON_ALLOW_REMOTE=1 to override.
+Holistic: ignoring malformed ANDON_API_BASE_URL (not a url).
+Preparing worktree (detached HEAD d0cc8c3)
+Preparing worktree (detached HEAD d0cc8c3)
+Preparing worktree (detached HEAD d0cc8c3)
+Preparing worktree (detached HEAD badb58b)
+Preparing worktree (detached HEAD badb58b)

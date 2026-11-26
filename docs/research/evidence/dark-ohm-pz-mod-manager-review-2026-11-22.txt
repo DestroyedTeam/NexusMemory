@@ -1,0 +1,44 @@
+# Dark-Ohm/pz-mod-manager — pinned source and behavior review
+
+Date: 2026-11-22. Candidate #118 of the 303-name primary GitHub corpus. User-confirmed scope remains ChatGPT Projects / Section Groups / Destruction Era session hierarchy into local/self-hosted Claude Code and Claude Desktop Chat, Cowork, Code as separate modes. No PZ game installation, server, Steam account/key, user config or real game data was accessed.
+
+## Bound source and provenance
+- Repository: https://github.com/Dark-Ohm/pz-mod-manager
+- Clone command: `rtk git clone https://github.com/Dark-Ohm/pz-mod-manager.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-dark-ohm-pz-mod-manager-20261122`; exit 0.
+- Pinned branch `master`, HEAD `e04311449785d27b866c2993d27f6681302326b6`; commit date `2026-11-20T21:15:38+02:00`; message `Ship the tactical launcher alongside the manager`. Checkout remained clean after tests/build and CodeGraph indexing. Repo page showed 1 star, 0 forks, six commits and MIT license. Latest listed release is v0.1.0 (tag commit `ba0e2fe`, released Nov 13, 2026); repo is not archived.
+- CodeGraph initialized and verified: `rtk codegraph init . && rtk codegraph status .` → exit 0; 44 indexed files, 988 nodes, 3,817 edges, up to date. Retained `.codegraph/.gitignore`, removed only its `!.gitignore` exception; generated DB is ignored, worktree remains clean.
+
+## What the implementation actually does
+- The README and source define a Project Zomboid server/client/mod manager: GUI + JSON CLI + MCP over stdio. `src/mcp.rs::tools` maps `src/cli.rs::COMMANDS` into MCP tools and annotates `readOnlyHint` from each command’s mutation flag; `tools/call` dispatches into the same command executor. This is an MCP integration example, not an agent-session interchange format.
+- The 50 MCP tools cover game environments, client/server mods, workshop downloads, mod profiles, INI/sandbox options, players, backups, server process controls and `.pzpack` sharing. The `.pzpack` archive contains Project Zomboid mod order/workshop IDs/server connection fields/local mod assets and an `AGENT.md` with PZ-specific instructions. Profile revision/hash fields track mod-pack updates, not conversation events or transcript fidelity.
+- No ChatGPT export importer, Project/Section Group entity, cross-session parent/child or branch graph, prompt/message history, attachments/media, tokens, subtask orchestration, portable memory, schedule, Claude Desktop mode adapter, Claude Code session adapter or migration report exists. “Profile” and “MCP” are product- and game-domain terms here, not equivalent Harness structures.
+- Disposition: pass as a false-positive/off-topic candidate for Nexus Memory. It is not a migration dependency. At most, its single command registry shared by GUI/CLI/MCP plus JSON schemas and mutation hints is a generic tool-adapter pattern; no PZ-specific code/state should be reused.
+
+## Verification
+- `rtk cargo test --release --workspace -- --test-threads=1` → exit 0; literal RTK summary: `cargo test: 62 passed, 4 ignored (2 suites, 4.53s)`. The CI workflow runs serial tests on Windows and Linux then builds the workspace; no transcript/session migration tests exist.
+- `rtk cargo build --release --workspace` → exit 0, 0 errors, 26 warnings across 2 crates. Observed warnings include unused imports/variable, deprecated egui `show_inside`/`Ui::id`, private interface and dead code. Output does not prove support for macOS or cross-Harness fidelity.
+- Isolated live MCP handshake/list check used the release binary with `PZMM_CONFIG_DIR=/tmp/nm-pzmm-isolated-config` and `PZMM_DATA_DIR=/tmp/nm-pzmm-isolated-data`. `rtk proxy python3` launched `rtk proxy <binary> mcp`, sent JSON-RPC `initialize` and `tools/list`, then parsed both responses. Exit 0, stderr empty. Literal harness output:
+```
+exit= 0
+stderr= ''
+response_count= 2
+initialize= {"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{"listChanged":false}},"instructions":"Project Zomboid server/mod manager. An environment (env) is one server + one game client that share one game install but have separate -cachedir folders (e.g. stable and lab). Most tools take `env` (id from env_list; default = active). Typical flow: env_list → mods_check → profile_enable/profile_set_order → ini_apply → server_start (wait) → server_cmd / server_log → server_stop. Profiles are ordered mod lists shared by all environments. Mutating tools change real files: back up with backup_create before risky changes. State is shared with the GUI and other agents; re-read status instead of assuming it.","protocolVersion":"2025-03-26","serverInfo":{"name":"pz-mod-manager","version":"0.1.0"}}}
+tool_count= 50
+first_tools= env_list,env_show,env_use,env_set,env_add,env_remove,config_show,config_set,mods_list,mods_check,profile_list,profile_show,profile_use,profile_create,profile_delete,profile_update,profile_enable,profile_disable,profile_set_order,profile_sort
+session_or_migration_named_tools= []
+isolated_config_exists= False
+isolated_data_exists= False
+```
+No state directories were created by the read-only handshake.
+
+## Inspection errors and corrections
+- The initial instructed form `rtk codegraph init --yes .` returned exit 1, `error: unknown option '--yes'`. Corrected to the installed command `rtk codegraph init . && rtk codegraph status .`, exit 0.
+- Initial workflow path `.github/workflows/ci.yml` did not exist (exit 1); corrected using `rtk ls -R .github` to `.github/workflows/build.yml`, then reopened it. This was a path mismatch, not a CI failure.
+- Initial browser requests used `main` paths for README/LICENSE and received 404 because the current default branch is `master`; corrected by opening the official repository page and `master` README/LICENSE/workflow pages.
+
+## Primary sources
+- Repository and current metadata: https://github.com/Dark-Ohm/pz-mod-manager
+- README on pinned branch: https://github.com/Dark-Ohm/pz-mod-manager/blob/e04311449785d27b866c2993d27f6681302326b6/README.md
+- MIT license: https://github.com/Dark-Ohm/pz-mod-manager/blob/e04311449785d27b866c2993d27f6681302326b6/LICENSE
+- CI/build workflow: https://github.com/Dark-Ohm/pz-mod-manager/blob/e04311449785d27b866c2993d27f6681302326b6/.github/workflows/build.yml
+- Latest release: https://github.com/Dark-Ohm/pz-mod-manager/releases/tag/v0.1.0

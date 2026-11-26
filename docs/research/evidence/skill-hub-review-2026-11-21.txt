@@ -1,0 +1,34 @@
+# GitHub candidate source / CI review — CassianFlorin/skill-hub
+
+Reviewed: 2026-11-21. Local checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-cassianflorin-skill-hub-20261121`. Default branch is `master`, pinned HEAD `19b764bce362a172b23e8db6f7394ff4e15f3ea2`; after fetch, `git ls-remote origin HEAD refs/heads/master` resolved to the same SHA. The checkout is clean. This is a source/CI and limited package-test review, not a conversation migration test.
+
+## Product scope and architecture
+
+- This is a real released Go Skill package manager (`go.mod` says Go 1.25; MIT). Current release is v1.4.0; main/master is one formula-refresh commit beyond the release tag. The latest observed code push and CI run #77 are July 6, 2026; this is a four-month-old stable snapshot as of review. The GitHub snapshot lists 3 stars / 0 forks, but that is not used as a quality proxy.
+- README makes three states explicit: managed global store (`$SKILLHUB_HOME/installed` plus `skillhub.lock`), project-discovered Skill folders, and runtime copies. Project discovery scans only `.skillhub/skills`, `.codex/skills`, `.claude/skills`, `.agents/skills`, and `agent/skills`; it does not create a Project/Section/group hierarchy.
+- Positive ResourcePlane design evidence: the lock model stores identity, version, source type/registry/URL/ref/resolved Git commit, source path/subpath/cache, checksum, installed path, compatible targets, deployed runtimes, holds and update time. A v2 registry index supports namespaced SKILL packages, targets, trust/review metadata and checksums. Lifecycle includes update preview, version holds, rollback snapshots and JSONL audit records. This is useful for Nexus Skill source provenance, deployment scope and managed-vs-runtime separation.
+- Runtime adapters are simple directory deployments to Codex, Claude, Gemini and Hermes Skill folders; Claude target means the `~/.claude/skills`-style runtime, not Claude Desktop Chat/Cowork/Code sessions. No Skills semantic converter was found: a package is copied to declared target paths, not translated into mode-specific session state.
+- There is **no** ChatGPT Project/Section/session/message/branch/subtask model, transcript import/export, attachment/media/token ledger, MCP/plugin migration, memory import, schedule migration, or third-party-gateway client-session writer. No migration accuracy metric is applicable.
+- A native macOS SwiftUI front-end exists (`macos/Sources/SkillHub`): Catalog, Installed, Updates, Deploy and Doctor views shell out to the CLI and decode JSON. It is an actual small-app architecture reference (single CLI source of behavior), but only for Skills; no corresponding Windows GUI or session-migration UI was found.
+
+## Code quality / safety observations
+
+- The repo has a meaningful mature workflow: formatting + `go vet`, Go tests, Node installer tests, and a build; the CI matrix covers Ubuntu, macOS and Windows. Current-main CI run #77 on the exact reviewed commit completed successfully with all three matrix jobs (GitHub run URL below).
+- Local Go tests/build could not execute because `go` is not installed in this environment (`rtk proxy go version`, `rtk proxy go test ./...`, and `rtk proxy go build ...` each reported `go: No such file or directory`, exit 1). Do **not** describe these as product test failures. Local `rtk npm test --prefix npm` passed 3/3, but those tests only check OS-to-release target mapping, release URL construction, and checksum parsing; they do not exercise the Go core or migration fidelity.
+- Registry path validation is stronger than many small tools: absolute paths, `..` components and post-clean path escape are rejected. The deploy path preflights existing targets and batch conflicts before writes unless the explicit `--force` option is supplied; matching tests are present.
+- Static safety caution (not a reproduced exploit): both installer and deploy `copyDir` start with `os.RemoveAll(dst)`, then walk and copy. Install snapshots an old managed version first, and normal deploy refuses target conflicts; forced deploy intentionally replaces runtime copies. `WalkDir` does not recurse into symlinked directories, but `copyFile` calls `os.Open` on file paths, which follows a file symlink. That can copy bytes from outside an untrusted Skill tree into the managed package; no local Go runtime/PoC was available, and no exploit was attempted. Add an explicit symlink policy and verify rollback/partial-copy behavior before using this implementation to ingest untrusted user Skill roots.
+- Audit append errors are best-effort and ignored by callers; it is an operational log, not a durable/tamper-proof migration ledger.
+
+## Disposition
+
+**Keep as a high-quality adjacent ResourcePlane / macOS CLI-GUI design reference; exclude as a Project/Session migration engine.** Its quality is stronger than its very small star count implies, and its version/provenance/preview/rollback boundaries are useful. Do not overstate `.claude/skills` deployment as support for Claude Desktop's three confirmed modes or a third-party-gateway session store. No actual Claude/ChatGPT data, user credentials, API keys, or runtime skill directories were accessed. Inventory is incremental, not exhaustive.
+
+## Primary source links
+
+- Repository / README: https://github.com/CassianFlorin/skill-hub
+- Pinned Go module: https://github.com/CassianFlorin/skill-hub/blob/19b764bce362a172b23e8db6f7394ff4e15f3ea2/go.mod
+- Pinned install/lock/provenance code: https://github.com/CassianFlorin/skill-hub/blob/19b764bce362a172b23e8db6f7394ff4e15f3ea2/internal/install/install.go
+- Pinned runtime deploy code: https://github.com/CassianFlorin/skill-hub/blob/19b764bce362a172b23e8db6f7394ff4e15f3ea2/internal/deploy/codex.go
+- Pinned CI workflow: https://github.com/CassianFlorin/skill-hub/blob/19b764bce362a172b23e8db6f7394ff4e15f3ea2/.github/workflows/ci.yml
+- Exact reviewed-commit CI run #77 (success): https://github.com/CassianFlorin/skill-hub/actions/runs/28761981165
+- v1.4.0 release: https://github.com/CassianFlorin/skill-hub/releases/tag/v1.4.0

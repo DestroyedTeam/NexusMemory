@@ -1,0 +1,183 @@
+# Candidate #244 review — benvenker/agent-session-search
+Date: 2026-11-24 (Asia/Shanghai)
+Repository: https://github.com/benvenker/agent-session-search
+Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-benvenker-agent-session-search-20261124-followup244
+
+## Identity, provenance and maturity
+- Dispatcher executed the stored shallow-clone command and observed exit 0. Branch `main`, clean status, HEAD `184b33295de0153e00f77de6843b2fef1f2a6265`, commit date 2026-09-09, subject/version `0.9.1`.
+- MIT license. GitHub snapshot today: 2 stars, 0 forks, 1 open issue (#2), 0 open PRs and 2 closed PRs. Latest GitHub release is v0.9.1 (2026-09-10); `npm view @benvenker/agent-session-search version dist-tags` returned `version=0.9.1`, `latest=0.9.1`.
+- TypeScript ESM package; Node requirement >=22.12.0. Review runtime Node v26.7.0 / npm 11.19.0. CodeGraph indexed 155 files, 3,348 nodes, 8,175 edges; status up to date. Removed only the generated `.codegraph/.gitignore` `!.gitignore` exception.
+- Package install in checkout used `npm ci --ignore-scripts --no-audit --no-fund` with disposable HOME/cache; exit 0, 248 packages added, one transitive `koa-router@14.0.0` deprecation warning. Lifecycle scripts and package postinstall were not run by that install command; no global install or FFF installer was used.
+
+## Product capability and migration boundary
+- This is a local lexical **read/search** layer over raw session files via FFF, with CLI, one managed MCP tool (`search_sessions`), a separate opt-in raw FFF MCP lane, doctor diagnostics, and an optional cass/cm shim. Built-in roots are Codex, Claude Code, Pi, Cursor, Hermes, Gemini CLI, and Pool; users may configure custom text roots.
+- Search returns source/root and canonical absolute path, match groups, bounded previews/snippets, query/pattern lineage, and an evidence-follow-up payload. It derives a Session ID only when a UUID appears in the file basename. It does not parse or emit a complete Conversation/Project/Section/Session graph, message event order, parent/fork/subtask lineage, attachments, tool results, token usage, memory, Skills, MCP/plugins, or schedules.
+- No built-in ChatGPT source exists; source code contains no ChatGPT, Cowork, or Claude Desktop adapter names. It has no importer or target writer for ChatGPT exports, Claude Desktop Chat/Cowork/Code, or local/self-hosted Claude Code API-Key/gateway sessions. A custom root can search an export as text but does not migrate it.
+- The optional cass shim supports a narrowly scoped single-file export to stdout as markdown/text (8 MiB ceiling) for simple Claude/Codex/Pi/generic message records. It is not a general export API and does not write to a target Harness. Synthetic ChatGPT `mapping`-shaped export returned an empty-session error instead of reconstructing messages.
+- Disposition: high-value adjacent local-session discovery/read adapter; not a Nexus migration solution. Keep its search/result/evidence contract as prior art, but keep the canonical archive and importer separate.
+
+## FFF dependency and compatibility evidence
+- Candidate README/`src/fff-runtime.ts` pins required/recommended FFF MCP v0.9.6. Current upstream stable release and Homebrew formula are v0.11.0. The source version gate accepts any parseable version at or above 0.9.6, so v0.11.0 is reported as `current` even when native tool schemas have drifted.
+- Downloaded official FFF MCP v0.9.6 Apple Silicon release to `/tmp/nm-agent-session-search-review244/bin/fff-mcp-v0.9.6`; sidecar checksum was `29a7fadeafb062f3e5954b1ab8c69e14dca24f5e061cd8d3b1ea1bab385a3754`; binary reported `fff-mcp 0.9.6 (28321da22836b0e11da81e30f40f7a043b8f8fb4)`.
+- Downloaded official FFF MCP v0.11.0 Apple Silicon release to `/tmp/nm-agent-session-search-review244/bin/fff-mcp`; its SHA-256 `cc606d9418cfa7764376dcd7b32a33e6459a6cb9a4718be366b024dca6e9fead` matches the upstream Homebrew formula; binary reported `fff-mcp 0.11.0 (95fd777c2529fc7b4d7572dabff64cc07268f2c5)`.
+- Actual FFF 0.11.0 tools/list returned `find_files`, `grep`, and `multi_grep`. Source policy classified `find_files` as internal, but blocked `grep` and `multi_grep` with `definition_drift` against pinned full-schema fingerprints. A real read-only `grep` against a synthetic root still worked. The native lane therefore fails closed and exposes only `fff_native_capabilities` on this newer FFF, not raw search tools.
+- `npm run check:fff` exited 0 with both v0.9.6 and v0.11.0: live grep smoke passed, but the multi_grep recall-equivalence probe failed and managed multi-pattern search fell back to sequential grep. With v0.11.0 the doctor still called its native-server check passed because it only requires `fff_native_capabilities`; observed listTools contained exactly that one tool after fingerprint drift. This is a liveness check, not proof that native `fff_grep` is available.
+- README documents sequential fallback when multi_grep is unavailable or not recall-equivalent. The fallback is authoritative for correctness but loses acceleration. The exact upstream-native tool exposure requires reviewing/updating policy when FFF schemas change.
+
+## Test/build results
+- `npm run check`: exit 0. `npm run build`: exit 0. `npm test -- --reporter=dot --maxWorkers=1` with verified FFF v0.9.6, disposable HOME, and canonical `/private/tmp` TMPDIR: 26 test files passed; 370 tests passed, 0 failed, 4 skipped; exit 0.
+- Same full suite with current FFF v0.11.0 under the same isolated environment: 24 files passed, 2 failed, 368 passed, 4 skipped; only `test/native-mcp-smoke.test.ts` and `test/packaging.test.ts` failed because expected `fff_grep` was blocked on definition drift. This is reproducible and consistent with the fail-closed policy, not a managed-search failure.
+- Initial full suite without FFF and with macOS default `/var/folders/...` TMPDIR had failures from missing FFF and path canonicalization resolving through `/private/var/...`. Re-running with FFF 0.9.6 and TMPDIR under `/private/tmp` removed those environment failures. No source changes were made.
+- `npm run smoke` without FFF initially exited 1 because the MCP smoke server could not start; the full suite later passed its MCP smoke tests with FFF 0.9.6. `npm audit`, DCG, Beads checks, and live cm integration were not run.
+- Synthetic read-only probe configured `chatgpt-export` to a one-file ChatGPT-shaped JSON export with a fake Project/Conversation/attachment. Search for `nexus-memory-sentinel-244` exited 0 using FFF 0.9.6 and returned a candidate group with one absolute file path and bounded preview only; it did not emit the synthetic project id, conversation id, attachment or hierarchy. Actual stdout is stored below.
+- Synthetic `cass-shim export --format text --` against a ChatGPT `mapping` object exited 9, stdout empty, stderr was an `empty-session` envelope: no confidently parsed messages. Exact stderr is stored below.
+- No real ChatGPT/Codex/Claude session, user profile, provider/API key, or remote MCP was accessed. All integration checks used temporary roots and disposable HOME. Candidate checkout status remained clean; generated npm/CodeGraph artifacts are ignored.
+
+## Exact synthetic output capture
+CLI command: `node dist/cli.js nexus-memory-sentinel-244 --json --source chatgpt-export` with `AGENT_SESSION_SEARCH_CONFIG=/tmp/nm-agent-session-search-review244/chatgpt-config.json`, FFF 0.9.6, and the synthetic fixture. Exit 0; stderr empty; literal stdout follows:
+{
+  "query": "nexus-memory-sentinel-244",
+  "resultsDisplayMode": "candidates",
+  "resultsShape": "candidate_groups",
+  "metadata": {
+    "contractVersion": "progressive-evidence-groups.v2",
+    "resultsDisplayMode": "candidates",
+    "resultsShape": "candidate_groups",
+    "backend": {
+      "mode": "sequential_grep_fallback",
+      "fallbackReason": "multi_grep_recall_probe_failed"
+    },
+    "limits": {
+      "candidateGroupLeadLimit": 5
+    },
+    "countSemantics": {
+      "relation": "eq means exact; gte means lower bound",
+      "assignedCandidateCount": "canonical candidates assigned to the group before lead slicing",
+      "hitCount": "physical matched lines, not pattern-line pairs",
+      "shownLeadCount": "leads included in this response"
+    }
+  },
+  "expandedPatterns": [
+    "nexus-memory-sentinel-244",
+    "nexus_memory_sentinel_244",
+    "nexusMemorySentinel244"
+  ],
+  "searchedSources": [
+    {
+      "name": "chatgpt-export",
+      "root": "/private/tmp/nm-agent-session-search-review244/chatgpt-fixture",
+      "include": [
+        "*.json"
+      ],
+      "status": "ok"
+    }
+  ],
+  "warnings": [
+    {
+      "source": "chatgpt-export",
+      "root": "/private/tmp/nm-agent-session-search-review244/chatgpt-fixture",
+      "code": "multi_grep_fallback",
+      "message": "Using sequential grep because FFF multi_grep was not promoted: multi_grep_recall_probe_failed.",
+      "recommendedAction": "Sequential grep is authoritative and safe. Upgrade or configure fff-mcp only if you need multi_grep performance diagnostics."
+    }
+  ],
+  "results": [
+    {
+      "id": "exact_or_structured",
+      "priority": 0,
+      "label": "Exact or structured",
+      "guidance": "Treat as strongest evidence and inspect first when it matches the task.",
+      "patternIds": [
+        "p1",
+        "p2",
+        "p3"
+      ],
+      "assignedCandidateCount": {
+        "value": 1,
+        "relation": "eq"
+      },
+      "hitCount": {
+        "value": 2,
+        "relation": "eq"
+      },
+      "shownLeadCount": 1,
+      "hasMore": false,
+      "leads": [
+        {
+          "source": "chatgpt-export",
+          "root": "/private/tmp/nm-agent-session-search-review244/chatgpt-fixture",
+          "path": "/private/tmp/nm-agent-session-search-review244/chatgpt-fixture/conversation-export.json",
+          "line": 1,
+          "preview": "…uation\",\"messages\":[{\"role\":\"user\",\"content\":\"Find nexus-memory-sentinel-244 before migration.\"},{\"role\":\"assistant\",\"content\":\"Synthetic response only.\"}],\"children\":[],\"attachmen…",
+          "hitCount": 2,
+          "matchedQueries": [
+            "nexus-memory-sentinel-244"
+          ],
+          "matchedPatterns": [
+            "nexus-memory-sentinel-244",
+            "nexus_memory_sentinel_244",
+            "nexusMemorySentinel244"
+          ],
+          "more": {
+            "evidence": {
+              "query": "nexus-memory-sentinel-244",
+              "sources": [
+                "chatgpt-export"
+              ],
+              "resultsDisplayMode": "evidence",
+              "paths": [
+                "/private/tmp/nm-agent-session-search-review244/chatgpt-fixture/conversation-export.json"
+              ]
+            }
+          },
+          "groupMemberships": [
+            {
+              "id": "exact_or_structured",
+              "priority": 0,
+              "patternIds": [
+                "p1",
+                "p2",
+                "p3"
+              ]
+            }
+          ],
+          "strongestGroup": {
+            "id": "exact_or_structured",
+            "priority": 0,
+            "patternIds": [
+              "p1",
+              "p2",
+              "p3"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+
+Cass-shim command: `node dist/cass-shim.js export --format text -- /tmp/nm-agent-session-search-review244/chatgpt-mapping-export.json`. Exit 9; stdout empty; literal stderr follows:
+{
+  "error": {
+    "code": 9,
+    "kind": "empty-session",
+    "message": "No confidently parsed messages in session: /tmp/nm-agent-session-search-review244/chatgpt-mapping-export.json",
+    "hint": "Allow cm to use its own fallback parser for this session.",
+    "retryable": false
+  }
+}
+
+
+## Source hashes and URLs
+- LICENSE SHA-256: 9bd0c580dc43249638c9e23d2085ec62dc267e5d9e6af76c1a73cc6fa22fd386
+- README.md SHA-256: 342a1a9a7ee6bb2723347769f483eb9437f4660a1159e0c273f3084e8575c63f
+- package.json SHA-256: d84512ee9ecb600cea6201bc02444ca1421fed7fb0663c147e1f7a8072a22f08
+- src/roots.ts SHA-256: 675c7cea35c56a632b3866d7ace8326de2ecd9df791b3289255ba00d40d70de9
+- src/search.ts SHA-256: ffa12110bd6b2d9c19e31d667593bb0394aa1f8beb070cfe451f8294cd8674d2
+- src/session-filters.ts SHA-256: cbb52f54af783bafca481032cfacf26992772bf47fdff4bb3a60055c827ba004
+- src/fff-native-policy.ts SHA-256: 313aa37449fc6a19f1e719c0620184dc1a148c0d9806c7c2f05020329783b681
+- src/fff-preflight.ts SHA-256: d5c57c9da946f0d4b9dc1cb18b6eb7736a27ab8b47622aecff7271a57a0800ba
+- src/cass-compat/export.ts SHA-256: a88ef5d95dcf300d627a8e5b412210916d49dce4dea9e8830d34db3e8b59fb1e
+- test/native-mcp-smoke.test.ts SHA-256: 68b5fa52cac30345b8350d12f88f7693dd138e5dba381b65d234fa0b4edae1bb
+- test/search.test.ts SHA-256: ab56e74b82ead90d222f50740c79780a980591514fe1024f92ef7ab9c3e62fda
+- Primary links: https://github.com/benvenker/agent-session-search ; https://github.com/benvenker/agent-session-search/blob/main/README.md ; https://github.com/benvenker/agent-session-search/blob/main/LICENSE ; https://github.com/benvenker/agent-session-search/releases ; https://github.com/benvenker/agent-session-search/issues/2 ; https://github.com/benvenker/agent-session-search/pulls ; https://github.com/dmtrKovalenko/fff/releases/tag/v0.9.6 ; https://github.com/dmtrKovalenko/fff/releases/tag/v0.11.0 ; https://github.com/dmtrKovalenko/fff/blob/main/Formula/fff-mcp.rb

@@ -1,0 +1,31 @@
+Nexus Memory candidate #183 source and test review — kelegele/cli-butler
+Review date: 2026-11-23
+Pinned repository state: https://github.com/kelegele/cli-butler/tree/2a44cb76ec357ec9b9d99002045fd55052536c56
+HEAD and refs/heads/main: 2a44cb76ec357ec9b9d99002045fd55052536c56; shallow clone exit 0. CodeGraph indexed two files (Python and YAML), 14 nodes / 17 edges; the shell implementation was reviewed directly. The only untracked path after CodeGraph init was `.codegraph/`; removed only `.codegraph/.gitignore`'s `!.gitignore` exception, leaving the index ignored.
+
+Decision
+--------
+Not a Harness/session/project migration tool. It is a standalone local CLI management Skill (install/list/uninstall/upgrade/reference chain/capabilities) with a useful provenance/channel model and deterministic fixtures. Keep only as a packaging and local adapter/testing pattern. Do not reuse its destructive write paths without security changes: an adversarial package name reached shell execution, and the documented app-contained symlink backup rule is not honored by the actual uninstall path.
+
+Positive implementation evidence
+---------------------------------
+* MIT license and English `SKILL.md`; shell entrypoints and a shared library are a plausible self-contained Skill delivery pattern. The README describes channel-aware inventory, install/update/uninstall routing and refchain. REQUIREMENTS explicitly declares that Skill management itself and GUI/Windows are non-goals; it is not a cross-Harness importer.
+* Provenance is explicit: package manager owns managed installs; a TSV journal owns manual provenance; system entries on macOS are read-only. `uninstall` refuses system items, routes package-managed removals through channel-specific tools, and uses dry-run unless `--yes`; `upgrade` likewise dry-runs. `refchain` is read-only and enumerates symlink/PATH/launchd/config references.
+* CI workflow declares ShellCheck plus a POSIX Bash fixture suite. `tests/run.sh` was executed from a disposable copy that preserved symlinks and nested fixtures; HOME, journal, TMPDIR, fake package managers and writes were isolated. Result: `tests: 184 passed, 0 failed`, exit 0, stderr empty. No source/user machine was altered.
+* Local ShellCheck attempt exited 1 because the binary is unavailable (`shellcheck: No such file or directory`); upstream CI configuration was inspected but no hosted CI run was inferred from that file.
+
+Security findings (synthetic, isolated)
+---------------------------------------
+1. Package-name shell injection: `bin/install.sh` builds a command string from an unvalidated CLI/package name and executes `bash -c "$cmd"`. In a temp-only probe, input `harmless; marker` printed `plan: brew install harmless; marker`; a fake Brew logged only `brew install harmless`, and the controlled `marker` executable then ran and created only the disposable marker file. Exit 0. The same string-builder/`bash -c` pattern is used by channel uninstall and upgrade builders. No real package-manager command was executed.
+2. App-contained symlink policy mismatch: `docs/REQUIREMENTS.md` / code comments promise moving an app-embedded symlink aside as `.bak`. In a temp-only `Fake.app/Contents/MacOS/pmtool` probe, `uninstall.sh pmtool --yes` classified the link as `manual|untracked`, ran `rm -f` on the link, left the target in the fake app intact, and did not create `.bak`. Exit 0. No real app or user path was touched.
+3. `uninstall.sh` parses multiple matching LaunchAgent paths through a whitespace-split scalar (`for pl in $PLIST_HIT`); filenames containing spaces/newlines are not safely represented. This is source inspection, not a live plist mutation.
+
+Observed test-run correction trail
+----------------------------------
+* First `rtk grep` attempt passed a directory rather than files; exit 2. Corrected to `tests/*.sh` and read-only inspection continued.
+* Initial test copies were incorrectly assembled: `copytree` followed fixture symlinks, later test copies blanket-ignored nested `node_modules` fixtures, and one run used macOS `/var`-canonicalized paths for exact fixture-prefix comparisons. These disposable runs failed (175/9, then 175/9, then 182/2), not because source was changed. Direct fixture inspection established the ignored nested `tests/fixtures/prefix/lib/node_modules` package and preserved-link assumptions. Corrected copy preserved symlinks and all nested fixtures, was placed under a canonical `/Users/...` path, and then the official runner passed 184/184. Original clone remained clean.
+* `rtk proxy shellcheck ...` exited 1: ShellCheck executable is not installed locally. The CI workflow calls ShellCheck on Ubuntu; CI status was not fetched or claimed.
+
+Recommendation
+--------------
+Retain the deterministic adapter/provenance/journal concepts and the test-fixture structure as a Skill-plane example only. Do not use it as a migration implementation. Nexus must separate resource adapters from SessionGraph serializers, use argument-vector execution (never interpolate untrusted names into `bash -c`), and preserve/rollback app and package-manager-owned paths with explicit ownership checks and adversarial tests. Evidence is pinned to this commit; no credentials, user data, external model, live package manager, or network were used.

@@ -1,0 +1,20 @@
+# fei-bai-inc/sine-kits-skills review — 2026-11-23
+
+## Repository and public distribution
+
+- Pinned `main` HEAD `c450388630135adc5cfc2e48491df66c252fadbe` (2026-10-05, `docs: add real universal Skill examples and evidence`). GitHub snapshot: 0 stars / 0 forks; no top-level LICENSE, implementation, CI workflow, or GitHub Release. `license_spdx` remains unconfirmed; do not assume these Skill texts are MIT merely because a separate Sine Kits SDK may use that license.
+- The repository is a Markdown/JSON Skill pack: two generic roles (`develop-sine-kit`, `use-sine-kit`), prompts, one example Reading List Kit snapshot, and a dated evidence JSON. The example Kit is a record-writing demo, not part of a cross-Harness migrator. The `Project`/`Installation`/`Run` terms refer to the Sine Kits platform, not ChatGPT/Codex Projects or agent conversation Sessions.
+- Current npm registry checks: latest `@sine-kits/kit-cli`, `@sine-kits/kit-sdk`, and `@sine-kits/kit-contracts` each report `0.2.0`. Exact `npm view @sine-kits/kit-cli@0.3.0 version` and `npm view @sine-kits/kit-contracts@0.3.0 version` both exit 1 with E404 `No match found for version 0.3.0`. README itself says CLI/contracts 0.3.0 requires a separate future public npm publication; therefore the checked-in `0.3.0` workflows cannot be followed using the public package versions currently returned by npm.
+- No executable tests/build for this Skills-only repository. A dated evidence JSON reports a Codex CLI 0.160.0 local example against explicitly authorized local release archives; that is author-provided historical evidence, not independently reproducible from this repo's pinned commit or current public npm packages. It explicitly says no human-operated browser UI, production promotion, Cloudflare deploy, or paid Provider request was exercised.
+
+## Useful transferable protocol ideas
+
+The two Skills recommend: one host-neutral authoring/usage Skill instead of per-Kit prompt copies; discover available operations dynamically; inspect bundled JSON Schema before constructing inputs; distinguish publisher login from owner-granted installation authority; separate declared capability from permission; require explicit user intent for persistent/provider effects; submit one stable idempotency key; poll the same durable run; and distinguish operation success from a record write or queued response. These are thoughtful **tool-execution protocol** practices for Nexus Memory's future MCP/provider adapters.
+
+However, the repository does not enumerate or migrate any existing Harness Project, Section Group, chat Session, child/fork graph, transcript, attachment, Skills/MCP/plugin configuration, memory store, or scheduled task. It contains no Claude Desktop third-party-gateway **Chat**, **Cowork**, **Code**, or local Claude Code transcript adapter. The standard Skills are themselves AI instructions that invoke a network CLI and require an owner-operated browser consent flow; they do not meet a “no AI / no manual research” auto-migration target. The Skill role is not a universal Harness adapter just because it is host-neutral.
+
+## Disposition
+
+`SKILL_CONTENT_AND_AUTHORIZATION_PROTOCOL_REFERENCE_ONLY; UNLICENSED_STATUS_UNCONFIRMED; NO_SESSION_OR_PROJECT_MIGRATION; PUBLIC_CLI_VERSION_GAP`. Keep only the dynamic operation/schema discovery, explicit capability grants, stable idempotency, and same-run polling as design references. Do not treat its evidence JSON as proof that the public CLI flow is currently reproducible, and do not copy/distribute its Skills until licensing is clarified. No user account, API credential, live Harness data, browser login, or Sine Kits backend was accessed.
+
+Pinned source: <https://github.com/fei-bai-inc/sine-kits-skills/tree/c450388630135adc5cfc2e48491df66c252fadbe> · [use Skill](https://github.com/fei-bai-inc/sine-kits-skills/blob/c450388630135adc5cfc2e48491df66c252fadbe/skills/use-sine-kit/SKILL.md) · [evidence record](https://github.com/fei-bai-inc/sine-kits-skills/blob/c450388630135adc5cfc2e48491df66c252fadbe/examples/evidence/2026-10-05.json) · [GitHub Releases](https://github.com/fei-bai-inc/sine-kits-skills/releases).

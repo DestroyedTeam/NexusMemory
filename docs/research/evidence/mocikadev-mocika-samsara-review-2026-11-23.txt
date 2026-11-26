@@ -1,0 +1,41 @@
+# Candidate #204 — mocikadev/mocika-samsara (2026-11-23)
+
+## Identity and pin
+- Repository: https://github.com/mocikadev/mocika-samsara
+- Branch: `main`; `origin/HEAD` resolves to `origin/main`; pinned HEAD / origin/main `4de9564444e235164ea3e1b4443b4478866627a1` (2026-05-30; subject `docs: 知识系统重定位为经验成长叙事并废弃 layer0/AAAK`). Checkout clean at review start.
+- Cargo package/version: `samsara 1.0.0`; `rust-version = 1.88`; dual license MIT OR Apache-2.0.
+- Latest official GitHub Release is `v1.0.0` at short commit `4de9564` (2026-05-30). Latest visible official CI run #20 at that commit succeeded (2m37s). Local CI-equivalent checks are detailed below.
+- CodeGraph index: 39 files, 502 nodes, 1,362 edges, up to date. `.codegraph/.gitignore` retained; only its `!.gitignore` exception was removed.
+
+## Product fit and capability boundary
+Samsara is a local-first knowledge/experience store: Markdown lessons under `~/.agents/knowledge/lessons/<domain>/<keyword>.md`, promotion into `rules/`, archive, index and operation log. Four typed experience kinds are `error`, `skill`, `pattern`, `insight`; repeated lessons can be promoted. The store is content that can be shared as files/Git and read by agents; this is a useful **Memory/ResourcePlane reference** for Nexus.
+
+It is not a cross-Harness session migrator or an autonomous no-AI transfer tool. No source model/importer/exporter was found for ChatGPT/Codex Projects, Section Groups, SessionGraph, task/parent-child/fork/message topology, transcript/reasoning/tool calls, attachments/media/links, usage/tokens, scheduled tasks, or mapping those objects to Claude targets. A CodeGraph search across the 39 indexed files found only OpenCode lifecycle hook names in this area, not persisted session IDs/history. Existing README migration guidance is either AI-batched lesson writes or manual `samsara write` commands; the CLI does not semantically parse session exports.
+
+The OpenCode plugin injects `samsara prime` into `experimental.chat.system.transform` and `experimental.session.compacting`, then runs static `reflect` on `session.idle`; it does not persist or recreate a conversation. Initialization also writes some general instructions/config: `.codex/AGENTS.md`, `.claude/CLAUDE.md` import, OpenCode plugin/MCP config, and a `claude_desktop_config.json` entry under the code's `~/.claude` home check. A fake-home smoke showed this config injection preserves an unrelated MCP server and is idempotent on a second run, but it is not a 3P inference/gateway setup or a Desktop session writer; no live Claude Desktop Chat/Cowork/Code client was tested. Anthropic's current Help Center distinguishes local MCP servers configured through `claude_desktop_config.json` from remote connectors and says local MCP is not available in cloud Cowork sessions, whereas a local device Cowork session can use it: https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp . Treat any local MCP integration as resource/tool connectivity, not session migration.
+
+**Disposition:** Keep as a valuable local Markdown memory-schema / explicit MCP / OpenCode read-injection design reference. Reject as a core Projects/Sections/SessionGraph migration engine. Do not copy its write path or dry-run semantics unchanged.
+
+## Runtime and code-quality checks
+- `rtk cargo test --locked`: exit `0`; literal summary `cargo test: 46 passed (8 suites, 1.20s)`.
+- `rtk cargo fmt --check`: exit `0`.
+- `rtk cargo clippy --locked -- -D warnings`: exit `0`; output `cargo clippy: No issues found`.
+- `rtk cargo build --locked --release`: exit `0`; output `cargo build (139 crates compiled)` and `Finished release profile [optimized] target(s) in 46.31s`.
+- The official CI workflow checks fmt, clippy, tests, MSRV 1.88 and cross-platform Linux/macOS/Windows builds; the observed latest run #20 was green. This is quality evidence for Samsara itself, not for any session-migration fidelity.
+- Actual stdio MCP smoke used `initialize` then `tools/list` with synthetic JSON-RPC requests and a temp `--home`. Exit `0`, stderr literal `samsara MCP server started (stdio)\n`. `tools/list` returned six names: `write_lesson`, `search_knowledge`, `get_status`, `promote_lesson`, `read_index`, `prime_context`. No model/provider call or user data was involved.
+
+## Safety and data integrity findings — isolated synthetic data only
+1. **Path traversal in lesson writes (confirmed POC).** `write` joins raw CLI domain/keyword strings into `knowledge_home/lessons/<domain>/<keyword>.md`; no slug/path containment validation occurs. The MCP `write_lesson` schema also accepts arbitrary string domain and keyword and forwards them to the CLI with `--yes`. On unique `/tmp/nexus-nm-followup204/samsara-path-poc` only, two actual release-binary writes both exited `0` and created files outside the supplied knowledge root:
+   - domain `../../escaped-domain`, keyword `domain-test` → `/private/tmp/nexus-nm-followup204/samsara-path-poc/escaped-domain/domain-test.md`;
+   - domain `safe`, keyword `../../../escaped-keyword` → `/private/tmp/nexus-nm-followup204/samsara-path-poc/escaped-keyword.md`.
+   Both payloads were synthetic Markdown. Each stderr was the expected `knowledge/ 不是 git 仓库，跳过自动提交。运行 `samsara init` 初始化。\n`; stdout was empty. This demonstrates an arbitrary path write if a caller can control those strings; it does not imply arbitrary code execution.
+2. **Dry-run creates directories (confirmed POC).** With `HOME=/tmp/nexus-nm-followup204/samsara-init-dry`, `--home <fake>/.agents/knowledge --dry-run init --yes` exited `0` and printed “初始化完成”, yet `ensure_dirs` ignores `dry_run` and created `.agents/adapters/{claude-code,gemini,windsurf}`, knowledge `lessons/` plus seed-domain directories, `rules/`, and `archive/`. No user data was touched. The app reported planned AGENTS/INDEX/log writes although those files were not created. `maybe_install_skill()` also has no `dry_run` guard; it was not exercised because `skm` is absent on this machine (source-only concern, not a reproduced install).
+3. **Initialization's useful narrow behavior.** In a fake HOME containing pre-existing OpenCode/Codex/Claude instructions and unrelated MCP servers, real `init --yes` exited `0`; it appended the Samsara protocol/import without replacing user prose, merged the `samsara` MCP entry while retaining the `existing` entry, wrote the OpenCode plugin, and created a Git repository in the fake knowledge folder. A second run exited `0` and skipped duplicate protocol/config/plugin writes. This validates the tested fake-home behavior only, not a live Desktop/client mode.
+4. **Git sync needs secret discipline.** Source shows automatic lesson commits and `push` use `git add -A`; `push` commits and sends `origin main`. The initialized `.gitignore` only lists `.DS_Store`, `*.tmp`, `*.bak`, and no secret patterns or content checks are visible. This is a source-based risk inference; no actual remote or credential was used. Never put API keys/tokens into this knowledge repository or treat its push as secret-safe.
+5. **Raw remote URL storage.** `remote add/set` writes the supplied URL into `~/.agents/samsara.toml` and `remote show` prints it; embedded credentials would be stored/displayed as part of the URL. Source inspection only; no credential URL was used.
+
+## Official sources
+- Repository and README: https://github.com/mocikadev/mocika-samsara
+- Latest CI workflow runs (run #20 at reviewed commit succeeded): https://github.com/mocikadev/mocika-samsara/actions/workflows/ci.yml
+- Latest release `v1.0.0`: https://github.com/mocikadev/mocika-samsara/releases
+- Official Anthropic Help Center on local vs remote MCP and local Cowork boundary: https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp

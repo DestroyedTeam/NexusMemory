@@ -1,0 +1,691 @@
+{
+  "schema": "agent-sweep/harnesses@1",
+  "platform": "darwin",
+  "harnesses": [
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "vendor": "Anthropic",
+      "kind": "cli",
+      "aliases": [
+        "claude",
+        "anthropic-claude-code"
+      ],
+      "platforms": [
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "defaultTTL": 30,
+      "risk": "medium",
+      "deleteEnabled": true,
+      "docs": "https://code.claude.com/docs/en/claude-directory",
+      "summary": "官方默认 cleanupPeriodDays=30；projects/*.jsonl、file-history、图片/粘贴缓存可按龄回收，但 memory/、settings、plugins、history.jsonl 永不清理。",
+      "neverDelete": [
+        "~/.claude/projects/*/memory/**",
+        "~/.claude/projects/*/CLAUDE.md",
+        "~/.claude.json",
+        "~/.claude/settings.json",
+        "~/.claude/plugins/**",
+        "~/.claude/history.jsonl"
+      ],
+      "notes": [
+        "删除会话 jsonl 会使 ccusage 等用量统计工具历史断档，报告中需提示。",
+        "projects/*/memory/ 为跨会话记忆，属于不可清理项。"
+      ],
+      "targets": [
+        {
+          "id": "projects",
+          "kind": "session-store",
+          "label": "会话数据目录 (~/.claude/projects/<编码路径>/*.jsonl)",
+          "unit": "child-dir",
+          "removable": true,
+          "orphan": "encoded-cwd",
+          "paths": [
+            "~/.claude/projects"
+          ]
+        },
+        {
+          "id": "todos",
+          "kind": "session-store",
+          "label": "会话待办 (~/.claude/todos/*.json)",
+          "unit": "glob-file",
+          "pattern": "**/*.json",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.claude/todos"
+          ]
+        },
+        {
+          "id": "shell-snapshots",
+          "kind": "cache",
+          "label": "Shell 快照 (~/.claude/shell-snapshots)",
+          "unit": "glob-file",
+          "pattern": "**/*",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.claude/shell-snapshots"
+          ]
+        },
+        {
+          "id": "statsig",
+          "kind": "cache",
+          "label": "遥测缓存 (~/.claude/statsig)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.claude/statsig"
+          ]
+        },
+        {
+          "id": "file-history",
+          "kind": "cache",
+          "label": "文件历史 (~/.claude/file-history)",
+          "unit": "child-dir",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.claude/file-history"
+          ]
+        },
+        {
+          "id": "image-cache",
+          "kind": "cache",
+          "label": "图片缓存 (~/.claude/image-cache)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.claude/image-cache"
+          ]
+        },
+        {
+          "id": "paste-cache",
+          "kind": "cache",
+          "label": "粘贴缓存 (~/.claude/paste-cache)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.claude/paste-cache"
+          ]
+        },
+        {
+          "id": "backups",
+          "kind": "cache",
+          "label": "配置备份 (~/.claude/backups)",
+          "unit": "glob-file",
+          "pattern": "**/*.backup.*",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.claude/backups"
+          ]
+        },
+        {
+          "id": "worktrees",
+          "kind": "worktree",
+          "label": "孤儿工作树 (~/.claude/worktrees)",
+          "unit": "child-dir",
+          "removable": true,
+          "orphan": "git-worktree",
+          "paths": [
+            "~/.claude/worktrees"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "codex",
+      "name": "Codex CLI",
+      "vendor": "OpenAI",
+      "kind": "cli",
+      "aliases": [
+        "codex-cli",
+        "openai-codex"
+      ],
+      "platforms": [
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "defaultTTL": 60,
+      "risk": "medium",
+      "deleteEnabled": true,
+      "docs": "https://github.com/openai/codex",
+      "summary": "按天分层的 rollout jsonl 无官方自动过期，仅提供归档/删除 API；history.jsonl 与 memories/ 明确不属于会话 rollout。",
+      "neverDelete": [
+        "~/.codex/history.jsonl",
+        "~/.codex/memories/**",
+        "~/.codex/AGENTS.md",
+        "~/.codex/config.toml"
+      ],
+      "notes": [
+        "history.jsonl 为全量提示历史，无官方过期机制，不属于可清理项。"
+      ],
+      "targets": [
+        {
+          "id": "sessions",
+          "kind": "session-store",
+          "label": "会话 rollout (~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl)",
+          "unit": "glob-file",
+          "pattern": "**/rollout-*.jsonl",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.codex/sessions"
+          ]
+        },
+        {
+          "id": "archived-sessions",
+          "kind": "session-store",
+          "label": "归档会话 (~/.codex/archived_sessions)",
+          "unit": "glob-file",
+          "pattern": "**/rollout-*.jsonl",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.codex/archived_sessions"
+          ]
+        },
+        {
+          "id": "log",
+          "kind": "log",
+          "label": "CLI 日志 (~/.codex/log)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.codex/log"
+          ]
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "label": "缓存 (~/.codex/cache)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.codex/cache"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "vendor": "Anysphere",
+      "kind": "ide",
+      "aliases": [
+        "cursor-ide"
+      ],
+      "platforms": [
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "defaultTTL": 30,
+      "risk": "high",
+      "deleteEnabled": true,
+      "docs": "https://docs.cursor.com/",
+      "summary": "官方对 worktrees 有 25 个 / 50 GB 上限并周期清理；state.vscdb 与 workspaceStorage 是最大膨胀源（社区出现 49.8 GB / 231 GB 案例），含聊天历史，仅报告不清理。",
+      "neverDelete": [
+        "~/.cursor/mcp.json",
+        "~/.cursor/rules/**",
+        "~/.cursor/argv.json"
+      ],
+      "notes": [
+        "workspaceStorage 为高价值但高风险对象，默认只报告。"
+      ],
+      "targets": [
+        {
+          "id": "worktrees",
+          "kind": "worktree",
+          "label": "工作树 (~/.cursor/worktrees/<project>/<branch>)",
+          "unit": "nested-dir",
+          "depth": 2,
+          "removable": true,
+          "orphan": "git-worktree",
+          "paths": [
+            "~/.cursor/worktrees"
+          ]
+        },
+        {
+          "id": "caches",
+          "kind": "cache",
+          "label": "应用缓存 (Cache / CachedData / Code Cache / GPUCache)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/Library/Application Support/Cursor/Cache",
+            "~/Library/Application Support/Cursor/CachedData",
+            "~/Library/Application Support/Cursor/Code Cache",
+            "~/Library/Application Support/Cursor/GPUCache",
+            "~/Library/Application Support/Cursor/DawnGraphiteCache",
+            "~/Library/Application Support/Cursor/DawnWebGPUCache"
+          ]
+        },
+        {
+          "id": "logs",
+          "kind": "log",
+          "label": "IDE 日志 ({appSupport}/Cursor/logs)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/Library/Application Support/Cursor/logs"
+          ]
+        },
+        {
+          "id": "workspace-storage",
+          "kind": "app-cache",
+          "label": "工作区状态库 ({appSupport}/Cursor/User/workspaceStorage)",
+          "unit": "child-dir",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/Library/Application Support/Cursor/User/workspaceStorage"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf / Devin",
+      "vendor": "Cognition",
+      "kind": "ide",
+      "aliases": [
+        "codeium",
+        "devin"
+      ],
+      "platforms": [
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "defaultTTL": 90,
+      "risk": "medium",
+      "deleteEnabled": false,
+      "docs": "https://docs.windsurf.com/troubleshooting/windsurf-common-issues",
+      "summary": "Windsurf 更名为 Devin 后新旧应用目录并存，旧目录为只读残留；memories/ 与 mcp_config.json 为不可清理资产。首批仅报告。",
+      "neverDelete": [
+        "~/.codeium/windsurf/memories/**",
+        "~/.codeium/windsurf/mcp_config.json"
+      ],
+      "notes": [
+        "新旧双目录是隐藏增量；删除 ~/.codeium/windsurf/cascade 会导致登录态异常。"
+      ],
+      "targets": [
+        {
+          "id": "codeium-windsurf",
+          "kind": "session-store",
+          "label": "Cascade 数据 (~/.codeium/windsurf)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.codeium/windsurf"
+          ]
+        },
+        {
+          "id": "app-support-windsurf",
+          "kind": "app-cache",
+          "label": "旧版应用目录 ({appSupport}/Windsurf)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/Library/Application Support/Windsurf"
+          ]
+        },
+        {
+          "id": "app-support-devin",
+          "kind": "app-cache",
+          "label": "新版应用目录 ({appSupport}/Devin)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/Library/Application Support/Devin"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trae",
+      "name": "Trae / Trae CN / SOLO",
+      "vendor": "ByteDance",
+      "kind": "ide",
+      "aliases": [
+        "trae-cn",
+        "solo",
+        "trae-solo"
+      ],
+      "platforms": [
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "defaultTTL": 30,
+      "risk": "medium",
+      "deleteEnabled": true,
+      "docs": "https://docs.trae.ai/ide/troubleshoot-general-issues",
+      "summary": "会话级工作目录与 git worktree 是本机最大残留源；mcps/、plugins/、permission/、memory/ 为治理资产，永不清理。",
+      "neverDelete": [
+        "~/.trae-cn/mcps/**",
+        "~/.trae-cn/plugins/**",
+        "~/.trae-cn/permission/**",
+        "~/.trae-cn/memory/**",
+        "~/.trae-cn/skills/**",
+        "~/.trae-cn/memory-config.json",
+        "~/.trae-cn/argv.json",
+        "~/.trae/mcps/**",
+        "~/.trae/plugins/**",
+        "~/.trae/skills/**"
+      ],
+      "notes": [
+        "CN 版与国际版目录并存时，两者需分别扫描。",
+        "work/ 内可能存在用户手工产物，因此默认落入需确认圈层而非安全圈层。"
+      ],
+      "targets": [
+        {
+          "id": "work",
+          "kind": "session-store",
+          "label": "会话工作目录 (~/.trae-cn/work/<sessionId>)",
+          "unit": "child-dir",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.trae-cn/work",
+            "~/.trae/work"
+          ]
+        },
+        {
+          "id": "worktrees",
+          "kind": "worktree",
+          "label": "工作树 (~/.trae-cn/worktrees/<project>/<branch>)",
+          "unit": "nested-dir",
+          "depth": 2,
+          "removable": true,
+          "orphan": "git-worktree",
+          "paths": [
+            "~/.trae-cn/worktrees",
+            "~/.trae/worktrees"
+          ]
+        },
+        {
+          "id": "attachments",
+          "kind": "attachment",
+          "label": "会话附件 (~/.trae-cn/attachments/<sessionId>)",
+          "unit": "child-dir",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.trae-cn/attachments",
+            "~/.trae/attachments"
+          ]
+        },
+        {
+          "id": "session-work-dirs",
+          "kind": "cache",
+          "label": "会话挂载配置 (~/.trae-cn/session_work_dirs)",
+          "unit": "child-dir",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.trae-cn/session_work_dirs",
+            "~/.trae/session_work_dirs"
+          ]
+        },
+        {
+          "id": "trash-transit",
+          "kind": "cache",
+          "label": "内置回收站中转 (~/.trae-cn/trash-transit)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.trae-cn/trash-transit",
+            "~/.trae/trash-transit"
+          ]
+        },
+        {
+          "id": "thumbnails",
+          "kind": "thumbnail",
+          "label": "缩略图缓存 (~/.trae-cn/.thumbnails)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/.trae-cn/.thumbnails",
+            "~/.trae/.thumbnails"
+          ]
+        },
+        {
+          "id": "app-cache-solo-cn",
+          "kind": "cache",
+          "label": "Electron 应用缓存 (TRAE SOLO CN)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/Library/Application Support/TRAE SOLO CN/Cache",
+            "~/Library/Application Support/TRAE SOLO CN/CachedData",
+            "~/Library/Application Support/TRAE SOLO CN/Code Cache",
+            "~/Library/Application Support/TRAE SOLO CN/GPUCache",
+            "~/Library/Application Support/TRAE SOLO CN/DawnGraphiteCache",
+            "~/Library/Application Support/TRAE SOLO CN/DawnWebGPUCache",
+            "~/Library/Application Support/TRAE SOLO CN/logs",
+            "~/Library/Application Support/TRAE SOLO CN/Crashpad"
+          ]
+        },
+        {
+          "id": "app-cache-trae-cn",
+          "kind": "cache",
+          "label": "Electron 应用缓存 (Trae CN)",
+          "unit": "child-entry",
+          "removable": true,
+          "orphan": "none",
+          "paths": [
+            "~/Library/Application Support/Trae CN/Cache",
+            "~/Library/Application Support/Trae CN/CachedData",
+            "~/Library/Application Support/Trae CN/Code Cache",
+            "~/Library/Application Support/Trae CN/GPUCache",
+            "~/Library/Application Support/Trae CN/DawnGraphiteCache",
+            "~/Library/Application Support/Trae CN/DawnWebGPUCache",
+            "~/Library/Application Support/Trae CN/logs",
+            "~/Library/Application Support/Trae CN/Crashpad"
+          ]
+        },
+        {
+          "id": "work-mode-projects",
+          "kind": "app-cache",
+          "label": "工作模式项目快照 ({appSupport}/TRAE SOLO CN/ModularData/ai-agent/work-mode-projects)",
+          "unit": "child-dir",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/Library/Application Support/TRAE SOLO CN/ModularData/ai-agent/work-mode-projects"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "copilot",
+      "name": "Copilot CLI",
+      "vendor": "GitHub",
+      "kind": "cli",
+      "aliases": [
+        "github-copilot"
+      ],
+      "platforms": [
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "defaultTTL": 60,
+      "risk": "low",
+      "deleteEnabled": false,
+      "docs": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference",
+      "summary": "COPILOT_HOME 可重定向；config.json 为认证与偏好，logs/ 与 session-state/ 是主要可回收对象。首批仅报告。",
+      "neverDelete": [
+        "~/.copilot/config.json",
+        "~/.copilot/mcp-config.json"
+      ],
+      "notes": [
+        "若设置了 COPILOT_HOME，实际路径需按环境变量解析。"
+      ],
+      "targets": [
+        {
+          "id": "logs",
+          "kind": "log",
+          "label": "CLI 日志 (~/.copilot/logs)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.copilot/logs"
+          ]
+        },
+        {
+          "id": "session-state",
+          "kind": "session-store",
+          "label": "会话状态 (~/.copilot/session-state)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.copilot/session-state"
+          ]
+        },
+        {
+          "id": "ide",
+          "kind": "session-store",
+          "label": "IDE 会话 (~/.copilot/ide)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.copilot/ide"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "aider",
+      "name": "Aider",
+      "vendor": "Aider",
+      "kind": "cli",
+      "aliases": [
+        "aider-chat"
+      ],
+      "platforms": [
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "defaultTTL": 90,
+      "risk": "low",
+      "deleteEnabled": false,
+      "docs": "https://aider.chat/docs/faq.html",
+      "summary": "主要垃圾在项目内：.aider.chat.history.md 只增不减，.aider.tags.cache.v3/ 为仓库索引缓存。全局 ~/.aider 通常很小。首批仅报告。",
+      "neverDelete": [
+        "~/.aider.conf.yml"
+      ],
+      "notes": [
+        "项目内 .aider.tags.cache.v3/ 与 .aider.chat.history.md 需要项目根扫描，P0 暂不启用写入。"
+      ],
+      "targets": [
+        {
+          "id": "home",
+          "kind": "session-store",
+          "label": "全局目录 (~/.aider)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.aider"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "goose",
+      "name": "Goose / OpenCode",
+      "vendor": "Block / SST",
+      "kind": "xdg",
+      "aliases": [
+        "opencode",
+        "block-goose"
+      ],
+      "platforms": [
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "defaultTTL": 60,
+      "risk": "low",
+      "deleteEnabled": false,
+      "docs": "https://block.github.io/goose/",
+      "summary": "Rust/Go 系 CLI 遵循 XDG 三件套：配置在 ~/.config、数据在 ~/.local/share、状态在 ~/.local/state。sessions.db 与状态日志是主要回收对象。首批仅报告。",
+      "neverDelete": [
+        "~/.config/goose/config.yaml",
+        "~/.local/share/opencode/auth.json"
+      ],
+      "notes": [
+        "XDG 路径受 XDG_CONFIG_HOME / XDG_DATA_HOME / XDG_STATE_HOME 影响。"
+      ],
+      "targets": [
+        {
+          "id": "goose-data",
+          "kind": "session-store",
+          "label": "Goose 数据目录 ({data}/goose)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.local/share/goose"
+          ]
+        },
+        {
+          "id": "goose-state",
+          "kind": "log",
+          "label": "Goose 状态目录 ({state}/goose)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.local/state/goose"
+          ]
+        },
+        {
+          "id": "opencode-data",
+          "kind": "session-store",
+          "label": "OpenCode 会话数据 ({data}/opencode)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.local/share/opencode"
+          ]
+        },
+        {
+          "id": "opencode-state",
+          "kind": "log",
+          "label": "OpenCode 状态目录 ({state}/opencode)",
+          "unit": "child-entry",
+          "removable": false,
+          "orphan": "none",
+          "paths": [
+            "~/.local/state/opencode"
+          ]
+        }
+      ]
+    }
+  ]
+}

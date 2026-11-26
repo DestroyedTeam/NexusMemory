@@ -1,0 +1,26 @@
+# Agent Skills Manager review — 2026-11-23
+
+Upstream: https://github.com/krishna-kudari/agent-skills-manager/tree/9b11ae223bad40510b1cb9a81bea39c95521cd66
+Pinned HEAD / refs/heads/main: 9b11ae223bad40510b1cb9a81bea39c95521cd66; commit timestamp 2026-02-01T20:01:41+05:30; shallow clone remained clean. CodeGraph: 16 files, 213 nodes, 622 edges. MIT license verified in LICENSE and package.json.
+
+## Product scope
+
+Raycast extension that browses Skills from skills.sh or GitHub, discovers SKILL.md files, and installs to 40+ configured AI-coding-assistant skill paths via symlink/copy. A global ~/.agents/.skill-lock.json tracks source URLs, git commit hash and timestamps for update detection. It is not a harness state migrator: no Projects/Section Groups, session/conversation records, parent/branch/turn/subtask graphs, transcripts, attachments, token use, scheduled tasks, MCP/plugin configuration or memory import/export. No Claude Desktop Chat/Cowork/Code mode-specific adapter; Claude Code is only one Skill directory target, with no API-Key/gateway functionality.
+
+The README says users can choose global or project scope, but pinned src/commands/install-flow.tsx declares scope as the literal global value, comments out the scope-selection UI, explicitly skips it, and passes global:true to installSkillForAgent. Thus current UI installation is global only.
+
+Pinned source links: README https://raw.githubusercontent.com/krishna-kudari/agent-skills-manager/9b11ae223bad40510b1cb9a81bea39c95521cd66/README.md ; installer https://raw.githubusercontent.com/krishna-kudari/agent-skills-manager/9b11ae223bad40510b1cb9a81bea39c95521cd66/src/installer.ts ; repository discovery https://raw.githubusercontent.com/krishna-kudari/agent-skills-manager/9b11ae223bad40510b1cb9a81bea39c95521cd66/src/repository-manager.ts ; agent directory table https://raw.githubusercontent.com/krishna-kudari/agent-skills-manager/9b11ae223bad40510b1cb9a81bea39c95521cd66/src/agents.ts ; install flow https://raw.githubusercontent.com/krishna-kudari/agent-skills-manager/9b11ae223bad40510b1cb9a81bea39c95521cd66/src/commands/install-flow.tsx .
+
+## Build quality
+
+Isolated npm ci --ignore-scripts --no-audit --no-fund exited 0 and added 238 packages (HOME and npm cache in /private/tmp/nm-agent-skills-manager-review). rtk proxy npm run type-check exit 0 (tsc --noEmit); rtk proxy npm run lint exit 0 (Raycast manifest/icon/metadata, ESLint and Prettier); rtk proxy npm run build exit 0 (compiled entry points, generated definitions, built extension). package.json has no test script and the repository contains no test files; no test suite is claimed.
+
+## Dynamic installer probe (synthetic temporary files only)
+
+A temporary CJS harness transpiled the pinned src/installer.ts, src/agents.ts and src/constants.ts via the installed TypeScript compiler, then invoked installSkillForAgent with global=true and mode=copy. All test paths were under /private/tmp/nm-agent-skills-manager-review. Input skill directory contained SKILL.md and an external.txt symlink pointing to a separate synthetic marker file; fake target ~/.claude/skills/probe-skill already contained unmanaged.txt. Result: success=true; copied external.txt contained the marker from outside the source skill directory; pre-existing unmanaged.txt did not survive; sanitizeName(../../escape) returned escape. No user data, credentials or Raycast production UI were touched.
+
+Source cause: copyDirectory uses fs/promises cp with dereference:true; cleanAndCreateDirectory unconditionally rm-recursive/force deletes the destination before writing. This demonstrates arbitrary external-file reads from malicious skill symlinks when the user installs such a repository, and destructive replacement of an unmanaged skill directory. It does not demonstrate network exfiltration or real credential access.
+
+## Decision
+
+Low-level SkillsPlane adapter reference only. Positive: broad agent path table, canonical skill store, symlink/copy support and source commit lock metadata. Not a Nexus Memory session/project hierarchy implementation. Required hardening before adopting code: reject symlinks or enforce realpath containment during source copy, maintain managed-file ownership/backup and atomic replacement, implement project scope before claiming it, and explicitly separate Claude Code from Claude Desktop modes.

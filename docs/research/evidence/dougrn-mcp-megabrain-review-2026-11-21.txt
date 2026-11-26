@@ -1,0 +1,40 @@
+NEXUS MEMORY CANDIDATE REVIEW — dougrn/MCP-MegaBrain
+Review date: 2026-11-21 (Asia/Shanghai)
+Disposition: adjacent prompt-memory/MCP sidecar reference, not a Harness migration engine. Upstream source was not edited.
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/dougrn/MCP-MegaBrain
+- Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-dougrn-mcp-megabrain-20261121
+- Main HEAD: 2b8fd6b6e05fd74ea5ca4cf085b120815e4fb14e; `git status --short` empty after review. GitHub showed MIT, 2 stars, 0 forks, 6 commits at review. No .github workflow files are tracked.
+- Python >=3.10, uv project, pinned uv.lock; license file is MIT. CodeGraph indexed 11 source files, 137 nodes and 356 edges, up to date.
+
+ACTUAL MODEL / ADAPTER BOUNDARY
+- Local stdio MCP server plus CLI over a single SQLite/FTS5 database (default ~/.megabrain/megabrain.db). Database tables store four manually authored knowledge record kinds: rules, mandatory specs, “experiences” (what failed / fix), and golden snippets. Project scope is a string label; no Project object hierarchy, Section Group, ConversationSession, messages, turns, parent/fork/subtask edges, attachments, tool-call records, token/cost ledger, memory importer/exporter, schedule, or session archive exists in source/tests.
+- README lists Claude Desktop, VS Code Cline/Roo/Continue, Antigravity IDE and llama.cpp. The integration is manually configured MCP; server entry point uses stdio transport. This is one local database shared by clients that can invoke the tool, not automatic no-AI migration or a cloud conversation importer. No ChatGPT, Codex, Claude Code Cloud, or API-key gateway session adapter was found. README's Claude Desktop config example does not distinguish Chat, Cowork, or Code. It proves neither mode-specific session support nor restoration of the user's “Destruction Era” history.
+- `brain_consult`/`brain_load_project` return a formatted prompt; “MUST call” language is system/tool instructions, not runtime-enforced preflight. `brain_require_spec` stores a path/trigger/instruction string; it does not read or prove the file exists. Optional `verified_snippet` is stored as a Golden Pattern without an independent validation step.
+- Good adjacent ideas: typed memory record classes, project/topic retrieval, FTS5, a local stdio MCP interface, explicit list/delete/stats tools, and provider-neutral client invocation. These are separate from source session migration fidelity.
+
+TEST / INTEGRATION EVIDENCE
+- `rtk proxy /Users/vincentadamnemessis/.local/bin/uv run --locked pytest -q` exited 0; literal stdout: `................. [100%]` and `17 passed in 2.94s`; stderr empty. Upstream README still says “All 15 test suites” while its badge says 17 passed; no source/test occurrence of schema-migration tests was found. `tests/test_project_normalization_and_isolation` verifies normalization and nonmatching final basenames, but does not test two unrelated projects with the same basename.
+- Actual MCP stdio integration used the locked local environment, an MCP `ClientSession`, a disposable database path, and only a synthetic rule. Exit 0; it initialized as `MegaBrain`, listed 10 tools, `brain_record_rule` accepted `FIXTURE_RULE_DO_NOT_USE_SECRET`, and `brain_consult` returned it from the same temporary DB; no model/provider/API call occurred. Literal compact output: `{"server_name":"MegaBrain","tool_names":["brain_consult","brain_load_project","brain_record_experience","brain_record_rule","brain_require_spec","brain_record_golden_pattern","brain_delete_record","brain_list_items","brain_list_rules","brain_stats"],"add_result":"✅ Rule registered [ID: 1] for project 'fixture-app': [CRITICAL] FIXTURE_RULE_DO_NOT_USE_SECRET","consult_contains_fixture_rule":true,"consult_preview":"### 🧠 MEGABRAIN ACTIVE GUARDRAILS & MEMORY\n**Project:** `fixture-app` | **Context:** `testing fixture`\n\n#### 🚨 MANDATORY RULES (STRICT COMPLIANCE REQUIRED):\n- **[CRITICAL] (test)**: FIXTURE_RULE_DO_NOT_USE_SECRET\n\n🔒 **AUTONOMOUS SELF-IMPROVEMENT MANDATE**:\nIf during this task you encounter ANY termi","db_inside_temp_root":true,"is_error":false}`.
+
+REPRODUCED PROJECT-ISOLATION COLLISION — IN-MEMORY FIXTURE ONLY
+- Source `normalize_project()` strips owner/path and keeps only the last slash/backslash segment. `org-one/secret-app` and `org-two/secret-app` both normalize to `secret-app`, so separate repositories silently become the same memory scope.
+- A synthetic in-memory DB inserted one rule, mandatory spec, experience and golden pattern under `org-one/secret-app`; a consult from `org-two/secret-app` retrieved all four. Literal stdout: `{"project_one_normalized":"secret-app","project_two_normalized":"secret-app","foreign_project_consult_project":"secret-app","foreign_project_sees_rule":true,"foreign_project_sees_spec":true,"foreign_project_sees_experience":true,"foreign_project_sees_pattern":true}`. This is a reproduced cross-project contamination/leak for common-basename projects, not merely a static concern.
+- Broad unscoped interfaces also exist by design: listing with project `all` and the `megabrain://rules` resource expose all projects in the shared local database; deletion accepts a global integer record ID, not an authenticated project scope. This makes project labels organizational filters, not tenant security boundaries.
+
+REPRODUCED FILE-PERMISSION BEHAVIOR — DISPOSABLE ROOT ONLY
+- With umask 022 and the same config directory-creation path, an isolated new data directory was mode 0755 and the SQLite database was mode 0644. Literal stdout: `{"project_one_normalized":"secret-app","project_two_normalized":"secret-app","foreign_project_consult_project":"secret-app","foreign_project_sees_rule":true,"foreign_project_sees_spec":true,"foreign_project_sees_experience":true,"foreign_project_sees_pattern":true,"temp_db_directory_mode":"0o755","temp_database_mode":"0o644","temp_db_inside_disposable_root":true}`. No secret was used. Effective reach depends on ancestor permissions/ACLs, but the application sets no private DB/directory mode or encryption itself.
+
+SAFETY / CLEANUP INCIDENT — TRANSPARENT RECORD
+- A first mode probe accidentally changed `MEGABRAIN_DIR` after importing config but left the module-captured `MEGABRAIN_DB_PATH` at its default. It therefore created one dummy `fixture-not-secret` rule in `/Users/vincentadamnemessis/.megabrain/megabrain.db` (row ID 1). Cleanup queried only that exact dummy value, deleted the row, confirmed zero remaining, confirmed all app record tables had zero rows, and removed the 80 KiB DB file and SQLite sidecars; the pre-existing `.megabrain` directory was retained and was empty at final check. Because no before-state snapshot was taken, I cannot certify whether an empty DB file existed before the probe; that uncertainty is retained rather than claiming exact restoration. All later probes used explicit temporary database paths. The corrected in-memory/file-mode probes used no persistent user data.
+
+SOURCES
+- Repository / MIT license: https://github.com/dougrn/MCP-MegaBrain
+- Pinned README: https://github.com/dougrn/MCP-MegaBrain/blob/2b8fd6b6e05fd74ea5ca4cf085b120815e4fb14e/README.md
+- Pinned database/project scoping: https://github.com/dougrn/MCP-MegaBrain/blob/2b8fd6b6e05fd74ea5ca4cf085b120815e4fb14e/src/megabrain/db.py
+- Pinned MCP tools and stdio transport: https://github.com/dougrn/MCP-MegaBrain/blob/2b8fd6b6e05fd74ea5ca4cf085b120815e4fb14e/src/megabrain/server.py
+- Pinned tests: https://github.com/dougrn/MCP-MegaBrain/tree/2b8fd6b6e05fd74ea5ca4cf085b120815e4fb14e/tests
+
+CORPUS STATE
+- Original GitHub corpus after this review: 89/303 reviewed, 214 pending; next candidate: eddieran/skillpm. Screening remains incremental; not evidence of full-market or all-Harness coverage.

@@ -1,0 +1,41 @@
+# GitHub candidate #136: rbutera/harness-bridge
+
+Reviewed: 2026-11-22. Primary corpus position: #136 of 303. This is a candidate source review only; no user account data, Claude Desktop store, API credentials, or live target session were used.
+
+## Identity and scope
+
+- Repository: https://github.com/rbutera/harness-bridge
+- Pinned HEAD: `31559c93be61fa6adec584b728f843e2f92330f3` (2026-10-11; commit message pins the Codex server's default model).
+- Snapshot: 1 star / 0 forks; MIT; package `@rbutera/harness-bridge` 1.0.0, Node >=18, package manager pin pnpm 10.29.2; local environment pnpm was 11.25.0.
+- Product: an MCP server for delegating live coding tasks between Claude Code CLI and OpenAI Codex CLI. It is not a static conversation/session importer, project/section migrator, or Claude Desktop third-party-inference adapter.
+
+## Source findings
+
+- README configures Claude Code to call Codex or Codex to call Claude. Codex threads use the native persistent `threadId` and can be resumed. Claude-side `threadKey` maps to a Claude session ID through an in-memory `SessionRegistry` Map; that relation is not persisted across server restart.
+- The MCP task inputs do not accept sandbox/approval policy controls. The CLI backend builds Codex args with `--dangerously-bypass-approvals-and-sandbox`; the app-server backend starts/resumes threads and turns with `danger-full-access` / unrestricted sandbox policy. This is unsafe as a default when caller trust does not imply permission for unrestricted local execution.
+- Source contains generated app-server protocol types resembling Codex migration/session descriptors, but searched runtime modules contain no `externalAgentConfig/detect` or `externalAgentConfig/import` invocation. A type declaration is not a migration feature.
+- No ChatGPT Projects, Section Groups, ChatGPT/Codex Session graph import, Claude Desktop Chat/Cowork/Code session store, skills/MCP/plugin resource transfer, attachments, usage ledger, schedule, or project membership adapter is implemented.
+
+## Tests, build, dependency and upstream signals
+
+- `rtk pnpm install --frozen-lockfile` exited 1. Corrected observation with `rtk proxy pnpm install --frozen-lockfile`: frozen lockfile was current and dependencies already present, then pnpm emitted `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: esbuild@0.27.3` and required explicit `pnpm approve-builds`. The install script was not approved or executed. `rtk pnpm test` exited 1 through the same dependency pre-install path.
+- Direct installed Vitest invocation: `rtk proxy /Users/vincentadamnemessis/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run` → exit 0; 17 test files, 127 tests passed.
+- `rtk proxy ./node_modules/.bin/oxfmt --check src/ test/ && rtk proxy ./node_modules/.bin/oxlint --type-check` → exit 0; all formatted, 0 Oxlint warnings/errors.
+- `rtk proxy ./node_modules/.bin/tsdown` → exit 0; 14 output files, 849.63 kB; embedded publint reported no issues.
+- GitHub Actions run `38146771778` for pinned commit `31559c93be61fa6adec584b728f843e2f92330f3` had successful CI check matrix. GitHub Releases list v1.0.0 and v0.4.1; npm latest was 1.0.0.
+- Disposition: retain only narrow live-delegation/native-session-ID ideas as adjacent reference. Do not adopt this package as a Nexus migration dependency or expose its unrestricted execution defaults to untrusted callers.
+
+## Separate first-party Codex importer finding (checked 2026-11-22)
+
+OpenAI Codex main was pinned to `8653ca9e99b2c805107bde7b7d6f57a634c643d0`. Its app-server `externalAgentConfig/detect` and `/import` types cover resource groups including Skills, MCP servers, memory, plugins, hooks, subagents, commands, and session `{path,cwd,title}`. Source adapters are Claude Code and Cursor, with no ChatGPT Project/Section entity. The session exporter projects parsed messages into user/assistant text items, emits an import marker and approximate token count, and does not rebuild native source tool calls or a complete hierarchy. OpenAI's official `codex-plugin-cc` calls the importer for Claude Code → Codex transfer; this is not a reverse ChatGPT → Claude path.
+
+Primary sources:
+- Harness Bridge README: https://github.com/rbutera/harness-bridge/blob/31559c93be61fa6adec584b728f843e2f92330f3/README.md
+- Harness Bridge app-server backend: https://github.com/rbutera/harness-bridge/blob/31559c93be61fa6adec584b728f843e2f92330f3/src/lib/app-server.ts
+- Harness Bridge pinned CI: https://github.com/rbutera/harness-bridge/actions/runs/38146771778
+- Harness Bridge releases: https://github.com/rbutera/harness-bridge/releases
+- Codex migration protocol: https://github.com/openai/codex/blob/8653ca9e99b2c805107bde7b7d6f57a634c643d0/codex-rs/app-server-protocol/src/protocol/v2/config.rs
+- Codex session exporter: https://github.com/openai/codex/blob/8653ca9e99b2c805107bde7b7d6f57a634c643d0/codex-rs/external-agent-migration/src/sessions/export.rs
+- Codex source adapters: https://github.com/openai/codex/blob/8653ca9e99b2c805107bde7b7d6f57a634c643d0/codex-rs/external-agent-migration/src/migration_source.rs
+- Official transfer caller: https://github.com/openai/codex-plugin-cc/blob/main/plugins/codex/scripts/lib/codex.mjs
+- Reported Codex import update issue: https://github.com/openai/codex/issues/53403

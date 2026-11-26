@@ -1,0 +1,35 @@
+# Candidate #153 — CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata (2026-11-22)
+
+## Identity and provenance
+
+- Repository: https://github.com/CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata
+- Default branch `main`; isolated shallow checkout HEAD `1dc44b6c99367a5c503b73488ba561999aa4ea85`.
+- GitHub page confirms archived read-only since 2026-11-17; README says deprecated and no longer maintained. GitHub snapshot is MIT, 0 stars / 0 forks, 4 commits; no releases and no Actions workflow runs.
+- CodeGraph indexed 18 files (17 Java + one XML), 323 nodes, 653 edges. `.codegraph/.gitignore` retained with only `!.gitignore` removed; final checkout `git status --short` empty after generated `target/` cleanup.
+
+## Actual MCP function and harness relevance
+
+This is a local Java stdio MCP adapter for a specific external datasource, Google Campaign Manager 360, using a separately supplied CData JDBC driver JAR and `.prp` connection properties. README provides a Claude Desktop `mcpServers` configuration example for local processes on Windows/macOS/Linux. The source registers 3 tools: get tables, get columns, and run SQL query; resources are table metadata CSV. It has no ChatGPT/Codex Projects, Section Groups, Session/turn/branch/message tree, attachments, tokens, project hierarchy, memory, scheduled tasks, export/import, MCP registry migration, or cross-Harness converter. The Claude Desktop snippet is configuration documentation only; Desktop 3P inference/API-key mode and Chat/Cowork/Code were not runtime-tested.
+
+The code/POM do not bundle the CData Campaign Manager JDBC driver; `Config` requires `DriverPath`, `DriverClass`, and `JdbcUrl`, then loads that JAR with `URLClassLoader`. The connection URL/credentials/driver supply the actual data scope. This is a local datasource connector, not a transferable skill or conversation record.
+
+README inconsistencies: it correctly says the project is a deprecated local **read-only** MCP server and describes `_run_query` as SQL `SELECT`, but a later generic “Usage Details” paragraph says tools can “read, write, update, and delete.” Actual source registers only metadata tools plus `Statement.executeQuery(sql)`; no write/delete tool is present. However, source does not call JDBC `Connection.setReadOnly(true)` or constrain query tables at the MCP layer. Treat read-only as an intended tool set/driver-permission contract, not a security guarantee proven by this checkout; no real CData driver or account was available for verification.
+
+## Build/test results and limits
+
+- `rtk mvn -Dproject.build.directory=/tmp/nm-cdata-campaign360-test-target test` — exit 0; Maven nevertheless wrote build output to checkout `target/` (the requested `-Dproject.build.directory` did not redirect it). Literal relevant output: `Tests run: 11, Failures: 0, Errors: 0, Skipped: 0` and `BUILD SUCCESS`. Surefire detail: `TableTests` 9/9 (table name parsing/list/URI) and `JsonSchemaBuilderTests` 2/2 (schema property shape). These are utility unit tests only; no MCP handshake, stdio transport, CData JDBC driver, OAuth/account, query permission, or Desktop 3P mode is exercised.
+- `rtk mvn package` — exit 0; again 11 tests passed; built `CDataMCP-1.0-SNAPSHOT.jar` and `CDataMCP-jar-with-dependencies.jar` in generated `target/`. The provider JDBC driver remains external. I removed only the generated `target/` tree after the checks; final candidate source checkout status was clean. No API key, real customer data, OAuth token, proprietary driver, or external provider endpoint was used.
+
+## Disposition
+
+Keep only as an adjacent MCP configuration/connector example showing the local stdio process + config file + external JDBC-driver dependency contract. It does not transfer MCP state and is archived/deprecated; do not use it as the target migration backend. Its limited Claude Desktop example cannot substantiate API-key/third-party gateway compatibility or all three Desktop modes. The broader Nexus interchange should carry MCP server identity, command/args, environment variable *names/placeholders*, auth reference, scopes, version/hash, transport, OS, and loss/permission notes—not secret values or external account data.
+
+## Primary sources
+
+- Repository and archived banner: https://github.com/CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata
+- Archived commit-pinned README: https://github.com/CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata/blob/1dc44b6c99367a5c503b73488ba561999aa4ea85/README.md
+- Commit-pinned query tool: https://github.com/CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata/blob/1dc44b6c99367a5c503b73488ba561999aa4ea85/src/main/java/com/cdata/mcp/tools/RunQueryTool.java
+- Commit-pinned connection/configuration: https://github.com/CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata/blob/1dc44b6c99367a5c503b73488ba561999aa4ea85/src/main/java/com/cdata/mcp/Config.java
+- Maven build: https://github.com/CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata/blob/1dc44b6c99367a5c503b73488ba561999aa4ea85/pom.xml
+- Releases: https://github.com/CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata/releases
+- Actions: https://github.com/CDataSoftware/google-campaign-manager-360-mcp-server-by-cdata/actions

@@ -1,0 +1,41 @@
+# ai-agent-manager/github-dispatcher-action — primary candidate review (2026-11-22)
+
+## Verdict
+
+Retain as an **adjacent GitHub CI skill-dispatch / harness-adapter reference only**. Exclude as a Nexus Memory Projects/Sections/session migration engine. This action installs remote skill bundles, filters configured skills by GitHub pull-request/comment triggers, invokes one of Claude Code CLI, GitHub Copilot CLI, or pi in headless mode, and posts/commits results back to a PR. There is no ChatGPT/Codex history parser, Project/Section/session graph, import/export codec, resume ID mapping, memory/MCP/plugin migration, attachment carry, schedules, token ledger, or Claude Desktop 3P Chat/Cowork/Code adapter in its current source surface.
+
+## Pin and repository health
+
+- Candidate checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ai-agent-manager-github-dispatcher-action-20261122`
+- Default branch `main` exact HEAD: `dc81e8a6ebfd4814b94d7b2d8fe353c03679441d` (commit date 2026-11-04, `chore(deps): bump undici from 6.29.0 to 6.29.1 (#60)`). Current upstream `refs/heads/main` independently resolved to the same SHA.
+- Package/release: Apache-2.0, package version 2.1.1. GitHub’s latest release is v2.1.1 from 2026-10-19; main is ahead of that tag by package/lockfile-only dependency metadata changes. Latest upstream CI run #259 on the exact main HEAD completed successfully on 2026-11-04; an upstream Dependabot PR CI run #263 completed on 2026-11-16. Evidence is not an exact release-tag build for current main.
+- CodeGraph initialized for the isolated checkout: 38 files / 214 nodes / 559 edges; index up to date. `.codegraph/.gitignore` kept with `*` and its `!.gitignore` self-exception removed. The checkout was clean after validation.
+
+## Implementation actually present
+
+1. `src/index.ts` reads `.github/ai-skills.yml`, validates a GitHub PR/comment event, optionally parses `/ai run <skill>`, installs the configured skill bundle through `npx @ai-agent-manager/cli@<agent-manager-ref>`, filters skill definitions by event, resolves per-tool credentials, fetches the PR diff once, and runs matched skills sequentially.
+2. Declared consumer tools are only `claude-code`, `github-copilot`, and `pi`; the `agent-manager` provisioner ID for pi is `agents`, while Claude Code and Copilot provision through `claude-code`. README examples use repo scope. Per-skill data is `name`, trigger list, `autonomy` (`observe` / `suggest` / `act`), optional tool/model, Claude dollar budget, and Copilot iteration cap.
+3. The prompt is `Use the <skill> skill. Here is the diff: <PR diff>`. It is an event-run, headless diff-review/action prompt, not a conversation archive, continuation graph, or native session transfer.
+4. Result routing is `observe` → PR comment, `suggest` → overwrite PR description, `act` → commit/push changes to PR head. The `act` path runs `git add -A`; this is broad worktree staging rather than an output-path allowlist.
+5. Claude Code child-process env maps a gateway key to `ANTHROPIC_AUTH_TOKEN`, optional URL to `ANTHROPIC_BASE_URL`, and model to `ANTHROPIC_MODEL`. Copilot uses a fine-grained PAT with Copilot Requests; pi uses `LITELLM_BASE_URL`/`LITELLM_API_KEY`. Credential isolation removes inherited harness-secret variables and creates per-tool environments. This is CI runtime configuration, not Claude Desktop 3P configuration or data conversion.
+6. Tool launch is deliberately non-interactive/fully approved: Claude Code uses `-p --dangerously-skip-permissions`; Copilot uses `--autopilot --yolo`; pi uses `-a --no-session`. The README explicitly warns that untrusted PR diffs can prompt-inject `autonomy: act` workflows. The action filters issue comments to PRs and bots, but it does not itself check commenter association/permission; README recommends consumer-workflow gating and warns against `act` on fork PRs. Treat this as a required deployment safeguard, not as a migration feature.
+7. Tool CLIs are pinned in the Dockerfile, but `agent-manager-ref` defaults to `latest`; installing from an authenticated bundle uses the `AGENTMAN_ACCESS_TOKEN` environment. Pin the manager CLI version for reproducibility and review the external bundle/CLI supply chain.
+
+## Test and CI evidence
+
+- Local `rtk npm ci --ignore-scripts --no-audit --no-fund`: exit 0, 129 packages added.
+- Local `rtk npm run validate`: exit 0. It ran TypeScript typecheck, 90 tests (90 passed / 0 failed), ncc bundled build, and ESLint. No real GitHub event, PR, gateway key, Copilot token, skill bundle server, or model call was used.
+- `test/dispatcher.test.ts`, the three adapter suites, trigger/filter/command tests and credential tests cover core pure/mock paths. CodeGraph shows `installSkills` has no direct test; the action's full entrypoint/workflow and real remote bundle installation are not integration-tested by the local unit suite.
+- The repo's CI doc says the workflow runs `npm run validate`. The current main exact-HEAD CI#259 is successful; release history shows v2.1.1 is the latest tagged release. The release workflow last completed successfully on 2026-10-19 for a release run, not for this current main SHA.
+
+## Nexus Memory assessment
+
+Borrow only: skill-resource provisioning as a separate plane from transcript/session migration; explicit harness IDs distinct from resource-provisioner IDs; per-harness child-environment construction and secret isolation; event-trigger/autonomy declarations; run output provenance; and the explicit warning that issue-comment content is untrusted. Do not count this action as any progress on ChatGPT/Codex Project or Section hierarchy, branching/child tasks, session resumption, attachments, memory, MCP, plugins, schedules, token usage, or Claude Desktop 3P modes. It complements a resource-plane feature but cannot serve as the core migration backend.
+
+Primary sources:
+- Repository at reviewed main: <https://github.com/ai-agent-manager/github-dispatcher-action/tree/main>
+- Exact reviewed commit: <https://github.com/ai-agent-manager/github-dispatcher-action/tree/dc81e8a6ebfd4814b94d7b2d8fe353c03679441d>
+- v2.1.1 release: <https://github.com/ai-agent-manager/github-dispatcher-action/releases/tag/v2.1.1>
+- CI runs: <https://github.com/ai-agent-manager/github-dispatcher-action/actions/workflows/ci.yml>
+- Release workflow runs: <https://github.com/ai-agent-manager/github-dispatcher-action/actions/workflows/release.yml>
+- README's security/permission caveats and configuration contract: <https://github.com/ai-agent-manager/github-dispatcher-action/blob/main/README.md>

@@ -1,0 +1,38 @@
+# erdemtuna/craft — source, cross-Harness scope and security review
+
+Date: 2026-11-22. Candidate #120 of the 303-name primary corpus. User’s end state is unchanged: migrate ChatGPT Projects/Section Groups/Destruction Era Session hierarchy, plus Skills/MCP/plugins/memory/context/schedules where possible, into local/self-hosted Claude Code and Claude Desktop Chat/Cowork/Code as distinct modes. No user home, Harness store, API key, or actual global Skill path was read or modified.
+
+## Fixed source and current upstream status
+- Repository: https://github.com/erdemtuna/craft
+- Clone command: `rtk git clone https://github.com/erdemtuna/craft.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-erdemtuna-craft-20261122`; exit 0.
+- Pinned `main`/latest released tag v0.5.0 at HEAD `38a686ac308616ab2b6e7647b6ce3d50881fa18a`; commit timestamp `2026-03-27T22:46:09+03:00`; release v0.5.0 is signed/verified and latest release. GitHub at review shows 156 commits, 1 star, 1 fork, 20 issues, and one open PR; no SECURITY.md/security policy detected. Open PR #34 (#7) proposes changing resolver's dependency-limit check from `>` to `>=`; not merged at pinned HEAD. This is a low-adoption but relatively developed project, with no release after Mar 27, 2026.
+- License: MIT. CodeGraph initialized/verified: 110 files, 1,055 nodes, 2,728 edges, current. `.codegraph/.gitignore` retained with only its `!.gitignore` exception removed; generated DB ignored.
+
+## Product scope and what is reusable
+- `craft` is a Go package manager for Agent Skills, not a conversation/session importer. `craft.yaml` describes local Skills and GitHub dependencies; `craft.pin.yaml` pins resolved commit SHAs and SHA-256 content digests. It supports transitive resolution using Minimal Version Selection, selective subpaths, Skill frontmatter parsing, Git caching, integrity verification, project vendoring to `forge/`, and globally installing flattened Skills.
+- Auto-target support is only **Claude Code** (`~/.claude/skills`) and **GitHub Copilot** (`~/.copilot/skills`). `--target <path>` permits a manually supplied destination. README does not list Codex, Gemini, Cursor, Claude Desktop Chat/Cowork/Code, MCP servers, plugins, conversation/session trees, media, token usage, memory stores, or schedules. The tool can move/resolve Skill files only; it cannot migrate the user's Session graph or Project/Section hierarchy.
+- Valuable patterns for a separate ResourcePlane: declarative package manifest, subpath selection, MVS, immutable commit + integrity pin, automatic agent detection with a prompt when multiple targets exist, explicit `--target`, and a recovery hint after write-ahead manifest/pin persistence. Project-local dependencies are vendored to `forge/`, distinct from global installation. There is no package registry/publish service; packages are Git repositories.
+- Do not call v0.5.0 safe to reuse unchanged: `go-vulncheck` finds multiple reachable advisories in its Git/network stack. A global installer must upgrade the affected modules and verify actual Desktop target semantics before adoption.
+
+## Tests/builds and observed vulnerability scan
+- Toolchain: Go 1.27.4 darwin/arm64 from the official Go download, running module directive `go 1.26.1`.
+- `rtk proxy env PATH=/tmp/nm-go1.27.4/bin:$PATH go test -race -coverprofile=/tmp/nm-craft-coverage.out ./...` → exit 0. All 13 Go packages pass under `-race`; statement coverage total 60.2% (`internal/cli` 40.8%, `internal/fetch` 21.8%, `internal/install` 66.7%, `internal/resolve` 89.7%, manifest 95.3%, pinfile 97.2%, integrity 100%, agent 100%). Tests are mostly unit/mock tests; no real Claude Desktop, Codex, GitHub provider or session-migration E2E.
+- `rtk proxy env PATH=/tmp/nm-go1.27.4/bin:$PATH go vet ./... && rtk proxy env PATH=/tmp/nm-go1.27.4/bin:$PATH go build -o /tmp/nm-craft-review ./cmd/craft && rtk proxy /tmp/nm-craft-review version` → exit 0; vet/build emitted no diagnostics; stdout: `craft version dev`.
+- `rtk proxy env PATH=/tmp/nm-go1.27.4/bin:$PATH gofmt -l .` → exit 0, empty stdout (formatted). `go tool cover -func=/tmp/nm-craft-coverage.out` total → `total: (statements) 60.2%`.
+- Installed govulncheck v1.10.0 in `/tmp/nm-craft-tools`; database timestamp `2026-11-11`. `govulncheck ./...` → exit 3: **20 symbol-reachable vulnerabilities across three modules**; it additionally found 7 package-level and 17 module-level vulnerabilities with no reachable call trace. Relevant call-reachable reports include:
+  - `github.com/go-git/go-git/v5@v5.17.0`: GO-2026-6214 (path traversal via crafted ref names) and GO-2026-6213 (worktree ops may follow symlinks), both fixed in v5.19.2; GO-2026-5336 (crafted repo may modify `.git` directories, fix v5.19.1); GO-2026-5105 (cross-host redirect credential leak, fix v5.18.0); GO-2026-5074 (inconsistent parsing of crafted objects, fix v5.19.0); GO-2026-5693 (crafted objects can panic/exhaust resources, fix v5.19.1); GO-2026-5496 (SSH single-quote escaping, fix v5.19.1).
+  - `github.com/go-git/go-billy/v5@v5.8.0`: GO-2026-5597 path traversal and GO-2026-5490 symlink-cycle DoS, both fixed in v5.9.0.
+  - `golang.org/x/crypto@v0.45.0`: reachable SSH channel deadlock DoS GO-2026-6355/6354, fixed in v0.56.0, plus other SSH advisories. The top two modules are directly used by Git fetch/ref/checkout and credential code, so these are material to consuming untrusted Skill repos.
+- `govulncheck -scan=package ./...` also exited 3 with 27 package-level findings. `govulncheck` database and exact GO advisories are listed in the report’s primary-source URLs.
+
+## Resolver limit defect
+- Pinned source `internal/resolve/resolver.go:320-326` inserts a previously unseen package into `visited`, then checks `len(visited) > maxTotalDeps` where the documented maximum is 200. This admits 201 before rejection. Existing `TestResolveDepthLimit` covers recursion depth, not the total dependency boundary.
+- Upstream has one open PR #34, opened Apr 30, 2026, describing the same behavior and proposing `>` → `>=`; it reports no existing test for the boundary. This PR is not merged/released. This is a source+upstream issue report, not independently reproduced in this review.
+
+## Primary sources
+- GitHub repository/current metadata and README: https://github.com/erdemtuna/craft ; https://github.com/erdemtuna/craft/blob/38a686ac308616ab2b6e7647b6ce3d50881fa18a/README.md
+- Release v0.5.0: https://github.com/erdemtuna/craft/releases/tag/v0.5.0
+- CI workflow and code: https://github.com/erdemtuna/craft/blob/38a686ac308616ab2b6e7647b6ce3d50881fa18a/.github/workflows/ci.yml ; https://github.com/erdemtuna/craft/blob/38a686ac308616ab2b6e7647b6ce3d50881fa18a/internal/install/installer.go ; https://github.com/erdemtuna/craft/blob/38a686ac308616ab2b6e7647b6ce3d50881fa18a/internal/resolve/resolver.go
+- Open off-by-one PR #34: https://github.com/erdemtuna/craft/pull/34
+- Security-policy status: https://github.com/erdemtuna/craft/security
+- Go advisories: https://pkg.go.dev/vuln/GO-2026-6214 ; https://pkg.go.dev/vuln/GO-2026-6213 ; https://pkg.go.dev/vuln/GO-2026-5336 ; https://pkg.go.dev/vuln/GO-2026-5105 ; https://pkg.go.dev/vuln/GO-2026-5074 ; https://pkg.go.dev/vuln/GO-2026-5597 ; https://pkg.go.dev/vuln/GO-2026-6355

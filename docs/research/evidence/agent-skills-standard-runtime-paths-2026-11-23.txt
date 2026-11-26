@@ -1,0 +1,26 @@
+# Supplemental evidence — Agent Skills payload vs harness runtime paths
+
+Reviewed 2026-11-23 from primary vendor/spec sources while examining candidate #211.
+
+- [Agent Skills specification](https://agentskills.io/specification) defines a directory with required `SKILL.md` YAML frontmatter and Markdown instructions plus optional scripts, references, assets, and other files. The common format is a **portable content package**, not a universal session, project, installation, or invocation API.
+- [OpenAI CLI official docs](https://developers.openai.com/api/reference/cli) currently specify Codex project skills at `.agents/skills/` and user skills at `~/.agents/skills/`. [OpenAI Responses API Skills docs](https://developers.openai.com/api/docs/guides/tools-skills) separately support upload/attachment of versioned skill bundles and sandbox directory discovery; this is not the same object or store as a project-local `.agents/skills` directory.
+- [Claude Code Skills docs](https://code.claude.com/docs/en/skills) specify project/local skills under `.claude/skills/` and managed/plugin alternatives. The page does not document `.agents/skills/`. It states Cowork and cloud sessions load Skills enabled for the claude.ai account, while local `~/.claude/skills/` is not read by those hosted sessions; a project skill can be committed under `.claude/skills/` for qualifying cloud project threads.
+- Claude Code adds runtime-specific fields such as `argument-hint` and `context: fork`. The base Agent Skills format does not define those fields; an adapter must preserve the raw source, report unsupported features, and avoid claiming the same invocation or tool-permission semantics on another harness.
+- The facts above apply to the named vendor surfaces. They do **not** prove identical discovery in every Claude Desktop on 3P release or for all three Desktop modes. A target-specific disposable profile remains the acceptance test.
+
+Inference: Nexus should have one normalized Skill bundle representation and separate versioned target adapters/installation profiles. Successful parsing/copying of a `SKILL.md` cannot be used as evidence that a destination will discover it, invoke it, grant the same permissions, sync it to cloud sessions, or preserve its runtime dependencies.
+
+## Follow-up verification 2026-11-23 — Codex skill installation paths are integration/version-specific
+
+A fresh official-doc check while reviewing the `Saber5656/skillet` adapter plan found multiple published Codex install forms that should not be collapsed into one claim:
+
+- The [OpenAI API CLI reference](https://developers.openai.com/api/reference/cli) currently lists `gh skill install` paths as Codex project `.agents/skills/` and user `~/.agents/skills/`.
+- An [OpenAI Codex skill-evaluation walkthrough](https://developers.openai.com/blog/eval-skills) uses `.codex/skills/` and `~/.codex/skills/` in its sample.
+- [OpenAI plugin packaging docs](https://developers.openai.com/plugins/build/plugins) describe plugin-root `skills/` referenced by `plugin.json`, a separate packaging/installation surface.
+
+The open Agent Skills format specifies `SKILL.md` content and optional support directories, not these host-level paths. Treat these official examples as potentially different host/version/integration contracts; a migrator must record the Codex client/version and test actual discovery instead of hard-coding one universal path. These pages do not establish Claude Desktop 3P Chat/Cowork/Code behavior.
+
+
+## Follow-up verification — candidate #223 Codex destination path — 2026-11-24
+
+The current official [OpenAI API CLI reference](https://developers.openai.com/api/reference/cli), reopened on 2026-11-24, lists Codex project Skills at .agents/skills/ and user Skills at ~/.agents/skills/. Candidate suqiangqiang2012-dot/agent-skill-manager instead resolves Codex to CODEX_HOME/skills or ~/.codex/skills; a synthetic no-CODEX_HOME path probe returned /tmp/nm-asm-codex-path/.codex/skills. The CLI accepts an explicit install root, but its default Codex adapter currently differs from the official documented path. Treat it as unverified until the manager changes its default or a current native Codex discovery test proves ~/.codex/skills is also loaded. This does not affect the confirmed Claude Desktop 3P Chat/Cowork/Code scope; the candidate has no Desktop 3P adapter.

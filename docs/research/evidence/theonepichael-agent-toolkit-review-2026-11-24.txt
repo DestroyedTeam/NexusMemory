@@ -1,0 +1,32 @@
+# Candidate #224 — theonepichael/agent-toolkit
+
+Review date: 2026-11-24. Pinned checkout: `main` at `5daf67975c8ffac3241b49341edbc76f3350820f` (2026-11-23), matching `origin/main`; clean source tree. Public GitHub page showed 0 stars and 0 forks at review. Repository carries an MIT License. The configured Python CI jobs use `ubuntu-latest` with Python 3.14 and 3.12; no macOS job is present in `.github/workflows/python-quality.yml`.
+
+## What it is
+
+A multi-harness coding-agent workflow/toolkit for Claude Code, GitHub Copilot CLI, OpenCode, Google Antigravity (AGY), Pi, and Codex CLI. Its strongest functions are shared Skill/workflow provisioning, generated per-harness interfaces, orchestration/backlog lifecycle, guardrails, and local session transcript/cost analytics. This makes it useful adjacent prior art for resource installation and session-observability design, not a source-to-destination migration utility.
+
+## Session-analysis implementation reviewed
+
+`agent-scripts/analyze_sessions.py` exposes `query_sessions` as a read/report service. The default adapters read local stores for Pi, Claude Code, OpenCode, Copilot CLI, Antigravity and Codex. The normalized `SessionRecord` retains harness, session ID, cwd, timestamp, role, plain text, model, input/output/cache token counts, cost/origin and a boolean `is_subagent`. Query filters cover date, cwd, session ID, model, role, subagents, text and result limit.
+
+This model is intentionally lossy for Nexus Memory's target: it has no raw event ID/sequence, event type, parent-session ID, fork/branch lineage, child-session edge, tool-call/result or permission event, attachment/media payload, link reference, resume handle, or project/Section identity. `_content_text` keeps only string/text blocks; tool-call blocks without a text key contribute nothing. Adapter-specific hierarchy is reduced to booleans: OpenCode `session.parent_id`, Claude `isSidechain`, and Codex path/metadata subagent hints do not become stable parent edges. The OpenCode adapter is a local SQLite analytics reader, not a session graph exporter. Claude's reader targets Claude Code local JSONL, not Desktop-on-3P Chat/Cowork stores or their app-managed mode metadata. No migration/import/export/target-restore writer was found in the reviewed feature paths.
+
+A safety caveat in the analyzer: `query_sessions` documents a read-only effect boundary, but `_open_sqlite_ro` (also used for SQLite loaders) falls back from a `mode=ro` connection to a plain SQLite connection after an SQLite error. No writes were observed in this review; a Nexus native-store reader should stay strictly read-only and surface the fallback rather than silently weakening the connection mode.
+
+## Tests and observed outcomes
+
+Commands were run from the pinned checkout with `rtk test python3 -m unittest discover ... -v`:
+
+- `test_analyze_sessions.py`: exit 0; 135 tests; `OK`.
+- `test_worker_invariant_audit.py`: exit 0; 45 tests; `OK`.
+- `test_worker_run_metrics.py`: exit 0; 24 tests; `OK`.
+- `test_herdr_queue_runner.py`: exit 1; 130 tests; `FAILED (failures=2, errors=1)`.
+
+The three exact failing expectations are path-alias assumptions on this macOS runner: `test_preparation_bootstraps_exact_validated_worktree` got `/private/tmp/repo-item-worktree` but expected `/tmp/repo-item-worktree`; `test_launch_agy_prunes_vanished_entries` got `/private/tmp/item worktree` instead of `/tmp/item worktree`; `test_codex_roots_follow_runtime_paths` got `/private/tmp/custom uv cache` instead of `/tmp/custom uv cache`. The source uses `Path.resolve()`, and the explicit probe `Path('/tmp').resolve()` returned `/private/tmp`. Inference: these tests expose macOS path-spelling portability gaps, not a demonstrated session-migration failure. The two configured CI jobs run on Ubuntu, so the current workflow does not exercise this macOS path behavior. The README-recommended `uv run pytest` full-suite gate was not run because `uv`/pytest is unavailable in this environment; only the listed standard-library unittest subsets are claimed.
+
+## Nexus Memory disposition
+
+Retain the six-harness read-only parsers, local session discovery, model/token/cost extraction, skip diagnostics and selective text-query patterns as prototypes for a **derived observability projection**. Do not reuse `SessionRecord` as the canonical portable record or call this repo a migrator. Nexus needs an immutable native-event envelope plus explicit Project/Section/SessionGraph edge tables; a source parser may additionally build lossy analytics views. Keep each Desktop 3P mode (Chat, Cowork, Code) separate from local/self-hosted Claude Code CLI even where Code shares transcript files. Require target-native discovery/resume and attachment/tool-event fidelity tests per version.
+
+Full code-path/test note: `docs/research/evidence/theonepichael-agent-toolkit-review-2026-11-24.txt`. This is a pinned-source review only; no user export, private app store, provider key or real session was accessed and no migration accuracy claim was made.

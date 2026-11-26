@@ -1,0 +1,75 @@
+# Candidate #268 review — Alot1z/agents-handoff
+
+Review date: 2026-11-25  
+Candidate: https://github.com/Alot1z/agents-handoff  
+Source pin: main `bef94b269f5f8353005a536417607b627d22946f`; package version 2.0.7, MIT, zero runtime dependencies, Node >=18 claimed. `npm view agents-handoff` reports latest 2.0.7, modified 2026-10-10. Local environment: Node 26.7.0 / npm 11.19.0.  
+Review checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-alotz-agents-handoff-20261125-followup268-reclone`. A first disposable checkout path later contained only a CodeGraph index; source was re-shallow-cloned to this recovery path at the same pinned commit. The recovered checkout is clean (`git status --short`, `git diff --exit-code` empty); CodeGraph indexed 20 files, 469 nodes, 1,603 edges.
+
+## Verdict
+
+**Useful cross-Harness handoff Skill and file-format prior art; not a native session migrator.** It converts caller-supplied JSONL or role-marked text into a portable folder an agent may read. It is not a ChatGPT export importer, does not recreate target-native sessions, and does not preserve Projects/Section Groups, session parent/fork/branch relationships, attachments, usage, resource dependencies, or native desktop state. The generic format is a lossy text projection, not a round-trip archive. A synthetic probe also demonstrated that the core writer can escape its configured handoff root, overwrite a sibling file, leak supplied secrets, and let `verify` pass after a timeline-content edit. Keep its portable handoff concept and test/contract patterns only; **do not use its current writer as Nexus's migration backend or against real profile data**.
+
+## What the implementation does
+
+- `tools/handoff.mjs` accepts one `.jsonl` file (line-parsed JSON) or another extension treated as role-marked text. It extracts `seq`, timestamp, role/class and text, assigns USER/AGENT/THOUGHT/TOOL/OTHER, and writes `projects/<project>/<session>/` with `HANDOFF.md`, summary/full JSON, `timeline.jsonl`, `TOOLS.md`, and `manifest.json`.
+- The source file is not copied into the output; only its path and whole-file `raw_sha256` are recorded. Normalized timeline entries are `{seq, ts, class, text}`. `TOOLS.md` is text rather than a structured tool-call graph. A handoff folder is intended for a fresh agent to read, not to be imported as a native session.
+- Project membership is one slug chosen from explicit `--project`, config, a recognized `--tag--` thread token, or the harness label. `PROJECT.md` is a flat session list; cross-project notes use keyword/Jaccard similarity. There is no Section Group object, section hierarchy, project provenance, parent-session ID, branch DAG, or fork relation.
+- `seq`/line order is a linear watermark. Message IDs, `parentUuid`, edits/regeneration edges, active branch, sidechains, approval state, scheduler identity, model/token-usage counters and most native metadata are not mapped. User/assistant/tool text can survive; an image block is dropped (or contributes only neighboring text), not copied as an asset. An input usage-only event with no recognized text is skipped.
+- `refs/ADAPTERS.md` describes an external `conversation-vault` canonicalizer for DSH zstd files, a generic SQLite desktop store and Claude Code. That adapter implementation is **not in this checkout/package** (the runtime has zero dependencies and only the direct JSONL/text engine); the document is a routing claim, not locally qualified adapter code. Codex is listed as an observed compatible shape. The bundled demo tests synthetic JSONL/plain-text captures, not native app stores.
+- The installer places the Skill in Claude Code (`~/.claude/skills`), Codex CLI (`~/.codex/skills`), generic `~/.agents/skills`, or a caller-selected directory. That makes the instruction bundle reusable; it does not add a target-native importer for Claude Desktop third-party-gateway Chat/Cowork/Code or local Claude Code sessions.
+- `federated-merge` merges the same handoff-folder schema between roots; this is store replication, not transfer into a provider's session database. No MCP, plugins, Skills-as-session-dependencies, project memory stores, schedules, credentials, or destination-specific activation are migrated.
+
+## Nexus target matrix
+
+| Requested object | Observed result |
+|---|---|
+| Standard ChatGPT `conversations.json` export | Not parsed as a source format. Synthetic export with `mapping` / `parent` / `children` returned exit 4, `no usable turns parsed`. The engine expects JSONL lines or role-marker text. |
+| Projects / Section Groups | One caller-selected project slug and flat session list only. No Section Group reader/writer or source membership graph. |
+| Session tree / branches / child tasks | No parent/child/fork/branch edges. A monotonically watermarked linear timeline cannot represent alternative answers or nested tasks. |
+| Turns / tools / interruptions | Extracted text with sequence/timestamp and broad role class; tool use/result becomes text in `TOOLS.md`, not a native typed event graph. The raw JSON records are not retained. |
+| Images, files, links, audio/video, token usage | Not transferred as assets or structured telemetry. Synthetic nested image bytes, usage counters, native message IDs and `parentUuid` were absent from the output; ordinary text and tool name remained. |
+| Claude Desktop 3P Chat/Cowork/Code | No mode-aware source reader or target writer; installing the Skill does not capture or create native Desktop sessions. |
+| Local/self-hosted Claude Code API-key/gateway | Can ingest caller-provided Claude-like JSONL after normalization, but no direct native store adapter is bundled and no target-native session restore was tested. |
+| Skills/MCP/plugins/memory/schedules | This repository is itself a Skill. It neither enumerates installed dependencies nor migrates/activates any of these resources. |
+| Hosted Claude Cloud | No hosted-session API or Cloud import path. |
+
+## Validation and quality
+
+Hermetic checks on the pinned checkout, without account access, credentials, live model calls, or real session data:
+
+| Command | Observed result |
+|---|---|
+| `npm --prefix <checkout> test` (`node tools/handoff.test.mjs`) | Exit 0; 53 tests, 53 pass, 0 fail, ~6.8 s. |
+| `npm --prefix <checkout> run test:demo` | Exit 0; 6 pass, 0 fail. Synthetic local capture only. |
+| `npm --prefix <checkout> run check:docs` | Exit 0; 18 pages in nav, 103 relative links resolve. |
+| `npm --prefix <checkout> run check:session-index` | Exit 0; two synthetic sample sessions verify and generated Markdown/JSON are current. |
+| `npm view agents-handoff version dist-tags time repository license --json` | Latest 2.0.7; MIT; published/modified 2026-10-10; matches source package version. |
+
+Test quality is useful: malformed JSONL, synthetic Claude/Codex shapes, idempotent watermark updates, evidence-gate flows, installer ownership, bounded runtime and demo privacy receive coverage. However, there is no core capture test for traversal via `--project`/`--session`, secret-bearing input, a same-line-count timeline edit, ChatGPT's actual ZIP/JSON export, image/attachment retention, fork/branch trees, token usage, or Claude Desktop 3P modes.
+
+## Synthetic boundary probes (no user data)
+
+All probes used `/tmp/nexusmemory-alotz-handoff-poc-followup268` or sibling disposable directories and synthetic transcript text.
+
+1. **Output-root escape + overwrite.** With a pre-existing `HANDOFFS_ROOT=/private/tmp/nexusmemory-alotz-handoff-poc-complete2-followup268/store/projects`, run:
+   `node tools/handoff.mjs build --source <synthetic.jsonl> --session .. --harness generic --project .. --objective 'Synthetic containment probe'`
+   Observed exit 0, stdout `handoff: built .. project=.. turns=1 new=1 rev=1 -> /tmp/nexusmemory-alotz-handoff-poc-complete2-followup268`, stderr empty. `manifest.json`, `HANDOFF.md`, `HANDOFF.llm.json`, `HANDOFF.summary.json`, `TOOLS.md`, and `timeline.jsonl` were written in the parent directory **outside** the configured store, and the pre-created `HANDOFF.md` sentinel was overwritten. Root cause: `slugify()` permits `..`, the session slug also permits `..`, and `build()` joins both without checking the resolved path stays under `HANDOFFS_ROOT`.
+2. **Partial write on failing traversal.** Repeating with a fresh root whose `projects/` directory did not exist still wrote the same parent output files and overwrote the sentinel, then exited 1 (`ENOENT` scanning `<store>/projects`). This is a partial state change despite command failure; writes are direct, not transactional.
+3. **ChatGPT export unsupported.** Passing a synthetic standard `conversations.json` object with a branched `mapping` returned exit 4 and stderr `handoff: no usable turns parsed from .../conversations.json`.
+4. **Structured fields/media dropped.** A synthetic Claude-shaped JSONL message with text + `SYNTHETIC_IMAGE_BYTES`, `parentUuid`, message IDs, session ID and token usage produced a handoff whose `HANDOFF.llm.json` retained the text/tool name but not the image bytes, parent UUID/message IDs, or usage fields.
+5. **No secret filtering.** A synthetic `SYNTHETIC_API_KEY_PROBE_DO_NOT_USE` embedded in user text appeared verbatim in `HANDOFF.llm.json`, `timeline.jsonl`, `HANDOFF.summary.json`, and `HANDOFF.md`. This matches the repository's SECURITY.md disclosure: no detection/redaction, plaintext and unencrypted output.
+6. **Integrity check misses content edits.** After building a synthetic two-line session, one `timeline.jsonl` text field was changed without changing line count. `node tools/handoff.mjs verify integrity-probe` still exited 0 and printed `PASS integrity-probe [synthetic]: manifest sha ok / timeline=2 turns / llm json parses`. The manifest hash is self-consistent but does not bind timeline content; no signature/trust anchor exists. The docs disclose this limitation, but the README's broader “prove which source bytes produced” language should not be treated as proof of output authenticity.
+
+The runtime permission tests pass for `tools/runtime-engine.mjs`, but that policy is not consulted by `tools/handoff.mjs`; the direct writer is outside that gate. On macOS/Linux the shipped permission policy's personal/system roots are Windows-shaped as documented, and it still would not protect an ungated direct invocation.
+
+## Reuse decision
+
+Keep only as a **design/reference for an optional portable handoff layer**: versioned human+machine payloads, incremental watermarks, separate full tool-text view, explicit per-session provenance, low-friction Skill distribution, and a human-reviewed evidence-gate workflow. Do not treat the output as lossless, do not use it to assert that native ChatGPT Projects/Sections or a Claude Desktop session were migrated, and do not reuse the writer until it enforces root containment, atomic writes, secret/PII review or redaction policy, output-content integrity, and true typed event/asset/branch preservation. No direct installs, profile writes, imports, or target app interactions were performed.
+
+## Sources
+
+- Pinned repository and MIT license: https://github.com/Alot1z/agents-handoff/tree/bef94b269f5f8353005a536417607b627d22946f
+- Pinned adapter claims: https://github.com/Alot1z/agents-handoff/blob/bef94b269f5f8353005a536417607b627d22946f/refs/ADAPTERS.md
+- Pinned input/output format: https://github.com/Alot1z/agents-handoff/blob/bef94b269f5f8353005a536417607b627d22946f/docs/FORMAT.md
+- Pinned security boundaries: https://github.com/Alot1z/agents-handoff/blob/bef94b269f5f8353005a536417607b627d22946f/docs/SECURITY.md
+- Pinned architecture and layer boundaries: https://github.com/Alot1z/agents-handoff/blob/bef94b269f5f8353005a536417607b627d22946f/docs/ARCHITECTURE.md

@@ -1,0 +1,58 @@
+# David-Sat/agpx — resource-plane candidate review (2026-11-22)
+
+## Identity and provenance
+
+- Repository: https://github.com/David-Sat/agpx
+- Isolated shallow clone: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-David-Sat-agpx-20261122`
+- Captured default-branch `main` HEAD: `61b51e587422738c8735011eedb30308cd1c8890`.
+- GitHub metadata snapshot: public MIT TypeScript project; 0 stars / 0 forks; repository says package manager for Skills, MCP servers and environment config. It has 124 visible GitHub Actions runs; the newest shown is successful Dependabot PR #29 run CI #60, while preceding Dependabot PR #28 run CI #59 is failed. These are not a run on the captured main HEAD. Latest visible package release at review time: v0.3.1.
+- Local checkout was not edited. `rtk git status --short` in the pinned source checkout returned no output. A status command against the disposable built test-copy `/tmp/nm-agpx-review-20261122/repo` returned exit 128 (`fatal: not a git repository`) because that test copy has no `.git`; the actual pinned checkout was used for provenance/status.
+- CodeGraph indexed the candidate (43 source/config files; status reported up to date). It indexed source, not external vendor behavior.
+
+## Product fit and adapter coverage
+
+`agentpx` is a plugin/resource installer: it reads a plugin manifest, Skills (`SKILL.md`), and MCP server definitions, then writes copies/config snippets into local Harness locations. The registry tracks plugin name/source/version/time, target Harness IDs, MCP server names, Skill names, environment-variable names and optional project mode. It does not retain content hashes, file ownership/backup data, paths for each write, or a session identity graph.
+
+The 19 registered adapter IDs cover Antigravity, Claude Code, Cursor, Windsurf, Claude Desktop, Zed, generic Workspace, Hermes, OpenClaw, DeepSeek, Pi, Devin, Cline, Roo, Continue, Goose, OpenHands, Trae and Qwen. The type has no Codex ID. `workspace` is a generic `.mcp.json` plus `skills/` destination, not a native Codex adapter. `--project` routes to that generic Workspace adapter, rather than a project-specific branch of each Harness adapter.
+
+The Claude Desktop adapter targets `claude_desktop_config.json` for MCP only; `getSkillsTargetDir()` returns `null`. It has no per-mode distinction for Desktop 3P Chat, Cowork, and Code, no Desktop local-session/archive handling, and no history importer. This does not meet the user's three separate Claude Desktop acceptance tracks.
+
+The Claude Code adapter writes MCP servers to `~/.claude/mcp.json` and Skills to `~/.claude/skills`. Current first-party Claude Code documentation specifies user and local MCP scope in `~/.claude.json` and project scope in `.mcp.json`; therefore the candidate's `~/.claude/mcp.json` is inconsistent with the documented current canonical store. This is a source compatibility finding, not a claim that every legacy build ignores it.
+
+There is no ChatGPT/Codex Project, Section, Session, message, event, branch, task/subtask, attachment, token/cost, schedule, or memory transfer schema. The project is relevant only as an adjacent ResourcePlane/package-manager reference and is not a Nexus Memory session migrator.
+
+## Code and test review
+
+Reviewed pinned source in `src/harnesses/index.ts`, `src/harnesses/claude.ts`, `src/harnesses/desktop.ts`, `src/harnesses/workspace.ts`, `src/harnesses/base.ts`, `src/core/discover.ts`, `src/core/installer.ts`, `src/core/registry.ts`, `src/core/git.ts`, `src/utils/json-merge.ts`, `src/ui/prompts.ts`, `src/types.ts`, `src/cli.ts`, and CI workflow.
+
+Observed gates in an isolated temporary test copy (`/tmp/nm-agpx-review-20261122/repo`; Node v26.7.0, npm 11.19.0):
+
+- `rtk npm run build` — exit 0; ESM and declaration build succeeded.
+- `rtk npm test` after build — exit 0; 6 files and 27/27 tests passed.
+- `rtk node bin/cli.mjs --version` — exit 0; stdout `0.1.0`, despite `package.json` version `0.3.1` and the banner default `0.3.1`.
+- A prior clean-copy `npm test` before build exited 1 (24 passed, 3 CLI tests failed because generated `dist/cli.js` did not exist). The checked-in CI workflow explicitly runs `npm run build` before `npm test`, so the green build-then-test order matches CI; the standalone test script is not self-building.
+- CI matrix in source covers Node 18, 20 and 22. The Actions page's latest visible runs were Dependabot PR runs, not evidence of the pinned main commit passing.
+
+`npm pack` is invoked with `--ignore-scripts`, which is a positive install-time restraint. Remaining resource-writing paths are not transaction-grade: MCP JSON merge is direct read/modify/write (no atomic replace/backup), Skill installation copies recursively into an existing directory without ownership/hash conflict checks, and uninstall recursively removes the whole recorded Skill directory. `removePlugin` catches per-Harness removal errors and still deletes the registry record. Tests do not cover install/update/remove, the Claude Desktop adapter, or the Claude Code adapter.
+
+## Disposable synthetic probes (no user data, credentials, target Harness, or commands run)
+
+1. **Manifest-path traversal is reproduced.** A temporary plugin manifest set `mcpConfig: "../outside.json"`; actual `discoverPlugin` followed the sibling path and returned its synthetic MCP server and value `NEXUS_SYNTHETIC_SECRET_SENTINEL`. Output fields were `mcp_server_keys=["synthetic"]`, `external_env_value=NEXUS_SYNTHETIC_SECRET_SENTINEL`, `source_manifest_mcpConfig=../outside.json`. Only the temp sibling file was read.
+2. **Update skips executable-command trust confirmation.** Actual `updatePlugin` ran against a temporary project and local plugin source with `process.stdout.isTTY=true` and no explicit `yes`. The update passes `yes: options.yes ?? true` to `installPlugin`, so it replaced the synthetic MCP command from `trusted-old` to `sh -c echo UNTRUSTED_UPDATE_SENTINEL`, returned `true`, and did not show the trust confirmation. The shell command was only written to temporary JSON; it was never executed.
+3. **Non-TTY add bypasses trust, even without `--yes`.** Actual `installPlugin` dry-run with a synthetic MCP server and `stdout.isTTY` unset completed without trust confirmation. A required environment variable was absent; non-interactive flow skipped prompting. Dry-run prevented disk writes and the configured command was not executed.
+4. **Uninstall removes unrelated local content inside its Skill directory.** A synthetic Skill was installed into a disposable project's `skills/demo-skill`; a `LOCAL_NOTES.md` sentinel was then added manually. Actual `removePlugin` returned true and recursively removed the complete `demo-skill` directory (`local_notes_before=true`, `local_notes_after=false`).
+
+These are local synthetic behavior probes, not upstream-reported CVEs or tests on any user environment. Never run a third-party MCP command merely to validate configuration.
+
+## Relevance to Nexus Memory
+
+Retain as design inspiration only: native per-Harness resource adapters, a target capability registry, preview/dry-run, clear source→target write plans, and support for installed Skills and MCP definitions. Reject as a direct dependency or session-transfer engine until it uses containment-safe manifest reads, ownership/content hashes, confirmation that cannot silently disappear in non-TTY/update paths, transactional writes with rollback, and conservative removal semantics.
+
+For the confirmed target, keep separate adapters and tests for `desktop-3p/chat`, `desktop-3p/cowork`, `desktop-3p/code`, and `claude-code-local`. Never infer Desktop 3P session support from the existence of a Claude Desktop MCP config writer. No API key was accessed or serialized.
+
+## Primary sources
+
+- Repository: https://github.com/David-Sat/agpx
+- Pinned [Claude Code adapter](https://github.com/David-Sat/agpx/blob/61b51e587422738c8735011eedb30308cd1c8890/src/harnesses/claude.ts), [Desktop adapter](https://github.com/David-Sat/agpx/blob/61b51e587422738c8735011eedb30308cd1c8890/src/harnesses/desktop.ts), [discovery](https://github.com/David-Sat/agpx/blob/61b51e587422738c8735011eedb30308cd1c8890/src/core/discover.ts), [installer](https://github.com/David-Sat/agpx/blob/61b51e587422738c8735011eedb30308cd1c8890/src/core/installer.ts), [registry](https://github.com/David-Sat/agpx/blob/61b51e587422738c8735011eedb30308cd1c8890/src/core/registry.ts), [MCP JSON merge](https://github.com/David-Sat/agpx/blob/61b51e587422738c8735011eedb30308cd1c8890/src/utils/json-merge.ts), and [CI workflow](https://github.com/David-Sat/agpx/blob/61b51e587422738c8735011eedb30308cd1c8890/.github/workflows/ci.yml).
+- Official [Claude Code MCP scopes](https://code.claude.com/docs/en/mcp) and [settings-file locations](https://code.claude.com/docs/en/settings).
+- Official [Claude Desktop on 3P move and session export](https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider) and [Desktop 3P configuration reference](https://claude.com/docs/third-party/claude-desktop/configuration).

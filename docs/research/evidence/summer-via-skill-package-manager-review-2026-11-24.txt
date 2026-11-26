@@ -1,0 +1,23 @@
+# Candidate #221 — summer-via/skill-package-manager
+
+Review date: 2026-11-24. Bound object: shallow checkout /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-summer-via-skill-package-manager-20261123-followup221. Branch master, HEAD f303dfbcc7248a84d1ea88afc111d87d4951b23a (2026-08-26T23:16:13+08:00, “docs: add real recorded terminal demo gif (vhs), replace static svg”), MIT, TypeScript, 0 stars/forks in the pinned inventory snapshot. Checkout remained clean.
+
+## What it is / is not
+
+A Git-native package manager for Agent Skills, “like go mod”: installs Skills from Git into ~/.agents/skills, represents dependencies/versions in project skill.json, and supports install/update/remove/list/config, copy or symlink, and package pinning. It does not read or write ChatGPT/Codex Projects, Section Groups, session transcripts/event graphs, parent/child or fork edges, interrupted follow-ups, media/attachment contents, tokens/cost, schedules, MCP invocation history, plugin auth, memory provenance, or destination resume IDs. Generic SKILL.md packaging is only a resource payload plane, not a session-graph converter.
+
+## Build/tests and code findings
+
+npm ci --ignore-scripts succeeded with 27 packages in a disposable npm cache; npm run build succeeded (exit 0, output “> tsc”). npm run exposes build/dev/install:global/prepublishOnly but no test script; repository has no tests/ directory. Do not report unit tests as passing.
+
+CodeGraph index was initialized and status-checked for this checkout. src/utils/package.ts::installPackage joins targetSkillDir and manifest-selected install name, then unconditionally fs.remove(targetDir) before copying or linking. installAllSkillsFromPackage does the same for each installed skill. The function does not check containment, target ownership, or create a recoverable backup. src/commands/remove.ts::removeCommand falls back to path.join(targetSkillDir, rawItem) and recursively deletes it if it exists; removeSkillDir similarly joins raw skill names. src/utils/config.ts::resolveSkillDir accepts absolute and project-relative paths, and writeSkillJson directly rewrites the manifest.
+
+## Synthetic-only reproducible behavior
+
+1. Remove path traversal: temp project /tmp/nm-spm-remove-traversal/project, skill_dir=".agents/skills", empty dependency map, synthetic sentinel at sibling project/sentinel/SYNTHETIC_SENTINEL.txt. Command node <checkout>/dist/index.js remove ../../sentinel with HOME=/tmp/nm-spm-remove-traversal/home exited 0; stdout “Removed manually installed skill: ../../sentinel\nDependencies updated in skill.json\n”; stderr empty; the outside-targetSkillDir sibling sentinel was deleted. This is a data-loss path traversal in the default manual-skill removal branch.
+
+2. Unowned target replacement: temp Git repo /tmp/nm-spm-collision/fake-repo contained skills/unowned/SKILL.md; scratch project .agents/skills/unowned/UNOWNED_SENTINEL.txt existed before install; manifest selected skill="unowned" and skill_dir=".agents/skills". A local-only Git insteadOf rewrite routed github.com/synthetic/fake to this synthetic repo. Command node <checkout>/dist/index.js install github.com/synthetic/fake --protocol https exited 0, stderr empty, printed the install path and “Dependencies updated”; the prior unowned sentinel disappeared and the new SKILL.md existed. No remote data or user Skills were touched.
+
+## Disposition
+
+Reject as a Skills writer until it validates normalized containment, claims/receipts target ownership, stages changes, preserves collisions by default, and offers tested rollback. Do not reuse as the requested Nexus Memory Project/Section/session migration system. Retain only its Git-ref/lockfile vocabulary as a low-priority resource-plane reference. Candidate was tested only on disposable /tmp fixtures; no user profile or real target state was accessed.

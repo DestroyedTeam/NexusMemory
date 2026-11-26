@@ -1,0 +1,32 @@
+# Candidate #109 — zhuyansen/awesome-agent-skills-managers (2026-11-22)
+
+## Disposition
+Discovery-only catalog; do not adopt as a Nexus Memory dependency or treat it as a Project/Section/Session migrator. It is useful for widening the skills/resource-plane candidate pool, but it does not establish session fidelity.
+
+## Source identity and local review
+- Repository: https://github.com/zhuyansen/awesome-agent-skills-managers
+- Pinned checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-zhuyansen-awesome-agent-skills-managers-20261122
+- HEAD: 855e594724f937a642fc044d7b6432c6f7a69332, branch main, rtk git status --short --branch = ## main...origin/main (clean).
+- Files inspected: README.md, README.zh-CN.md, data/skills.json, root LICENSE, .github/ISSUE_TEMPLATE/, assets/previews/. No product runtime/source/test suite or release was present. rtk gh release list returned []; rtk gh run list --limit 10 returned []; rtk gh pr list --limit 10 returned []; one open issue (#3). This is a static catalog, so no local build/test result is applicable.
+- LICENSE says CC0 1.0 covers the list's selection/grouping/written text; repository names/descriptions belong to their authors, and every listed repository has its own license. Do not infer permission to reuse any listed project's code/assets.
+
+## Dataset and quality checks
+Pinned data/skills.json, generated 2026-11-21, parses as 192 distinct repository names:
+- categories: general 32, cli 61, sync 11, app 47, registry 36, team 5;
+- external labels: safe 185, caution 5, unknown 2;
+- 32 rows have no license metadata;
+- 15 repo names overlap the existing 303 primary-query + 11 manual-addition inventory; 177 are net-new.
+The README's admission rule says software must manage skills/plugins, have a README, and (for fewer than 50 stars) pass a README quality bar and have at least five stars. The pinned JSON nevertheless includes three entries below five stars (EfanWang/skills-manager 0, zhuyansen/skills-manager 0, terrylica/cc-skills 3), so the stated rule is not a strict data invariant in this snapshot. The catalog rule reads each README via a decision model; it is useful discovery triage, not independent implementation evaluation.
+
+Supplemental import is stored at docs/research/awesome-agent-skills-managers-supplemental-2026-11-22.json. It preserves the external grade separately from Nexus review_status and marks the 177 new entries supplemental_unreviewed; it does not promote the other repositories to reviewed. Primary corpus counts remain 109/303 reviewed and 194 pending. There are 371 pending records in the primary plus net-new supplemental queues; the 11 manually added records remain a separate pool. Across all three discovery inputs there are 491 unique names.
+
+## Companion benchmark — useful but narrow
+The catalog README describes a self-authored E2E run dated 2026-10-09: 16 Skills managers attempted, 14 judged; the same disposable task installs 20 synthetic Skills, attempts a Skill with a curl | sh setup script, prunes to five, then syncs to Codex. It reports one manager declining the risky Skill by default, one warning but installing, and 12/14 with no warning; reported added context ranges 345–396 tokens for that test setup. This is an operational smoke benchmark for Skill install/removal/sync and one warning path, not a Harness/session migration benchmark. No Project/Section/message-tree/fork/subtask/media/token-history/schedule/credential/MCP/Plugin or target-native session restore fidelity is measured.
+
+The companion benchmark script ops/skillmgr-runs/in/measure.sh runs claude -p "Reply with the single word OK." --output-format json --model haiku and totals input/cache token fields; it inventories a few local Skills directories, .claude/CLAUDE.md bytes, and claude mcp list. This measures a single context/startup probe rather than general per-session cost or migration accuracy. Its test fixture URL is example.invalid; the canary was inspected but never executed. The script also includes a ~/.bashrc append after that URL; no host profile or live Skill was changed by this review.
+
+## Security-grade limitation from companion source
+The candidate README defines its grade as the grade of the README and install steps. In the companion Hub source at pinned HEAD 8b93394e57a820cfe9e4e375804923e6f7dcd496, SecurityScanner._scan truncates skill.readme_content to 15,000 characters and applies rules to that text; the LLM analyzer receives repository metadata, scanner flags and only the first 8,000 README characters. This does not inspect the full repository source or execute/sandbox the Skill. The 12/14 benchmark installs without a warning reinforce that a safe grade is not a malware-sandbox guarantee. Store the catalog's label only as external_readme_security_grade, never as a Nexus source-audit verdict.
+
+## Nexus Memory impact and user scope
+The user reconfirmed on 2026-11-22 that all Claude Desktop modes—Chat, Cowork, Code—are included, alongside local/self-hosted Claude Code. Keep each as a distinct adapter/runtime axis; a third-party inference/API-key route is not proof that client-side session state can be imported or restored. The source project names Destruction Era and the requested ChatGPT Projects/Section Groups/Session relationships remain the migration target; no real account export, local Skills tree, or target session was accessed in this review.

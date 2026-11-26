@@ -1,0 +1,42 @@
+# Ocul-PM candidate review — local project journal, not conversation migration
+
+Date: 2026-11-21. Repository: https://github.com/bunhine0452/Ocul-PM . License: MIT. Branch main pinned at `9dd0f85ad64c3e5b9b75c29fbe5e8141aa66cc34` (tag v4.11.2; 2026-11-19). Local checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-bunhine0452-ocul-pm-20261121`.
+
+## Verdict
+
+High-value adjacent reference for local project journaling, plans, file verification and agent activity observation. Not a ChatGPT Project/Section/Session importer, generic conversation archive, Claude Desktop Chat/Cowork/Code importer, or API-key/provider-gateway migrator. Keep out of the core migration engine and accuracy claims; consider only as a design reference for a separate project-memory/journal plane.
+
+## Source and model findings
+
+- `.oculpm/journal/` Markdown is the durable work-record source of truth; planner files describe plan and task state; SQLite is a derived cache. A journal entry captures a concise task summary, structured metadata and files, not a full turn-by-turn transcript.
+- The code's watcher `Session` is an app-side work-activity aggregate (start/end, active-window time, file-change counts, Git heads, agent label, agent conversation IDs, linked journal entries). `agent_sessions` is a list of IDs, not parent/child/fork edges. `FileChangeEvent` tracks file operations/hashes, not conversation messages or tool-result trees. The separate application-window `Session` means the window/project/focused-state snapshot; don't conflate these meanings with a native conversation.
+- Claude Code transcript parsing is used to identify successful file-edit paths for verification; it does not ingest or re-emit the full conversation. `SessionId::imported()` is defined/tested, but focused source reference scan found no production caller. `ManualEntryDraft.created_at` enables backdated manual journal entries; the Tauri command is still a manual-entry path, not a transcript/export importer.
+- Integrations are uneven: README describes level-3 hooks/MCP/rules observation for Claude Code and Codex, while Gemini CLI/Cursor/Copilot/Windsurf/Cline/Aider/Zed/Antigravity/pi are level-1 rules/context paths. Claude Desktop MCP one-click registration was removed in v4.0 after no actual connection records. No mode-specific Chat/Cowork/Code session adapter was found.
+- Workday/category folder structure and planner hierarchy offer useful project-memory organization ideas, but there is no portable native Projects/Sections/thread/branch/subagent graph or generic source/target matrix.
+
+## Privacy/security probe (synthetic only)
+
+The shipped Claude Code hook reads complete event JSON from stdin and appends the unredacted payload to `.oculpm/hooks/claude-events.jsonl`; the JSON can contain `prompt` and `last_assistant_message`. The app parser consumes known metadata fields but unknown JSON fields do not prevent the raw full line from first being written. I ran the actual hook command with a temporary project, synthetic canaries only, and explicit `umask 022`: both subprocesses exited 0 with empty stdout/stderr; canaries remained in plaintext in a 541-byte file with mode `0644` and parent directory `0755`. No real prompt, session, credential, network call or user project was used. `.gitignore` excludes this inbox from Git commits but does not enforce private file modes or encryption. Inbox compaction is conditional: it truncates only after all lines were consumed and size is at least 1 MiB; there is no time-based retention in this path. The transcript parser and this raw hook inbox are separate privacy surfaces.
+
+## Local checks at pinned HEAD
+
+- `rtk codegraph init --yes`: succeeded; 861 files, 13,583 nodes, 49,986 edges; `.codegraph/.gitignore`'s self-preserving exception was removed; final status current.
+- `rtk proxy ./node_modules/.bin/vitest run`: exit 0; 206 files, 1,975 tests passed.
+- `rtk proxy ./node_modules/.bin/tsc --noEmit`: exit 0.
+- Production build (`tsc`, Vite build, critical-CSS check): exit 0; 2,766 modules transformed; critical CSS check passed.
+- Custom lints + ESLint: exit 0; one `no-irregular-whitespace` warning in `scripts/check-design-discipline.mjs`; no lint errors.
+- `rtk cargo test --manifest-path src-tauri/Cargo.toml`: exit 0; 1,234 passed, 5 ignored, 35 suites. `cargo fmt --check`: exit 0. `cargo clippy --all-targets -- -D warnings`: exit 0.
+- Runner caveat: initial `rtk pnpm test` exited 1 before tests because the environment's package policy blocked esbuild/msw install scripts (`ERR_PNPM_IGNORED_BUILDS`). After package installation, the already-installed Vitest binary was invoked directly through `rtk proxy` and the complete suite passed. This is retained as a tooling/environment error, not a source test failure.
+- Upstream CI at this exact commit: CI #592 and E2E #264 succeeded; Release v4.11.2 succeeded. Portability #305 failed on Windows in Cargo tests due two spawn-count performance-budget assertions: `capture_spawns_for_files_committed_together` observed 6 vs limit 5, and `capture_spawns_for_n_committed_files` 11 vs limit 10. Thus Windows remains a mixed/beta signal despite release/CI/E2E success; no Windows device test was run here.
+
+## Primary sources
+
+- Repo / README / LICENSE: https://github.com/bunhine0452/Ocul-PM
+- Release v4.11.2: https://github.com/bunhine0452/Ocul-PM/releases
+- CI #592: https://github.com/bunhine0452/Ocul-PM/actions/runs/44511186927
+- E2E #264: https://github.com/bunhine0452/Ocul-PM/actions/runs/44511186803
+- Windows portability #305: https://github.com/bunhine0452/Ocul-PM/actions/runs/44511187001
+
+## Disposition
+
+Retain as a locally verifiable project-journal/agent-observation reference with an explicit warning about raw hook payload permissions/retention. Do not count its journal, IDs, or hierarchy as full session migration. This is one source-level candidate review, not proof that the wide harness matrix or any target mode is compatible.

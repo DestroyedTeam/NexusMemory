@@ -1,0 +1,29 @@
+# Claude Desktop 3P skill/plugin routing — verified 2026-11-22
+
+This is a supplemental design record for the user-confirmed target: Claude Desktop third-party inference in Chat, Cowork, and Code, plus separate local/self-hosted Claude Code. It does not imply the desktop app offers a generic ChatGPT/Codex archive importer.
+
+## Confirmed routing and packaging rules
+
+User confirmation (2026-11-22): the target includes all three Claude Desktop surfaces—Chat, Cowork, and Code—under third-party inference, and separately local/self-hosted Claude Code. Treat each Desktop mode as an independent acceptance target; none is optional or out of scope.
+
+1. Official Claude Desktop 3P documentation says the app supports MCP connectors, Skills, and plugins, but third-party deployments provision them via managed configuration and the filesystem. User extensions are a separate layer.
+2. Claude-account-synced Skills do not sync into Claude Code when signed in with an API key or when using a third-party/cloud provider. Therefore the API-key Desktop target cannot rely on the user's normal Claude.ai Skills sync.
+3. For a single skill, Desktop 3P can accept a user-uploaded plugin or a plugin marketplace/organization plugin. A desktop plugin can bundle skills, MCP connectors, commands, hooks, and agents. A plain skill directory is not a valid organization plugin: it needs .claude-plugin/plugin.json, or a top-level SKILL.md acting as the manifest with specific frontmatter. To distribute a single skill, put skills/<name>/SKILL.md inside a plugin manifest.
+4. Organization plugin files in the system-wide org-plugins directory load in Cowork and Chat, but do not load skills/commands/subagents/hooks in Code. For all three surfaces, use a marketplace/plugin route or another separately validated local route; do not treat the org-plugins directory as one universal target.
+5. User-uploaded plugins are local-device state and can load in Cowork, Chat, and Code, but have user consent and feature-policy gates. A plugin downloaded in the Code part of the app vs elsewhere can remain scoped to that part of the app, so the target adapter must record deployment surface and install state separately.
+6. Managed plugin marketplaces can be Git or HTTPS, use source pins/manifest digests, and can be available, auto-installed, or required. This is a distribution layer, not a replacement for per-skill session/project contents.
+7. Skill security scanning in Desktop 3P can reject unsupported/binary/large skill files; for a passing/caution result it may rewrite certain characters and does not keep the original copy. It does not scan plugins. Nexus must preserve the original archive hash separately from target-normalized bytes and report every dropped/transformed file. Skills/plugins may execute scripts or influence tool use, so import must remain previewed and source-reviewed.
+
+## Cross-Harness consequence
+
+The portable interchange unit should be the exact Skill bundle plus a manifest of required tools, commands, MCP/plugin dependencies, environment variables, credential references, and permission requirements. Target adapters then create either (a) Desktop 3P plugin/marketplace package(s) for Chat/Cowork/Code, (b) Claude Code local/project skill folders, or (c) Codex skill directories/plugin overlay, each with a separate capability/loss report. Preserve secret names/placeholders, never credential values. The Codex official docs show both .agents/skills and Codex-specific .codex/skills or .codex-plugin packaging in different scopes/formats; treat path and plugin wrapper as versioned adapter metadata rather than a single universal path.
+
+## Sources (primary vendor documentation)
+
+- Claude Desktop 3P extensions/skills/plugins: https://claude.com/docs/third-party/claude-desktop/extensions
+- Claude Desktop 3P configuration, including gateway and plugin/skill capability flags: https://claude.com/docs/third-party/claude-desktop/configuration
+- Claude user skills and account sync limits: https://support.claude.com/en/articles/12512180-use-skills-in-claude
+- Codex/Agent Skills install locations: https://developers.openai.com/api/reference/cli
+- Codex-specific skill and portable plugin packaging: https://developers.openai.com/blog/eval-skills and https://developers.openai.com/plugins/build/plugins
+- Agent Plugins/Agent Skills risk guidance: https://developers.openai.com/api/docs/guides/tools-skills
+

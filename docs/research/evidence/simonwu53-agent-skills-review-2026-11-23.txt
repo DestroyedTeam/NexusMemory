@@ -1,0 +1,67 @@
+# GitHub candidate #218 — `simonwu53/agent-skills`
+
+Review date: 2026-11-23. Bound scope remains Nexus Memory's ChatGPT/Codex Project/Section/`Destruction Era` SessionGraph transfer and the user-confirmed destination set: local Claude Desktop on a third-party inference provider / API gateway in **Chat, Cowork, and Code**, plus local/self-hosted Claude Code. Anthropic-hosted Claude Code Cloud and claude.ai Projects are separate products.
+
+## Identity and project health
+
+- Upstream: https://github.com/simonwu53/agent-skills; shallow checkout `main`, HEAD `0a7e4569fab0f40011b74a6a4e7781aecc3a1ae4`, commit date `2026-10-30T14:40:04+02:00`, subject `Merge pull request #2 from simonwu53/claude_space`; local `main...origin/main` clean.
+- GitHub page shows 0 stars / 0 forks and 10 commits. Latest GitHub release is `v3.0.1` (released 2026-08-17); its page states two commits have landed on `main` since release. Issues: 0 open; PRs: 0 open / 1 closed. No `.github/workflows` tree is present and the Actions tab shows no configured runs. The repo's license metadata is absent and no root LICENSE file is present.
+- Four declared Skill-content submodules are pinned in `.gitmodules` but uninitialized in this shallow checkout: `AIScientists-Dev/academic-humanizer` (`94b88b23703bed7df507acae7d6d5876209a0cdf`), `Haojae/scipilot-figure-skill` (`43098ddb9e6a6d142218540c114f9ed38922fc42`), `K-Dense-AI/claude-scientific-writer` (`14ee3e3c90da3891b081e6789b423a1440ecdfad`), and `emilkowalski/skills` (`78761e1b57f97dce65b983d640c70a68f39e8163`). No user repositories or installed skills were initialized/read.
+
+## What it implements
+
+This is a Bash personal Skill library manager. `main.sh` dispatches `--load/--unload`, `--install/--update/--remove`, `--list`, `--pin/--unpin`, and `--sync`. `config.yaml` models source repositories/local Skills, Skill subpaths/categories, a Boolean pin flag, and coarse install destinations. `download.sh` accepts root GitHub repositories, local folders, and ZIPs; `install.sh` copies by default or symlinks and may clear a tool's destination first; `sync.sh` refreshes Git submodules but does not update already-copied installs. Each Skill is essentially a folder containing `SKILL.md` plus optional assets.
+
+The `claude` tool adapter is one generic path mapping: global `~/.claude/skills/`, project `<project>/.claude/skills/`. It does not distinguish Claude Desktop 3P Chat vs Cowork vs Code, standard Desktop vs 3P, or standalone CLI. There is no parser/writer for ChatGPT/Codex history, Project/Section IDs, message/turn/event records, active branches, parent/child sessions, interruption/re-prompt lineage, images/files/links, token/cost usage, memory, schedules, MCP definitions, plugin bundles, permission decisions, outputs, or target-native resume IDs. It cannot migrate the requested session structure.
+
+## Tests and source review
+
+`rtk proxy bash test/smoke_test.sh` runs an offline temporary-manager integration script: **47 passed, 0 failed**, exit 0. Coverage exercises local path/ZIP loads, GitHub-like local fixtures, categories, name collision prompts, copy/symlink installs, pins, update, remove, list, and unload. There are no unit tests beyond that smoke script and no configured GitHub Actions workflow. Its fixtures never test cross-harness session data, Claude Desktop 3P modes, restore/resume, real host store discovery, input sanitization, or transactional rollback.
+
+Useful narrow ideas: retain source repo identity and subpaths; separate Skill resources from a SessionGraph; make copies rather than assume all harnesses follow symlinks; test exact source selectors and destination adapters. Do not reuse as a session migration engine. Its default install can recursively clear the complete target Skill directory after confirmation, preserving only selected/pinned Skills; `--update` deletes an existing named entry before copying, and no preimage/receipt rollback is produced. These are important warnings for any future writer pointed at user directories.
+
+### Synthetic source-boundary probe (temp-only)
+
+`download.sh` constructs `src="$skroot/$sel"` and stores `$skroot_name/$sel` in config without realpath containment. `config.sh` later joins that relative path to the registered repository root without containment checks. This permits an explicit `--skill` selector with enough `../` components to register a directory outside the checked-out repository. A synthetic local Git repo was mapped to a fake GitHub URL; a sibling `/tmp/.../outside/SKILL.md` was not part of the repo. No actual user directory/config or network request was involved.
+
+Load command (exact fixture paths):
+```sh
+rtk proxy env CONFIG_FILE=/tmp/nm-candidate218-path-traversal-final/config.yaml GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=protocol.file.allow GIT_CONFIG_VALUE_0=always GIT_CONFIG_KEY_1=url.file:///tmp/nm-candidate218-path-traversal-final/fake.insteadOf GIT_CONFIG_VALUE_1=https://github.com/attacker/fake bash /tmp/nm-candidate218-path-traversal-final/manager/main.sh --load --link https://github.com/attacker/fake --skill ../../../../../outside
+```
+Exit 0. Literal stdout:
+```text
+==> Adding submodule: attacker/fake -> skills/repository/attacker-fake
+==> Added skill: outside  (category: .., source: attacker/fake)
+```
+Literal stderr:
+```text
+Cloning into '/private/tmp/nm-candidate218-path-traversal-final/manager/skills/repository/attacker-fake'...
+```
+Recorded subpath: `skills/../../../../../outside`.
+
+Install command:
+```sh
+rtk proxy env CONFIG_FILE=/tmp/nm-candidate218-path-traversal-final/config.yaml bash /tmp/nm-candidate218-path-traversal-final/manager/main.sh --install --skill outside --claude --path /tmp/nm-candidate218-path-traversal-final/project
+```
+Exit 0; stderr empty. Literal stdout:
+```text
+==> Copying 'outside' (project) to:
+  /tmp/nm-candidate218-path-traversal-final/project/.claude/skills
+==> Copied: /tmp/nm-candidate218-path-traversal-final/project/.claude/skills/outside
+==> Done.
+```
+The resulting target file contains the synthetic marker `SYNTHETIC_OUTSIDE_SKILL`. This is a user-supplied-selector path traversal, not a claim that an ordinary `--skill name` or the remote repo autonomously escaped. Guard selectors by validating safe relative components and checking the canonical source remains within the selected repository.
+
+A separate synthetic ZIP with a `../` member was loaded under the installed macOS `unzip`; the CLI exited 0 but the uniquely named sentinel outside its extraction directory did **not** appear. Do not report a demonstrated Zip Slip for this environment; the importer still delegates archive safety to external `unzip` and has no explicit member-path validation in its own code.
+
+## Current official Claude Desktop on 3P cross-check
+
+The official [Desktop 3P overview](https://claude.com/docs/third-party/claude-desktop/overview) explicitly supports Chat, Cowork, and Code, routes model inference through the configured provider/gateway, and keeps conversation storage on the device. The [feature matrix](https://claude.com/docs/third-party/claude-desktop/feature-matrix) says device-local conversation history exists while Anthropic-cloud sessions do not. The current [local-data map](https://claude.com/docs/third-party/claude-desktop/data-storage) says Chat and Cowork use `local-agent-mode-sessions/` session-state JSON plus per-session working directories (uploads/outputs, audit/transcript, memory); Code session metadata is in `claude-code-sessions/`, while transcripts live separately in Claude Code's `~/.claude/projects/`. The same pages describe local provider credentials, device identity, app settings, and data that does not pass through the inference gateway.
+
+The user selected all three Desktop modes in the latest clarification response. Current [Unified Claude documentation](https://claude.com/docs/third-party/claude-desktop/unified-claude) says the UI can combine Chat and Cowork and list their histories together, while Code stays separate; the actual started mode can depend on the device's Cowork VM. Preserve mode/source-store identity, not just a UI label. Current [extensions documentation](https://claude.com/docs/third-party/claude-desktop/extensions) separates managed MCP servers, organization plugin distribution and per-user in-app extensions. Desktop records user-created/uploaded Skills and directs delivery through organization plugins/marketplaces; plain `.claude/skills` filesystem Skills are documented for Code sessions. The candidate's one-path “Claude Desktop / Code” row therefore cannot certify Skill discovery in all three 3P modes. No Desktop profile, local store, API key, or provider was accessed in this review.
+
+The official migration guide documents Claude-origin import/copy workflows with omissions; these are not generic ChatGPT/Codex import APIs. A configured inference gateway receives model requests/responses, not all local session events such as permission decisions. Current source pages checked 2026-11-23: https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider and the claude.com links above.
+
+## Disposition
+
+Classify as an adjacent **ResourcePlane Skill library**, not a candidate session migrator and not evidence for a ChatGPT/Codex-to-Claude Desktop 3P compatibility rate. Reuse only design questions—Skill identity/source provenance, category/pin concepts and target-specific copy-vs-link policy. Reject its unconstrained source selector for a trusted reader/writer and its clear-before-copy updater for any user data. Keep Chat/Cowork/Code as three separate Desktop adapter profiles plus an independent local/self-hosted `claude-code-cli` profile.

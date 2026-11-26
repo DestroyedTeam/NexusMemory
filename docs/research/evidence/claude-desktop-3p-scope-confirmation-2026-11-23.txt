@@ -1,0 +1,5 @@
+# User scope confirmation — 2026-11-23
+
+The user confirmed that Claude Desktop third-party-gateway use through the developer-mode/client gateway should cover **all three modes separately: Chat, Cowork, and Code**. Continue to treat local/self-hosted Claude Code as a distinct target, not as the Claude Desktop client session store. Earlier user correction: the proper label is **Destruction Era**, not “destraction error.”
+
+Acceptance consequence: document and test Chat, Cowork and Code independently. Do not infer that a shared desktop client, MCP server configuration, or shared API key makes their session stores, project trees, tool state, attachments, or restore semantics interchangeable.

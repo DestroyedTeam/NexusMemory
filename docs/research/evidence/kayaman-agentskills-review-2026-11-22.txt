@@ -1,0 +1,52 @@
+# kayaman/agentskills — candidate #128 review
+
+Date: 2026-11-22. Candidate #128 in the primary 303-repository GitHub search corpus. Scope remains ChatGPT Projects/Sections/Destruction Era sessions and related resources into local/self-hosted Claude Code and Claude Desktop Chat/Cowork/Code as distinct surfaces. No user application, session store, key, account, global Skill directory or target CLI was accessed. All destructive/synthetic probes used temporary directories only.
+
+## Pinned identity and maintenance
+
+- Repository: https://github.com/kayaman/agentskills ; Apache-2.0. The search snapshot records 1 star. Local HEAD is `a5093afcb84a27dbbd7a816f8e92bd5058313cf2`, commit dated 2026-04-29 (`Add slug for Codecov upload in CI workflow (#4)`); `Cargo.toml` version 0.1.3, edition 2024. CodeGraph indexed 22 files / 237 nodes / 554 edges; status up-to-date.
+- GitHub advertises a single open PR and the Actions page showed 23 runs; the latest visible successful run was a PR #6 run on branch `feat/install-by-name` (Oct. 18, 2026), not a pinned-main E2E certification. Checked-in CI runs `cargo test` and a Codecov/Tarpaulin job; it does not run Clippy or rustfmt.
+
+## What the code actually installs
+
+- `agentskills add` parses local paths or GitHub handles, shallow-clones a branch/tag, copies one skill or all discovered `SKILL.md` folders, and writes `~/.agents/skills` or project `.agents/skills`. The lockfile is `.agents/.skill-lock.json` v3; it records source repository, source URL, skill path, folder hash and timestamps.
+- `detect_agents` recognizes marker directories for Cursor, Claude Code, Codex, Copilot, Amp, Cline, Continue and Kiro, and `add` prints the first detected name. But `installer.rs` ignores that detected agent and always writes `.agents/skills`; `AgentInfo.skills_dir` is display metadata, not a per-target serializer. This is a shared directory convention, not eight verified native adapters.
+- Current official docs validate `.agents/skills` for Codex, Cursor and Copilot; OpenCode V2 also recognizes it as a compatibility path. Current Claude Code docs specify `.claude/skills` and do not list `.agents/skills`. Thus the README's detection list cannot be counted as eight working targets without host-specific runtime tests. Claude Desktop Chat/Cowork session stores, account skills, Code session records, MCP, plugin, Project, Section, memory and schedule conversion are absent.
+- The `SkillSource` records a `git_ref` while fetching, but `SkillLockEntry` omits that ref/commit. `update` reconstructs `owner/repo@skill` and fetches the default `main` branch, so a one-time pinned ref is not a reproducible lock. The SHA-256 folder hash excludes dotfiles and concatenates relative path bytes with file contents without delimiters/lengths.
+
+## Build/test evidence
+
+- `rtk cargo test --locked` → exit 0; `cargo test: 58 passed (2 suites, 0.03s)`.
+- `rtk cargo build --locked --release` → exit 0; `Finished release profile [optimized] target(s) in 13.36s` after 97 crates compiled.
+- `rtk cargo fmt --check` → exit 1 with formatting diffs in `src/commands/find.rs`, `src/commands/init.rs`, `src/core/git.rs`, `src/core/hash.rs`, `src/core/installer.rs`, `src/core/source_parser.rs`, and `tests/integration.rs`; no formatter rewrites were applied.
+- `rtk cargo clippy --all-targets --all-features -- -D warnings` → exit 101, 3 denied lints: consecutive `str::replace` in `src/commands/init.rs`, collapsible `if` in `src/commands/update.rs`, and manual `unwrap_or_default` in `src/core/lockfile.rs` (plus one warning). The chained release build did not execute in that command; it was run separately and passed.
+
+## Reproduced isolated behavior/security probes
+
+1. **Remove escapes the skills root.** First attempt lacked the intermediate `.agents/skills` directory and therefore returned exit 1 (`Skill '../../../victim' not found in project scope.`); the temporary victim remained. After creating that directory, `agentskills remove ../../../victim` resolved to a sibling of the project root, exited 0, printed `ℹ Removing skill '../../../victim'...` and `⚠ Removed '../../../victim' directory but it was not in the lockfile.`, and deleted the temp-only victim sentinel. The checked path was `/private/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-kayaman-remove-path-probe-297vm8hk/victim`; the entire temp tree was automatically removed afterward.
+2. **Failed replacement deletes the old skill and leaves stale lock.** Initial local install of `demo` exited 0 and wrote `# old`. Re-run with a changed skill plus a dangling symlink in the source exited 1 (`✗ No such file or directory (os error 2)`) after `install_single` removed the existing destination. The old `SKILL.md` was gone, the destination was absent, and `.skill-lock.json` was unchanged. All paths were under disposable `/tmp/nm-kayaman-overwrite-probe-cbzouttr/`.
+3. **Dotfiles are copied but omitted from integrity hash.** Two temp skills with identical `SKILL.md` but different `.private` contents both installed successfully and received the same lock hash `b8076aef1d6e7fff009d97a39f8d9e581483c133dbf0848fb47f9c20cb3d972d`.
+4. **Hash framing collision.** Two temp skill trees with identical `SKILL.md` but distinct files (`a` containing `bc` vs `ab` containing `c`) both installed successfully and received hash `1971e4d30c53a0f541391a8f6861bb674307eaa3a3f98013a1cce4e146a12f3e`. Inference from `update.rs`: because updates compare this same hash, such distinct trees can be treated as unchanged.
+
+## Disposition
+
+Retain the open `SKILL.md` package/source idea and lockfile/provenance vocabulary as a narrow ResourcePlane reference. Do not adopt its installer, path handling, update/rollback semantics, lock hash, or treat its 8-marker detection as 8 complete cross-harness adapters. It has no SessionGraph or ChatGPT/Claude Desktop migration support, and its reproduced path traversal plus destructive failed update are direct blockers for reusing mutation code.
+
+## Primary sources checked
+
+- Pinned source tree: https://github.com/kayaman/agentskills/tree/a5093afcb84a27dbbd7a816f8e92bd5058313cf2
+- Installer, source parser, remove, update, hash: https://github.com/kayaman/agentskills/blob/a5093afcb84a27dbbd7a816f8e92bd5058313cf2/src/core/installer.rs ; https://github.com/kayaman/agentskills/blob/a5093afcb84a27dbbd7a816f8e92bd5058313cf2/src/core/source_parser.rs ; https://github.com/kayaman/agentskills/blob/a5093afcb84a27dbbd7a816f8e92bd5058313cf2/src/commands/remove.rs ; https://github.com/kayaman/agentskills/blob/a5093afcb84a27dbbd7a816f8e92bd5058313cf2/src/commands/update.rs ; https://github.com/kayaman/agentskills/blob/a5093afcb84a27dbbd7a816f8e92bd5058313cf2/src/core/hash.rs
+- Current official paths: OpenAI Codex https://developers.openai.com/api/reference/cli ; Claude Code https://code.claude.com/docs/en/skills ; Cursor https://cursor.com/docs/skills ; GitHub Copilot https://docs.github.com/en/copilot/concepts/customizations/agent-skills ; OpenCode https://opencode.ai/docs/skills/.
+
+
+## Release, CI and current native alternative checked 2026-11-22
+
+- Git tags are `v0.1.0`, `v0.1.2`, `v0.1.3`; `v0.1.3` points to `2b4c837f197b1cfb8ccb467d3fbab016cfed5086` (2026-03-20), while pinned `main` is a later Apr. 29 commit but still reports package version 0.1.3. GitHub Actions shows successful CI run #14 for the pinned main commit on Apr. 29. The latest visible Actions run is PR #6 CI #16 from Oct. 18 and succeeds, but is not merged. PR #6 remains open; it adds bare-name Skill install and version 0.2.0, while Copilot review flags that the default `kayaman/agentskills` repository lacks the advertised Skill. Treat that branch as proposed and separately gated, not as current main. Sources: https://github.com/kayaman/agentskills/actions ; https://github.com/kayaman/agentskills/pull/6.
+- GitHub's current CLI docs separately document `gh skill` (public preview, GitHub CLI >=2.90): preview before install, agent/scope-specific targets, `@TAG`/`@SHA`, `--pin`, and install provenance containing source repository/ref/tree SHA. That is a stronger current comparator for deterministic Skill install/lock behavior than this candidate's `main`-only updater; it remains a Skills plane and does not create/restore any Projects or Sessions. Source: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills.
+
+
+### Update failure status probe (additional temp-only test)
+
+A fake `git` executable at the front of a disposable `PATH` returned exit 128 with `fatal: forced fixture failure`. With one synthetic project lock entry, `agentskills update demo` itself exited **0**; stdout was `ℹ Checking 'demo'...
+ℹ All skills are up to date.`, while stderr contained `✗ git clone failed: fatal: forced fixture failure
+⚠ Failed to update 'demo': Failed to clone https://github.com/owner/no-such-repository.git: fatal: forced fixture failure`. The installed Skill remained. This is a false-success status path, not a successful update; no network request or real repo was involved.

@@ -1,0 +1,29 @@
+# Knaackee/linxmd review — 2026-11-23
+
+- Upstream: https://github.com/Knaackee/linxmd/tree/d831a3ac078bfd6322e87ba10bd860a52be2001f
+- Pinned HEAD / refs/heads/main: `d831a3ac078bfd6322e87ba10bd860a52be2001f`; commit time `2026-04-02T10:48:12Z`; isolated shallow checkout; source tree clean.
+- License: MIT. Language: C#/.NET. Source reviewed: README, `src/Linxmd/Commands/CommandFactory.cs`, `src/Linxmd/Services/SyncEngine.cs`, local source client, installed state, library index parser, unit/E2E tests and CI. CodeGraph: 33 files, 569 nodes, 1,262 edges.
+
+## Capability / migration boundary
+
+README describes a CLI artifact manager for Agents, Skills, Workflows and Templates with GitHub/local sources, dependencies/version pins and project-local `.linxmd/` state. `SyncEngine.Sync` creates Copilot (`.github/agents`), Claude Code (`.claude/agents`, `.claude/skills`) and OpenCode (`.opencode/agents`) outputs; Skills sync only in the Claude Code branch. No ChatGPT/Codex project, Section Group, conversation/session graph, parent-child/branch/turn semantics, transcript/media/token/schedule importer, or Claude Desktop Chat/Cowork/Code third-party gateway adapter was found.
+
+Source links pinned to the reviewed commit: [README](https://github.com/Knaackee/linxmd/blob/d831a3ac078bfd6322e87ba10bd860a52be2001f/README.md), [SyncEngine](https://github.com/Knaackee/linxmd/blob/d831a3ac078bfd6322e87ba10bd860a52be2001f/src/Linxmd/Services/SyncEngine.cs), [CommandFactory](https://github.com/Knaackee/linxmd/blob/d831a3ac078bfd6322e87ba10bd860a52be2001f/src/Linxmd/Commands/CommandFactory.cs), [tests](https://github.com/Knaackee/linxmd/tree/d831a3ac078bfd6322e87ba10bd860a52be2001f/tests/Linxmd.Tests). `SyncAgentsTo` writes current wrapper files but does not enumerate/delete stale target files. `InstallDirectoryArtifactAsync` combines `GetArtifactDir(type)` with remote `artifact.Name` and combines each returned entry with target directory without a canonical-root check.
+
+## Tests
+
+1. Unmodified checkout: `rtk proxy dotnet test Linxmd.sln --verbosity quiet`, local .NET SDK 8.0.129 in isolated HOME/NuGet paths. Exit 1; stdout contained `NETSDK1045` for both `src/Linxmd/Linxmd.csproj` and `tests/Linxmd.Tests/Linxmd.Tests.csproj`, each targeting .NET 10.0; stderr empty. This is an environment/toolchain limitation, not a candidate test failure or upstream CI result.
+2. Disposable copy with only copied project target frameworks retargeted `net10.0`→`net8.0`: same `rtk proxy dotnet test Linxmd.sln --verbosity quiet` command, exit 0, stderr empty; literal result `Passed! - Failed: 0, Passed: 152, Skipped: 0, Total: 152, Duration: 2 m 9 s - Linxmd.Tests.dll (net8.0)`. Warnings: IL2026 JSON trimming warnings in UpdateNotifier; xUnit1031 blocking task operation warning. Compatibility smoke does not establish .NET 10 equivalence.
+
+## Isolated dynamic probes (all paths under a disposable temp root)
+
+Commands and results captured in `/Users/vincentadamnemessis/NexusMemory/artifacts/verified-workspace-routing-2026-11-20/VERIFICATION.txt`, follow-up 186 section. Local fake index/source only; no actual project or external credentials.
+
+- `init --project <temp>/project`: exit 0, stderr empty.
+- `add agent:stale-agent --install --yes --project <temp>/project`: exit 0, stdout reported `✓ Installed agent 'stale-agent' v1.0.0.` and `✓ Synced: 3 wrapper(s), 1 skill(s) copied.` All three wrapper files existed.
+- `remove agent:stale-agent --yes --project <temp>/project`: exit 0, stdout reported `✓ Uninstalled agent 'stale-agent'.` and `✓ Synced: 0 wrapper(s), 1 skill(s) copied.` All generated wrappers remained on disk.
+- `add skill:../../../escaped-skill --install --yes --project <temp>/project`: exit 0, stdout reported installation; synthetic `SKILL.md` appeared at `<probe-root>/escaped-skill/SKILL.md` (outside `<probe-root>/project` and `.linxmd/skills`, still inside the temporary probe parent).
+
+## Decision
+
+Adjacent ResourcePlane reference only: manifest/dependency packaging and per-host serialization. Not a Project/Section/SessionGraph migration solution. Before adopting its path model, enforce real-path containment for artifact names and entry paths; give generated outputs ownership tracking and stale-file cleanup. Do not infer migration accuracy from the 152 unit/E2E tests; those tests validate package-manager behavior, not cross-Harness conversation fidelity.

@@ -1,0 +1,44 @@
+Nexus Memory candidate evidence — itlackey/akm (Agent Knowledge Manager)
+Review date: 2026-11-20
+
+IDENTITY / VERSION / CURRENT BRANCH
+- Repository: https://github.com/itlackey/akm (MPL-2.0). GitHub page snapshot: 70 stars / 4 forks.
+- Local default-branch checkout `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-itlackey-akm-20261120`: main HEAD `ec8318eabc6f15b912b3fe4f86b17130c0e3746f`, clean, commit 2026-11-16 (“Merge pull request #1695 from itlackey/release/0.10.261129”). Package 0.10.261129.
+- Remote refs included `release/0.10.261130` at `45cea2cf4ecef939bd83095c3a7f0ed55e15eaed` and latest `release/0.11.0` at `fce58373e7cf373cd07f57ec854c31268697e4d9`. The latter is commit 2026-11-20, “Merge release/0.10.261130 (0.10.261130-beta.6) into release/0.11.0 (#1720)”; its package is `0.11.0-beta.0`. GitHub release page at review time lists `v0.10.261130-beta.6` as a prerelease published Nov 20 and `v0.10.261129` as the prior stable release (Nov 16). Do not treat the active 0.11 branch as a stable published version.
+- CodeGraph initialized on both checkouts (main 2,031 files / 33,799 nodes / 160,886 edges; release branch 1,916 files / 33,669 nodes / 163,393 edges); both status current. The installed CodeGraph init CLI did not accept AGENTS.md’s `--yes` flag (exit 1, unknown option); corrected by `rtk codegraph init <project-path>` (exit 0). `.codegraph/.gitignore` kept, its `!.gitignore` exception removed.
+
+PRODUCT / TARGET FIT
+- AKM is a local-first knowledge/capability library with 14 native asset types; broad harness/runtime integration; read-only adapters for Claude Code/OpenCode directories, Agent Skills, OKF/LLM wikis and other sources; path-based project defaults; Task v4 files plus cron/launchd/schtasks backends. Product docs mark session extraction, tasks/scheduling and harnesses as Evolving.
+- Docs explicitly say AKM complements MCP/native skills; it does not replace or migrate arbitrary MCP servers. The richer platform plugins for Claude Code, Codex and OpenCode are a separate repo, `itlackey/akm-plugins`, not part of this review.
+- LLM connections are OpenAI-compatible endpoints and API keys are environment-variable references. They support AKM model-work calls, not destination session storage in Claude Cloud.
+- `projects` are path-selected read/write/filter scopes. They are not a nested Session/Project/SectionGroup graph. `--project` supplies fields such as user/agent/channel/metadata to memory/proposal assets.
+
+SESSION ADAPTERS AND LOSS
+- `SESSION_LOG_HARNESSES` derives from registry providers for exactly Claude Code, Codex and OpenCode. No ChatGPT-history session adapter was found.
+- Claude Code reader parses local JSONL and folds the parent’s subagent JSONL files into one chronologically sorted parent SessionData. Child transcript content is stamped with parent session identity/provenance; no parent-child edge is emitted.
+- Codex reader reads rollout JSONL from CODEX_HOME/sessions; includes codex exec, excludes subagent/guardian/internal rollouts. It accepts response_item message, function/custom tool calls and tool outputs. `blockText` reads only text blocks; image/audio blocks are discarded.
+- OpenCode reader handles v1/v2 SQLite read-only and does not start the OpenCode process. v2 lists top-level sessions only (subagents and AKM model-work omitted); event projection keeps text/tool-call/tool-result strings.
+- `SessionSummary` only contains harness/session id/file path/times/cwd/project hint/title. `SessionEvent` only contains harness/text/time/session id/role/file path. It lacks canonical parent/fork edges, SectionGroup, multimodal attachments, explicit interruption/steering, provider continuation markers and token/cost accounting.
+- `akm proposal extract --sessions ...` (or `--auto`) calls a model to turn transcripts into durable insight proposals; default discovery window is 24h, with `--since`, `--session-id`, `--location`, `--dry-run`, `--force`, `--project`, model/connection selectors. The `sessions/**` asset writer stores metadata, source `log_path`, access instructions, tags, LLM Summary and Key topics only; it does not copy raw message events. The local source log must remain available. Pre-filtering truncates long events and uses a recency-biased total-character budget. Session extraction remains Evolving per STABILITY.md.
+- No actual ChatGPT Project/Section/session payload, provider credential, API key or user home session log was accessed. All test fixtures and temp dirs were synthetic and isolated.
+
+TESTS AND MACOS PATH FAILURE
+- Bun 1.4.5 installed in isolated `/private/tmp/nm-bun-runtime-20261120`; `bun install --frozen-lockfile` on `release/0.11.0` exited 0, 52 packages installed (122.52s).
+- Focused tests on release branch: `bun test tests/session-logs-providers.test.ts tests/session-logs-pre-filter.test.ts tests/commands/improve/session-summary.test.ts tests/integration/opencode-session-store.test.ts`; exit 0, 81 passed, 0 failed, 212 expect calls (12.87 s).
+- `bun test tests/integration/extract-projects.test.ts`; exit 1, 0 passed / 3 failed; each failed in `resolveProposalQueueTarget` with `ConfigError: No bundle owns proposal queue /var/folders/.../stash`. This also reproduces without test harness using a temp filesystem bundle.
+- Direct probe command imports `resolveSourceEntries` and `resolveProposalQueueTarget`, creates a synthetic bundle under `os.tmpdir()`, prints both the raw and real path, and removes the temp dir. On macOS: `root=/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/akm-release-source-probe-GKFvFk`; `real=/private/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/akm-release-source-probe-GKFvFk`; source listing contains the `/private/var/...` path with `registryId:"stash"`; `resolveProposalQueueTarget(root, config)` throws `No bundle owns proposal queue /var/folders/...`. Exit 1 on release/0.11.0. Cause: comparison uses `path.resolve(source.path) === root` but source path was already `safeRealpath` normalized; neither operand is canonicalized consistently.
+- A wrongly named Bun selector (`-t 'minContentChars: 0 disables'`) matched zero tests (exit 1), because the 0.11 branch renamed/removed that test. Corrected by running `tests/integration/extract-projects.test.ts` without a name filter; this gave the reproducible 0/3 result above.
+- Main-branch broader 6-file extraction-focused run: 108 pass / 17 fail, failures in extraction flows sharing the same path mismatch. Treat as supporting evidence; latest-branch direct reproduction and 3 targeted test failures are authoritative.
+
+RESEARCH CLASSIFICATION
+- Value: high as a reference for source readers, data/hash idempotence, dry-run, log prefilter, and local knowledge/scheduler architecture.
+- Not a session migration implementation: no ChatGPT history adapter, no raw transcript/package export to Cloud, no hierarchy graph or target write adapter. Keep the source adapters as potential design references, not the canonical representation.
+- Recommended class: `HIGH_VALUE_LOCAL_SESSION_INGESTION_REFERENCE_NOT_MIGRATOR`; 303 repository records total, 33 reviewed, 270 unreviewed after this record.
+
+PRIMARY LINKS
+- Repo/release: https://github.com/itlackey/akm and https://github.com/itlackey/akm/releases
+- Pinned release branch: https://github.com/itlackey/akm/tree/fce58373e7cf373cd07f57ec854c31268697e4d9
+- Session summary writer: https://github.com/itlackey/akm/blob/fce58373e7cf373cd07f57ec854c31268697e4d9/src/commands/improve/session-asset.ts
+- Codex reader: https://github.com/itlackey/akm/blob/fce58373e7cf373cd07f57ec854c31268697e4d9/src/integrations/harnesses/codex/session-log.ts
+- Queue ownership: https://github.com/itlackey/akm/blob/fce58373e7cf373cd07f57ec854c31268697e4d9/src/commands/proposal/repository.ts
+- Agent/MCP boundary: https://github.com/itlackey/akm/blob/fce58373e7cf373cd07f57ec854c31268697e4d9/docs/guides/use-with-any-agent.md

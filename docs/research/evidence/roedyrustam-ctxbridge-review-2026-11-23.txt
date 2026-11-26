@@ -1,0 +1,57 @@
+# Candidate #213 source review — roedyrustam/ctxbridge
+
+Review date: 2026-11-23. Pinned checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-roedyrustam-ctxbridge-20261123-followup213`; branch `main`, `origin/HEAD` -> `origin/main`; HEAD `9c03ce2da94ac38eaec2beef964d16e0c3cbf534`; Git working tree clean after tests. CodeGraph initialized: 17 files, 262 nodes, 664 edges; status up-to-date. `.codegraph/.gitignore` self-preserving `!.gitignore` exception removed; database remains ignored.
+
+## Upstream snapshot
+
+- Repo: https://github.com/roedyrustam/ctxbridge
+- Pinned commit: https://github.com/roedyrustam/ctxbridge/commit/9c03ce2da94ac38eaec2beef964d16e0c3cbf534
+- GitHub page (checked today): main branch, 5 commits, 0 stars / 0 forks, MIT license. `Cargo.toml` v0.2.0; repository latest commit 2026-11-15. Latest release `v0.2.0`: https://github.com/roedyrustam/ctxbridge/releases
+- GitHub Actions: https://github.com/roedyrustam/ctxbridge/actions — 6 runs visible. Current commit CI#3 passed (Nov 15, 53s); Release#1 passed (Nov 15, 2m11s); metadata sync run #2 failed (Nov 15, 10s). No root-cause analysis performed for the metadata failure.
+- Pull requests: https://github.com/roedyrustam/ctxbridge/pulls — 0 open, 0 closed visible. Issues: https://github.com/roedyrustam/ctxbridge/issues — 0 open visible.
+- Security policy: repository README says local-first, no telemetry; `SECURITY.md` asks reporters to use private GitHub Advisories or a non-sensitive issue.
+
+## Actual data model and compatibility
+
+README/PRD/ERD and pinned code show: project store `.ctxbridge/project.db`; global `~/.ctxbridge/global.db`; project `rules.md`; git-tracked `memories.jsonl`; and SQL tables for `memories`, `memory_tags`, `capsules`, `capsule_items`, `sync_targets`, and `sync_logs`. Memory fields include ID/hash, scope, kind, title/content, source agent, priority, token estimate, tags, timestamps. MCP exposes memory save/recall, capsule generation, context sync and forget. `ctxbridge sync` targets `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `CODEX.md`, `.gemini/GEMINI.md`; these are local coding-agent instruction files. There is no ChatGPT/Codex Projects or Section Groups import, conversation/session event model, parent/child task/branch graph, files/attachment payload model, tool-result stream, token-accounting importer, Claude Desktop 3P Chat/Cowork/Code session target or target-native resume/lineage adapter. `ctxbridge capsule` creates a derived bounded memory handoff, not a session transcript. `export_jsonl` selects only memory IDs/records; capsules and their membership are not included.
+
+Relevant pinned source:
+- `src/store.rs:447-469` `export_jsonl`: sorted `SELECT id FROM memories`, serialize each memory record to JSONL.
+- `src/store.rs:471-503` `import_jsonl`: deserialize `MemoryRecord`, call `save_memory` with scope/kind/title/content/source_agent/priority/tags; does not submit ID/hash/token_estimate/timestamps.
+- `src/adapter.rs:118-192` `sync_adapters_with_mode`: joins fixed relative target paths under project_root and calls `fs::write` sequentially; no canonical/symlink containment check or multi-file rollback.
+- `src/capsule.rs:10-110` builds derived capsules from recall/pinned memories and stores capsule records; no source transcript importer.
+
+## Local quality gates (exact checkout)
+
+- `rtk cargo test --locked`: exit 0; literal RTK summary `cargo test: 19 passed (7 suites, 0.13s)`.
+- `rtk cargo fmt --check`: exit 0.
+- `rtk cargo clippy --locked --all-targets -- -D warnings`: exit 0; `cargo clippy: No issues found`.
+- `rtk cargo build --locked --release`: exit 0; `cargo build (65 crates compiled)` and `Finished 'release' profile [optimized]`.
+- `rtk cargo tree --locked --invert libsqlite3-sys`: `libsqlite3-sys v0.30.1 -> rusqlite v0.32.1 -> ctxbridge v0.2.0`.
+- `rtk cargo tree --locked --invert chrono`: `chrono v0.4.45 -> ctxbridge v0.2.0`.
+- `rtk cargo audit`: exit 1; loaded current advisory DB; reports RUSTSEC-2026-0459 for `libsqlite3-sys 0.30.1` and RUSTSEC-2026-0543 for `chrono 0.4.45`.
+- `rtk cargo audit --locked`: exit 2, corrected because `cargo audit` does not accept `--locked`; exact diagnostic: `error: unexpected argument '--locked' found`.
+
+RustSec primary sources: https://rustsec.org/advisories/RUSTSEC-2026-0459.html and https://rustsec.org/advisories/RUSTSEC-2026-0543.html. RUSTSEC-2026-0459 describes SQLite <3.54.0 exposing uninitialized page-cache bytes when the process opens an attacker-crafted DB together with a sibling WAL whose page size differs; `libsqlite3-sys`'s bundled source is affected; RustSec marks `>=0.39.0` patched. The condition requires the process to open DB/WAL supplied by a less-trusted party; no exploit was run. RUSTSEC-2026-0543 marks `chrono` unmaintained, with no patched version. This is a dependency risk; not a demonstrated exploit in this repo.
+
+## Synthetic, isolated behavior checks
+
+All synthetic files live under `/tmp/nm-ctxbridge-followup213-poc/`, use a locally built release binary, explicit `--project`, and a temporary `CTXBRIDGE_HOME`. No live harness, personal file, provider credential or non-temporary path was accessed.
+
+### JSONL import provenance probe
+
+Created synthetic memory; exported JSONL; changed incoming record fields to ID `source-id-keep-me`, hash `source-hash-keep-me`, `created_at=2001-02-03T04:05:06Z`, `updated_at=2002-03-04T05:06:07Z`, `token_estimate=999`, retaining scope=project, kind=decision, title `Synthetic source title`, content `synthetic memory payload`, source_agent=codex, priority=5, tags=[fixture,transfer]. `ctxbridge --project /tmp/nm-ctxbridge-followup213-poc/target import` exited 0, stdout `Imported 1 new memories (0 duplicates merged/skipped).`, stderr empty. Exporting target exited 0, stdout `Exported 1 memories to /tmp/nm-ctxbridge-followup213-poc/target/.ctxbridge/memories.jsonl`, stderr empty. Output had a new UUID, current timestamps `2026-11-23T11:58:11.708210Z`, recomputed SHA-256 `40f92556f9e33fc6aae036cee8f3f09694f9425c0e509dd636f6f83562ef6b39`, and token estimate 6. Scope/kind/title/content/source_agent/priority/tags were identical to input. This confirms the app's memory import is dedup-oriented, not identity/time-preserving.
+
+### Project-root symlink write probe
+
+Created `/tmp/nm-ctxbridge-followup213-poc/symlink-project/AGENTS.md` as a symlink to `/tmp/nm-ctxbridge-followup213-poc/outside-sentinel.md` whose initial bytes were `# EXTERNAL SENTINEL
+`. `ctxbridge --project ... init` exit 0; `ctxbridge --project ... sync` exit 0, stdout showed AGENTS.md `[updated]` and other four adapters `[created]`; stderr empty. The symlink remained and the outside sentinel changed to include the project default rules plus `<!-- ctxbridge:start -->` and `<!-- ctxbridge:end -->`. This is a confirmed write through a project-root symlink, but whether a user-created symlink is intentional is context-dependent. It proves there is no containment guard, so a safe migration writer should reject symlink escape by default or obtain explicit opt-in, and use realpath containment.
+
+## Researcher tool errors corrected (not product failures)
+
+- A CodeGraph lookup used nonexistent `render_capsule`; it returned “Symbol not found” and exited 1. Correct symbol `generate_capsule` was retrieved and verified.
+- A grep used directories as file arguments (`rtk grep -n 'fn test_' tests src`) and exited 2 with `grep: tests: Is a directory` / `grep: src: Is a directory`; corrected to `rtk grep -n 'fn ' tests/bridge_tests.rs` and `tests/mcp_tests.rs`, which returned concrete test names.
+- One `exec_command` was rejected before shell creation due a misspelled checkout path; corrected to the cloned `/.../nm-review-roedyrustam-ctxbridge-20261123-followup213` path. No command ran in the rejected attempt.
+- A GitHub `/commits/main/` page request was restricted by the browser fetcher; local pinned HEAD and GitHub repository's displayed 5-commit count were used instead.
+
+Disposition: **high-value adjacent memory-plane reference, not a session/project migrator**. Reuse the conceptual split among project/global memory, memory categories, MCP interface and handoff capsule only. Do not claim lossless history migration, and do not reuse the import/file-writer behavior without preserving source IDs/timestamps and guarding path writes. Assess or update the affected SQLite and chrono dependencies before opening untrusted project databases.

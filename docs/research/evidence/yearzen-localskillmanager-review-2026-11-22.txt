@@ -1,0 +1,36 @@
+# Candidate review — yearzen1/LocalSkillManager (#108)
+
+Reviewed 2026-11-22. Checkout `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-yearzen1-localskillmanager-20261122`; pinned HEAD `809eb98210038fcf02c6eb386f3436e9db10fbc8`; Cargo package version 0.11.0. GitHub snapshot: 2 stars, 0 forks, not archived, MIT; latest release observed v0.9.1 (2026-11-12), while HEAD package version is 0.11.0; pushed 2026-11-18. `rtk gh run list` returned `[]`; root listing contains no `.github` workflow directory. Low public adoption and untagged HEAD are context, not direct quality measures.
+
+## Product surface and canonical data model
+
+LocalSkillManager (`lsm`) is a cross-platform Rust CLI for local Skills only: `add`, `list`, `search`, `pull`, `push`, `remove`, reusable groups, config, and self-upgrade. The only managed runtime assets are `.agents/skills/<name>/` in two scopes: global (`$LSM_HOME/skills`, default `~/.agents/skills`) and project (`<cwd>/.agents/skills`). Project scope is exactly the current working directory; it does not discover a root. Pull/push copy directories, not links. A group is a global TOML list of skill names and `@group` references; nested references are DFS-expanded, de-duplicated, and cycle/missing-reference checked. This is not a ChatGPT Project/Section Group container.
+
+The data model is a directory name + SKILL.md frontmatter (`name`, `description`) plus arbitrary local files. Strict skill names are lowercase ASCII letters/digits/single hyphens, at most 64 characters, with Windows reserved device names rejected. No Session/message/branch/subtask/event graph, transcript, attachments, usage tokens, MCP or plugin config, memory store, schedule, remote-Harness source adapter, or Claude Desktop/Claude Code session writer was found in `src`, docs, or READMEs. The repository scan for session/transcript/MCP/plugin/conversation terms returned no matches. Thus it contributes only local asset-plane patterns, not any requested Project/Session portability.
+
+## Source and safety review
+
+- `src/commands/add.rs`: accepts a local Markdown file or directory; directory basename must match parsed frontmatter name; rejects destination nested inside source; refuses an existing destination without explicit `--force`.
+- `src/domain/name.rs`: rejects slash, backslash, dots/path traversal, uppercase Skill IDs, invalid hyphen forms, long names, and Windows reserved names. The parser is tested for traversal-shaped names.
+- `src/infra/fsops.rs`: recursively copies in deterministic filename order, rejects symlinks rather than following them, stages into a same-volume sibling temp path, renames the old target to backup only after staging succeeds, rolls the old target back if final rename fails, and cleans or reports leftover backups. `remove` similarly renames to a temp entry before deletion. Explicit `--force` intentionally replaces the named target.
+- Source-level caveat: sibling temp and backup names are predictable (`.tmp-<name>-<pid>`, `.bak-<name>-<pid>`) and pre-existing collisions are removed with `remove_existing` before use. No collision POC was run; treat as an unverified stale-name/data-loss edge, not a reproduced finding.
+- Project skill groups live in the global `groups.toml`, not per-project metadata. A group contains only skill IDs/references; no project/session tree or target-specific capability/loss model exists.
+- Cargo.lock pins the Rust dependency graph; no cross-Harness formats, adapters, migration receipts, or conformance fixtures are present.
+
+## Verification performed
+
+1. `rtk cargo test --locked --all-targets` — exit 101. Observed 243 library/unit tests pass. Integration test `tests/cli.rs::upgrade_fails_cleanly_when_the_directory_is_not_writable` is the one failure (178 CLI integration tests pass, 1 fails). It chmods the temp directory to 0555 but expects stderr `cannot replace`; the implementation first downloads to a sibling `.lsm-upgrade-*` file, so the observed error is instead `cannot download lsm-macos-arm64: ... Permission denied`. The test fails before checking the original executable remains unchanged; its intended replacement-failure branch was not reached. Local HTTP test server and TempDir isolation were confirmed in the test helpers.
+2. `rtk cargo test --locked --test config` — exit 0, 11 passed.
+3. `rtk cargo test --locked --test upgrade` — exit 0, 5 passed.
+4. `rtk cargo test --locked --test cli -- --skip upgrade_fails_cleanly_when_the_directory_is_not_writable` — exit 0, 178 passed, 1 filtered out.
+5. `rtk cargo fmt --check` — exit 0.
+6. `rtk cargo clippy --locked --all-targets -- -D warnings` — exit 101: `src/infra/fsops.rs:252` helper `backup_path` is dead code on this macOS target because its call site is Windows-only but the helper itself is not cfg-gated.
+7. `rtk cargo build --locked --release` — exit 0, one warning for the same `backup_path` dead code.
+8. Disposable end-to-end probe only under `/tmp/nm-lsm-poc-20261122`: `lsm add <fixture.md> global` installed a temp Skill; `lsm group set reusable durable-skill` wrote a global group; in a separate temp project `lsm pull --group reusable` copied it to `<cwd>/.agents/skills/durable-skill`; `lsm list project --json` returned `valid: true`. Observed output: `installed durable-skill -> /tmp/nm-lsm-poc-20261122/home/.agents/skills/durable-skill`; `group 'reusable' saved (1 skills) -> /tmp/nm-lsm-poc-20261122/config/groups.toml`; `pulled durable-skill -> /private/tmp/nm-lsm-poc-20261122/project/.agents/skills/durable-skill`; `pulled 1, skipped 0, failed 0`; JSON listed one valid `durable-skill`. The fixture was deleted afterward. No user Skill tree was accessed.
+9. A scoped source search for `session|transcript|mcp|plugin|conversation|section group` across `src`, READMEs, and docs returned no matches. This supplements (but does not replace) the source-level model review.
+
+## Disposition
+
+Retain as a comparatively strong **narrow Skills ResourcePlane reference**: strict path-safe identifiers, explicit scope, safe default no-overwrite, explicit force, symlink rejection, atomic directory replacement/rollback, and hierarchical reusable Skill groups. Do not adopt as a migration engine or equate its groups with Section Groups. It has no actual Harness session or project import/export. Confidence is reduced by the red full test suite, strict-Clippy failure, no upstream CI runs, small adoption, and a HEAD version newer than its latest tagged release. Full source/test ledger only supports the above local formats and checks.
+
+Primary source links: [repository](https://github.com/yearzen1/LocalSkillManager/tree/809eb98210038fcf02c6eb386f3436e9db10fbc8), [README](https://github.com/yearzen1/LocalSkillManager/blob/809eb98210038fcf02c6eb386f3436e9db10fbc8/README.md), [atomic filesystem operations](https://github.com/yearzen1/LocalSkillManager/blob/809eb98210038fcf02c6eb386f3436e9db10fbc8/src/infra/fsops.rs), [skill/group model](https://github.com/yearzen1/LocalSkillManager/blob/809eb98210038fcf02c6eb386f3436e9db10fbc8/src/domain/group.rs).

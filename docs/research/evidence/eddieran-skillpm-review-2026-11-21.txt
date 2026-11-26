@@ -1,0 +1,63 @@
+NEXUS MEMORY CANDIDATE REVIEW — eddieran/skillpm
+Review date: 2026-11-21 (Asia/Shanghai)
+Disposition: a high-value deterministic Agent Skills distribution/resource-plane reference, but not the requested conversation/project migration tool. Do not reuse its filesystem adapter unchanged.
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/eddieran/skillpm
+- Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-eddieran-skillpm-20261121
+- Main HEAD: 26fb1c66b274b8729f5bcca0c2e31d2013cf3141; commit date 2026-04-04; Apache-2.0; GitHub snapshot 2 stars, 0 forks, not archived, metadata updated 2026-08-11. Latest release tag v4.0.0 was published 2026-03-28. No source changes were made in the upstream checkout; Git status was clean after removing a locally generated smoke binary.
+- Go module declares go 1.26.1. CodeGraph: 105 indexed files, 1,465 nodes, 4,376 edges, current. Its generated .codegraph/.gitignore already lacked the !.gitignore exception; I left it unchanged and verified Git status stayed clean.
+- Go 1.27.4 darwin/arm64 temporary toolchain archive was downloaded from go.dev and SHA-256 verified as 91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4; it was not installed globally.
+
+WHAT IT ACTUALLY DOES
+- skillpm is a local CLI/package manager for the Agent Skills format. It fetches from Git/ClawHub, resolves versions/dependencies, scans skill content, stores installed artifacts and lock records, then copies SKILL.md plus ancillary files into agent-specific skill directories. Project scope is .skillpm/skills.toml + skills.lock + per-repo installed state; it is not a chat Project or Section Group.
+- Runtime targets in docs/agents.md: 7 marked verified (Claude Code, Codex, Gemini CLI, Copilot CLI, OpenCode, Kiro, OpenClaw) and 3 best-effort (Antigravity, Cursor, TRAE). VS Code is an alias to Copilot. Every adapter uses the same file-copy implementation; status is based on discovery docs/frontmatter/path validation, not proof that each real client activated a skill.
+- This is one resource class only: no ChatGPT/Codex conversation or Project/Section reader/writer, Session/message/branch/subtask hierarchy, attachment/tool-event/usage ledger, MCP configuration transfer, plugin migration, persistent memory import, scheduled-task migration, Claude Desktop Chat/Cowork/Code or API-key gateway session adapter. The local docs explicitly say historical procedural-memory and scheduler subsystems were removed in v4.0.0.
+- Positive reference: project/global separation, explicit sources, lock/checksum metadata, dependency DAG, support matrix that labels best-effort versus verified, project manifest, deterministic CLI, dry-run sync, rollback concepts, and a concrete file-adapter API. These are useful only for Nexus ResourceArtifact/ResourcePlacement design, not session fidelity.
+
+TEST / CI EVIDENCE
+- Local exact-source command: rtk proxy /private/tmp/nm-skillpm-review-go1.27.4/go/bin/go test ./... -count=1 ; exit 0. All packages passed; test/e2e completed in 103.830s. Real-network tests are opt-in and skip unless SKILLPM_E2E_REAL_NETWORK=1. No user credentials, real provider sessions, or user data were used.
+- Local rtk proxy go vet ./... exit 0; gofmt -l . printed no files; go build ./cmd/skillpm exit 0 (the generated root binary was removed immediately); ./tools/coverage-gate.sh exit 0: store 62.2% >=50, sync 83.3% >=80, importer 93.8% >=80, audit 100% >=80, config 61.4% >=50, security 80% >=70. The dedicated sync-regression suite exited 0.
+- GitHub CI run 23967731412 is for exact HEAD and passed lint-test-build (Go 1.26.1), sync-regression, and race jobs. GitHub nightly-e2e run 26866259246 is also exact HEAD and passed six lanes (openapi-drift, integration, contract-probe, resilience, rollback, openclaw-clawhub). These are code/file-path tests, not a live ChatGPT or Claude Desktop session restore.
+- GitHub security run 26863966648 (scheduled 2026-06-03, exact HEAD) failed at “Go vulnerabilities”; Trivy, SBOM, and secret-scan steps were skipped. Its logs returned HTTP 410 and are unavailable, so the failure cause is not claimed. A current local govulncheck v1.10.0 run against the 2026-11-11 DB exited 0 with 0 reachable vulnerable symbols but 2 module-level findings in golang.org/x/mod v0.33.0, fixed in v0.40.0. Go advisories GO-2026-6180 and GO-2026-6179 were published 2026-08-13, after the June workflow run; they do not explain the June failure. This is a maintenance/lockfile risk even though govulncheck reports the affected symbols are not called by this program.
+
+REPRODUCED FINDINGS — ISOLATED TEMPORARY COPY / CANARIES ONLY
+1. Arbitrary outside-file overwrite through predictable AtomicWrite temp symlink
+   - internal/fsutil.AtomicWrite uses path + ".tmp" with os.WriteFile, then renames it, without exclusive creation or symlink rejection. Project manifests call this helper.
+   - Temporary POC placed .skillpm/skills.toml.tmp as a symlink to a synthetic outside canary, then called SaveProjectManifest. The canary was overwritten with version=1 and skills=[]; the symlink was renamed into skills.toml. Literal output: POC_PROJECT_MANIFEST_ATOMIC_WRITE_OUTSIDE="version = 1; skills = []" MANIFEST_PATH_IS_SYMLINK=true.
+   - A project repository can carry the predictable .skillpm/skills.toml.tmp symlink; a subsequent project-scope install/save can write manifest bytes to its target. This is a reproduced path-write primitive in a disposable project, not a claim that a real user file was touched.
+
+2. Git source symlinks read files outside the checked-out skill tree; ancillary prompt injection is not scanned
+   - gitProvider.Resolve walks a skill directory, then os.ReadFile(path) on non-directory entries without checking symlink mode or resolved containment. A Git checkout may contain symlink files.
+   - Temporary fake-checkout POC linked references/guide.md to an outside temporary file containing a synthetic marker plus “ignore previous instructions”. Resolve embedded the outside file in the skill Files map; the security scanner produced 0 findings and Enforce returned nil because the prompt-injection rule scans SKILL.md only. Literal output: POC_SYMLINK_READ_OUTSIDE_SOURCE=true COPIED_BYTES=67 ANCILLARY_PROMPT_INJECTION_PRESENT=true PROMPT_INJECTION_FINDING=false FINDINGS=0 ENFORCE_ERROR=<nil>. No real secret was read.
+
+3. Adapter path traversal via crafted installed ref; normal Git resolver has a guard
+   - ExtractSkillName takes the last component with no validation, and the file adapter joins it directly under skillsDir. A temporary installed-record fixture with ref org/.. caused Inject to target ~/.claude rather than ~/.claude/skills, copying synthetic settings.json content outside the skills root. Calling Remove on that injected ref recursively removed the temporary .claude directory. Literal output: POC_DOTDOT_INJECTED_PATH="<temp-home>/.claude" SETTINGS_WRITTEN_OUTSIDE_SKILLS=true; POC_DOTDOT_REMOVE_DELETED_CLAUDE_CONFIG_DIR=true.
+   - Important reachability qualification: the normal Git source resolver rejects any skill path containing “..”; this POC exercises the adapter boundary with a crafted installed ref/state. It is not claimed as an end-to-end remote Git install exploit. It still requires strict path-component validation at every public/adapter/state boundary.
+
+4. Valid same-leaf skills from different sources silently collide
+   - Two synthetic installed refs, org-a/setup and org-b/setup, pass the adapter plan but both map to the same destination directory named setup. The state records both refs while the second skill overwrites the first skill’s SKILL.md. Literal output: POC_COLLISION_INJECTED=[org-a/setup org-b/setup] PATHS_EQUAL=true FINAL_HAS_A=false FINAL_HAS_B=true.
+   - This can cause both agents and users to resolve the wrong skill content; fail before writing when destination names collide or use a namespace strategy.
+
+5. Install rollback is not transactional across old versions, state and lockfile
+   - Temporary installer POC successfully installed v1.0.0, then installed v2.0.0 with a nonexistent lockfile under a read-only temp directory. The app committed v2, deleted v1, saved state.toml pointing at v2, then lockfile save failed; rollback deleted v2 but did not restore v1 or prior state. Literal output: POC_INSTALL_ERROR="INS_LOCK_SAVE: write tmp: open <temp>/read-only-lock/skills.lock.tmp: permission denied" STATE_VERSIONS=[2.0.0] OLD_VERSION_DIR=false NEW_VERSION_DIR=false.
+   - This is a reproduced partial-rollback/data-consistency defect, independent of the unrelated safe temp-test setup. It contradicts the broad rollback-safe install promise for this failure mode.
+
+6. Static scanner boundary
+   - Three regex-based rules are useful guardrails, not malware analysis. The prompt-injection scanner only analyzes SKILL.md, while ancillary files are injected/copied and can be read by the skill. force may permit high/medium findings; critical is not bypassed; scanning can be disabled. Treat scanner output as a low-confidence risk signal, never as proof of safety.
+
+FIT / RECOMMENDATION
+- Keep as a high-quality Agent Skills ResourcePlane candidate/reference, not as a Nexus Memory core converter and not as a compatible ChatGPT→Claude Desktop migration path.
+- Design inspiration: separate scope, source/version/checksum lock, dependency DAG, target-specific discovery contracts, deterministic sync and report/rollback UX.
+- Do not copy installer, AtomicWrite, adapter naming/removal, or source-symlink handling without fixing the reproduced write path, symlink, basename-collision, path-traversal, and partial-rollback findings. The current runtime handles skills only; it does not move Destruction Era or any session/project hierarchy.
+
+SOURCES
+- Repository, release and project claims: https://github.com/eddieran/skillpm ; https://github.com/eddieran/skillpm/releases/tag/v4.0.0
+- Pinned README and capability matrix: https://github.com/eddieran/skillpm/blob/26fb1c66b274b8729f5bcca0c2e31d2013cf3141/README.md ; https://github.com/eddieran/skillpm/blob/26fb1c66b274b8729f5bcca0c2e31d2013cf3141/docs/agents.md
+- Pinned source: https://github.com/eddieran/skillpm/blob/26fb1c66b274b8729f5bcca0c2e31d2013cf3141/internal/fsutil/atomic.go ; https://github.com/eddieran/skillpm/blob/26fb1c66b274b8729f5bcca0c2e31d2013cf3141/internal/source/git_provider.go ; https://github.com/eddieran/skillpm/blob/26fb1c66b274b8729f5bcca0c2e31d2013cf3141/internal/adapter/runtime.go ; https://github.com/eddieran/skillpm/blob/26fb1c66b274b8729f5bcca0c2e31d2013cf3141/internal/installer/installer.go
+- Exact CI runs: https://github.com/eddieran/skillpm/actions/runs/23967731412 ; https://github.com/eddieran/skillpm/actions/runs/26866259246 ; https://github.com/eddieran/skillpm/actions/runs/26863966648
+- Current Go vulnerability reports: https://pkg.go.dev/vuln/GO-2026-6180 ; https://pkg.go.dev/vuln/GO-2026-6179
+- Official Go 1.27.4 checksum page: https://go.dev/dl/
+
+CORPUS STATE
+- Original GitHub corpus after this review: 90/303 reviewed, 213 pending; next candidate: Elixion-ai/claudepass. Screening remains incremental and is not proof of complete market or Harness coverage.

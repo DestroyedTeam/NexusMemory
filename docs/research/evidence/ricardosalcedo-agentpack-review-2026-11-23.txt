@@ -1,0 +1,61 @@
+# Candidate #212 source review — ricardosalcedo/agentpack
+
+Review date: 2026-11-23. Pinned local checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ricardosalcedo-agentpack-20261123-followup212`; branch `master`, `origin/HEAD` → `origin/master`; HEAD `07b11d6bd182c533ac5a9c7093fb594670c7759b`; `git status --short` empty. CodeGraph initialized in this isolated repo: 29 files, 260 nodes, 524 edges; status up-to-date. CodeGraph self-preserving `.gitignore` exception was removed per workspace policy.
+
+## Upstream identity and maintenance snapshot
+
+- Repository: https://github.com/ricardosalcedo/agentpack
+- Pinned commit: https://github.com/ricardosalcedo/agentpack/commit/07b11d6bd182c533ac5a9c7093fb594670c7759b
+- GitHub repository view (checked today): public, 0 stars / 0 forks, 15 commits; 2026-07-04 latest commit; README says MIT project, and `Cargo.toml` has `license = "MIT"` (GitHub's license metadata was not populated in the API inventory).
+- Releases: https://github.com/ricardosalcedo/agentpack/releases — v0.3.0 is latest observed (released 2026-06-30); README's Project Status still says “v0.1 — Prototype.”
+- Actions: https://github.com/ricardosalcedo/agentpack/actions — 19 workflow runs shown; CI#15 on pinned `07b11d6` succeeded 2026-07-04. CI#14 and earlier v0.3 jobs also shown; one Pages deployment failed, then later Pages deployment succeeded.
+- Pull requests: https://github.com/ricardosalcedo/agentpack/pulls — 0 open, 0 closed visible.
+
+## Scope and source implementation
+
+Rust CLI (`edition = 2021`) described as dependency management for MCP servers and AI agents. `agentpack.json`/lock represent package name/version/source/integrity, MCP transport, dependency/agent edges, profiles, capability requirements, and tool names/descriptions. Commands include init/add/install/graph/export/run/audit/fetch/validate/import/update/doctor/search. No Skills/plugin content migrator or history importer/exporter was found in the pinned source. `src/commands/export.rs` builds `mcpServers` and writes `claude_desktop_config.json` relative to the current working directory; this is a local configuration fragment, not deployment to Claude Desktop 3P managed policy or its Chat/Cowork/Code stores. The package schema contains no source Project/Section/session identity, events, parent/child task edges, transcript/message payload, attachment/file bytes, token usage, schedule records, or target lineage. It is a ResourcePlane reference only.
+
+Useful contained-source locations (all pinned to the commit above):
+- Import: https://github.com/ricardosalcedo/agentpack/blob/07b11d6bd182c533ac5a9c7093fb594670c7759b/src/commands/import.rs — raw `cmd` interpolation into ESM at generated `command: "{cmd}"`.
+- Fetch cache: https://github.com/ricardosalcedo/agentpack/blob/07b11d6bd182c533ac5a9c7093fb594670c7759b/src/registry.rs — `name.replace('/', "__")` then `packages/{name}/agentpack.json`, no canonical containment check.
+- Export: https://github.com/ricardosalcedo/agentpack/blob/07b11d6bd182c533ac5a9c7093fb594670c7759b/src/commands/export.rs — narrow mcpServers/transport mapping; output path relative to cwd.
+
+## Build and test events
+
+Observed local checks (checkout above):
+- `rtk cargo test --locked --manifest-path Cargo.toml`: **exit 101**, literal summary `test result: FAILED. 19 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out`. Failed tests: `test_capability_resolution`, `test_conflicts`, `test_resolve_local`, `test_resolve_agent`; failures are `No such file or directory` while test helpers concurrently mutate current working directory. The raw filtered output is captured by RTK at `~/Library/Application Support/rtk/tee/1795434139_cargo_test.log`.
+- `rtk cargo test --locked --manifest-path Cargo.toml -- --test-threads=1`: **exit 0**, literal summary `cargo test: 23 passed (1 suite, 0.01s)`.
+- `cargo fmt --check`: exit 0 (observed during full local quality run).
+- `cargo clippy --locked -- -D warnings`: exit 0.
+- `cargo build --locked --release`: exit 0 (52 crates compiled).
+- `src/tests.rs` contains resolver/manifest/lock/credential tests; no command-level import/fetch/export safety regression tests.
+
+## Isolated security probes (confirmed; synthetic temporary data only)
+
+### Fetch path traversal overwrites the project manifest
+
+Fixture: fresh temp project with `packages/` and pristine `agentpack.json` `{"name":"pristine-project","version":"0.0.1"}`; fetched local source contains `{"name":"synthetic-source","version":"1.2.3"}`. Command:
+
+`/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ricardosalcedo-agentpack-20261123-followup212/target/debug/agentpack fetch .. --source file:///var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-agentpack-poc-dync_og5/source.json`
+
+Exit 0; stdout was `Fetching manifest for '..'...
+  Cached .. -> packages/../agentpack.json
+  ✓ synthetic-source @ 1.2.3 (0 tools)
+`; stderr empty. The isolated project root `agentpack.json` was overwritten with the serialized synthetic source manifest. No path outside the disposable POC root was written. This is a confirmed package-name traversal/overwrite, not evidence of arbitrary filesystem escape beyond this exact target.
+
+### Import command argument executes injected JavaScript
+
+The probe created only a local fake `@modelcontextprotocol/sdk` package whose synthetic Client returns zero tools; no MCP server or network was started. `--command` was passed as one CLI argument:
+
+`"}); await import("node:fs/promises").then(fs=>fs.writeFile("/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-agentpack-poc-dync_og5/INJECTED","SYNTHETIC_POC")); //`
+
+Expanded CLI invocation: `agentpack import --name synthetic/import-probe --command <above> --`. Exit 0; stderr empty; fake client completed normally; stdout reported “Found 0 tools”; sentinel `/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-agentpack-poc-dync_og5/INJECTED` was created with exact contents `SYNTHETIC_POC`. This confirms arbitrary JavaScript execution within the generated Node process due to the unescaped string interpolation. No secrets or non-temp files were accessed.
+
+Disposition: security blocker for `import` command construction and `fetch` cache path handling pending source fixes plus regression tests. Do not run either against user config or untrusted manifests. Other dependency-manifest ideas may be evaluated independently as references.
+
+## Official Claude Desktop on 3P scope cross-check (all user-confirmed modes)
+
+- https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider — current migration guide covers Desktop 3P Chat/Cowork/Code, on-device history/projects/memory, local session export (unencrypted ZIP, excludes Claude Code CLI sessions), attachment/project-file caveats, and gateway visibility limits (model requests/responses but not permission events).
+- https://support.claude.com/en/articles/18466061-move-claude-code-cli-users — CLI gateway config is separate from Desktop config; Claude Code CLI `--cloud` unavailable on third-party provider; local transcript resume remains a different path.
+
+These Claude-owned import/export flows do not establish a ChatGPT/Codex source adapter or automatic preservation of Project/Section/session hierarchy. User target remains all three local Desktop modes plus local/self-hosted Claude Code; per-mode testing against the user's installed version is not yet done.

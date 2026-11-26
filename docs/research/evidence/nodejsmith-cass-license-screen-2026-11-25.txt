@@ -1,0 +1,16 @@
+# License screen: NodeJSmith/cass — 2026-11-25
+
+## Disposition
+
+Candidate #289 was stopped at the license gate. The repository's LICENSE calls itself “MIT License (with OpenAI/Anthropic Rider)” and states that no rights are granted to OpenAI, Anthropic, their affiliates, or representatives absent express prior written permission. Its definition of use expressly includes analyzing, indexing, testing, executing, and benchmarking. This is not an unmodified MIT license for this research environment. Do not copy, integrate, execute, test, index, or further analyze the repository unless the copyright holder provides express written permission.
+
+Official license: https://github.com/NodeJSmith/cass/blob/main/LICENSE
+Repository metadata: https://github.com/NodeJSmith/cass — GitHub marks it archived on 2026-07-05; it reports zero stars/forks and no GitHub releases: https://github.com/NodeJSmith/cass/releases.
+
+## Compliance stop / audit boundary
+
+A shallow clone and CodeGraph initialization were started before the license file was checked, and some source was opened before the rider was discovered. Once the rider was read, source inspection stopped. The checkout and its local CodeGraph index were deleted. No build or test was run, no source-level findings are retained or used in this plan, and no personal session files, API keys, provider account, or gateway were accessed. This entry is license-screen metadata only, not a code review or functionality verdict.
+
+## Intake-process correction
+
+For subsequent candidates, perform the license screen before CodeGraph initialization, broad code exploration, builds, tests, or copying. If terms expressly exclude OpenAI/Anthropic or forbid this analysis, record a license-only exclusion, remove the disposable checkout/index, and continue with the next candidate unless the user supplies written permission.

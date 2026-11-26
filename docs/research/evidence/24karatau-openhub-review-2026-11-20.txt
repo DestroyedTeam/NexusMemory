@@ -1,0 +1,41 @@
+Candidate review: 24KaratAu/openhub
+Date: 2026-11-20
+Bound project target: /private/tmp/nm-next-agent-sessions-review-20261120/candidate/project
+Source checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-24karatau-openhub-20261120
+Origin: https://github.com/24KaratAu/openhub.git
+Pinned source/remote main: eb8a50b01fea5b88d8e028dcd03cfe6ac7880d66 (2026-09-27)
+GitHub snapshot: 21 stars / 4 forks; MIT; v0.2.0.
+
+Selection and checkout
+- Selected from first exact unreviewed candidate registry row at 40/303 reviewed.
+- `rtk git clone --depth 1 https://github.com/24KaratAu/openhub.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-24karatau-openhub-20261120` exited 0. Exact origin/main/HEAD match confirmed; `rtk git status --short` exited 0 with empty output.
+- CodeGraph initialized 26 files, 461 nodes, 1,024 edges; `rtk codegraph status` says current. Removed only `.codegraph/.gitignore`'s `!.gitignore` self-preserving exception.
+
+Product behavior found in current source
+- Local Python/Textual TUI discovers/catalogs GitHub repositories, caches metadata in SQLite, fuzzy-searches, shows README/metadata, installs via OpenCode CLI, exports Markdown Skills and tracks local installs/updates.
+- `app/exporter.py::export_skill` converts the selected repo name/description/README into `SKILL.md` and OpenCode-specific Agent Markdown. It writes project/global locations under `.opencode`, `.agents` and `.claude`, with target=`project` or `global`; same-slug path conflicts are opened in `w` mode (overwrite) and are not staged/backed up in the export flow.
+- `app/local_skills.py` scans supported SKILL.md folders, checks source release/frontmatter versions, then update flow creates an external backup and restores on failure. It explicitly rejects unsafe tar paths; tests cover path traversal and failed-copy rollback.
+- `app/cache.py` SQLite objects are repository catalog, installed packages/local paths/update state, and `history_log` for actions such as installed/exported/failed/updated. No conversation, message, project-session graph, child task, branch, attachment, token, model, or schedule event model exists. `grep` in `app/` found no session/transcript/chat-history importer; one “conversation” match was only a hardcoded seed repository description.
+- README claims OpenCode, Claude Code/Desktop, Cursor, Windsurf, Roo/Cline, AutoGen/CrewAI, while the implementation only writes files to a subset of known folders; no per-host load/activation handshake or MCP config/plugin registration was found. “MCP Servers” is a catalog `impl_type`, not a configuration importer. Installer delegates to `opencode get {slug}`; there is no Claude/Cloud API-Key chat/session writer. GitHub API `GITHUB_TOKEN` only raises GitHub request limits.
+
+Quality and safety evidence
+- GitHub exact-HEAD CI run #36314091626 succeeded (3 jobs for Python 3.10/3.11/3.12); release #36314099009 succeeded; both ran 2026-09-27. The GitHub Actions CI workflow is Ubuntu-only though README lists Linux/macOS/Windows.
+- Local isolated test dependencies installed only into `/tmp/openhub-test-sandbox-20261120/venv` (pytest/httpx/textual/rapidfuzz). Ran official `run_all_tests.py` with `HOME=/tmp/openhub-test-sandbox-20261120/home`; exact command: `rtk proxy env HOME=/tmp/openhub-test-sandbox-20261120/home /tmp/openhub-test-sandbox-20261120/venv/bin/python /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-24karatau-openhub-20261120/run_all_tests.py`; exit 1. `test_local_skills.py` passed 16; `test_catalog.py` passed 7; `test_core.py` ran 4 with 1 failure, `test_quality_scorer`: expected label Excellent/Great but got Good.
+- Failure is clock-sensitive: fixture uses `pushed_at=2026-07-20`; `calculate_quality_score` compares it to `datetime.utcnow()` and downgrades activity score to 15 by 2026-11-20, so computed score is 70 / label Good while the test expects >=75. Same exact HEAD's earlier CI success predates this boundary; no current upstream run was observed. Do not claim tests currently green.
+- Separate full `pytest` in one process (not CI's runner) had 23 passed / 4 failed. In addition to the rating failure, three failures arose because `test_core.py::test_exporter` wrote the `test-automation-skill` fixture into the process-wide CWD after `test_local_skills.py` changed to its HOME sandbox; use only the official subprocess runner for the primary result.
+- `run_all_tests.py` deletes `~/.cache/opencode-hub/repos.db` before executing tests; `test_core.py` also removes imported `DB_PATH`. We set a temporary HOME and did not read/modify any user catalog. The runner itself does not sandbox CWD, and the exporter uses relative paths for target=`project`.
+- Installer uses `asyncio.create_subprocess_shell(f"opencode get {slug}")`. The slug is sourced from a GitHub catalog item. This is an unsafe shell boundary; no exploit was executed or established (repo-name character constraints may reduce risk). Prefer argv + validation in downstream design.
+- Deprecation warnings observed for `datetime.utcnow`, `utcfromtimestamp`, and `tarfile.extractall()` without explicit extraction filter.
+- Broad app source grep: `rtk grep -R -n -i "conversation|transcript|chat history|session export|session importer|mcpServers|scheduled task" app`; only match was seed string `app/client.py` saying AutoGen enables “multi-agent conversation workflows”; no chat/session implementation.
+
+Verdict
+- Keep as a low-cost adjacent Skills catalog/export and reversible update UX reference, not a direct migration engine. Explicitly test destination activation; add write-conflict preview and backup for same-slug exports; use argv subprocesses, safe temp HOME/workdir and no destructive test runner effects.
+- It does not migrate Projects, Section Groups, chats/sessions, parent-child or branch edges, message/turn order, supplements/interruptions, image/file/link attachment payloads, tool calls/results, token usage, assistant memory, scheduled tasks, MCP settings/plugins, or a Claude/Cloud API-Key conversation target.
+- No Cloud account access, API key, transcript, or user session was used. No independent security audit was run.
+
+Primary source URLs
+- Repo/README: https://github.com/24KaratAu/openhub and https://github.com/24KaratAu/openhub/blob/main/README.md
+- Core compatibility/quality docs: https://github.com/24KaratAu/openhub/blob/main/HOW_IT_WORKS.md
+- Source exporter / installer / cache: https://github.com/24KaratAu/openhub/blob/main/app/exporter.py ; https://github.com/24KaratAu/openhub/blob/main/app/installer.py ; https://github.com/24KaratAu/openhub/blob/main/app/cache.py
+- Exact HEAD CI and release: https://github.com/24KaratAu/openhub/actions/runs/36314091626 ; https://github.com/24KaratAu/openhub/actions/runs/36314099009
+- Release v0.2.0: https://github.com/24KaratAu/openhub/releases/tag/v0.2.0

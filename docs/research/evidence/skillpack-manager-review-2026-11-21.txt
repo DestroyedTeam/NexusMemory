@@ -1,0 +1,65 @@
+# t59688/skillpack-manager — skill resource packaging, not session migration (2026-11-21)
+
+## Identity and review boundary
+
+- Repository: https://github.com/t59688/skillpack-manager
+- Reviewed main HEAD and `origin/HEAD`: `2d8f5507c4926fccb776c121879b5bed449d7f9d`; local worktree clean. Repo license MIT. `package.json` version 0.1.3 (`@t59688/skillpack`); `rtk npm view @t59688/skillpack version time --json` exited 0 and returned current registry version 0.1.3, last published 2026-05-27T07:36:39Z. The repository's own GitHub Releases page is empty; its latest commit and latest CI run are 2026-05-28. Snapshot metadata: TypeScript, 25 commits, 5 stars / 0 forks; GitHub Actions page showed 20 runs (latest main CI succeeded, while several early publish runs failed).
+- Disposable checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-t59688-skillpack-manager-20261121`. CodeGraph current: 66 files, 1,100 nodes, 3,111 edges.
+- Local checks used `rtk npm ci --ignore-scripts` to avoid dependency lifecycle scripts; no global installation or real agent skill directory was changed.
+
+## Verdict
+
+**Useful adjacent Skill-packaging/resource-plane design reference, but not a Session, Project, Section, MCP, plugin, memory, or schedule migrator. Do not use with untrusted packs until the path-boundary defects below are fixed and regression-tested.** It packages `SKILL.md` directories with manifests, checksums, versions, GitHub/npm workflows and target-directory adapters. It copies Skill files into user-global folders; it does not transform harness semantics or import/export any conversation state.
+
+## Source-level capability and boundary audit
+
+- Main workflow: scan `SKILL.md` directories, create `skillpack.yaml`, add resources, audit/package to `.skillpack`/ZIP, publish to GitHub Releases, install, sync/update, pull workspaces, and track installs/workspaces in `~/.skillpack/installed.yaml` and `state.yaml`. Pack contents may include shared references/assets, but the adapter projection is a directory of Skills, not an MCP/plugin/session serializer.
+- `TargetSchema`/`TARGETS` declares 13 destinations: Claude Code (`~/.claude/skills`), Cursor, Codex, Windsurf, OpenCode, OpenClaw, Gemini CLI, Cline, Copilot, generic `~/.agents/skills`, Goose, Pi and local. These are documented global Skill directories. A custom local directory can be supplied; no native ChatGPT, Claude Desktop Chat/Cowork/Code mode, Projects/Sections or Code session-store adapter was found. The README “Claude” adapter is specifically Claude Code's local Skills directory.
+- `installed.yaml` stores pack/target/path/version/checksum and source information. It is package install bookkeeping, not a per-session use history, conversation graph, cross-device chat archive or user memory store. The Skill itself is the only shared instruction content; no MCP server or connector schema exists in package dependencies/source.
+- `sync` tries to preserve extra local skill directories and skips changed installed skills unless `--force`, but its directory replacement deletes the destination before copying (`fs.remove` then `fs.copy`) and is not staged/atomic. Install of a multi-skill pack can also write earlier skills before a later copy fails, with registry recording only after the loop; partial installs can remain untracked. These are source-level reliability risks; no crash-injection test was run.
+- Security is an advisory pattern scan (secret-like strings, remote install commands, executable files, filesystem wording), not a sandbox or malware detector. README warns Skills can contain scripts/instructions. The actual synthetic probes below show the static security summary misses manifest path escape.
+
+## Confirmed path-boundary vulnerabilities (isolated `/tmp` only)
+
+The Zod `SkillRefSchema` validates `name` and `path` only as nonempty strings; it does not constrain either to a single safe segment or to a path below the pack root. `installPack` computes `sourceSkillDir = path.resolve(packDir, skill.path)` and `targetSkillDir = path.join(targetRoot, skill.name)`, then passes both to `copyDirSafe`, which checks destination existence but does not enforce source/target containment. `auditPack` similarly resolves the manifest path without asserting it remains under the pack. `installCommand` prints the static `analyzePackSecurity` summary but does not run `auditPack` or reject path escapes before copying.
+
+**Probe A — write outside the chosen target directory:** A temporary manifest used `skill.name: ../../escaped`, a valid in-pack source `skills/demo`, and target root `/tmp/nm-skillpack-path-traversal-20261121/target/skills`. The built CLI command exited 0 and printed `OK ../../escaped /tmp/nm-skillpack-path-traversal-20261121/escaped`; the target root remained empty, while `/tmp/nm-skillpack-path-traversal-20261121/escaped/SKILL.md` appeared. The test was confined entirely to `/tmp`.
+
+**Probe B — copy an arbitrary sibling directory into an installed Skill:** A temporary manifest used `skill.path: ../secret-source`, `skill.name: copied-sentinel`, with a synthetic sentinel in the sibling directory outside the pack. `skillpack audit <pack>` exited 0 and printed `No issues found.`; `skillpack install <pack> --target local --target-dir <tmp>/target/skills` exited 0, printed a “Risk level: Low” summary and copied the sibling `SKILL.md` contents into the selected target. No real user files/secrets were accessed.
+
+**Packaging inference, not separately executed:** `packSkillPack` uses `path.resolve(absolutePackDir, skill.path)` followed by `zip.addLocalFolder`, also without a containment check; a crafted local workspace may therefore package files outside the intended pack. Treat this as a code-derived risk pending a dedicated pack-output reproduction.
+
+No test names or matches for traversal/Zip Slip/path containment exist in the 37-test suite (`rtk proxy grep -R ... test src` returned exit 1 / no matches). The direct POCs are stronger evidence than the test suite's positive status.
+
+## Local tests and build (pinned checkout; no real pack/token/target)
+
+- `rtk npm ci --ignore-scripts` — exit 0, 237 packages installed.
+- `rtk npm test` — exit 0, 10 test files / 37 tests passed.
+- `rtk npm run typecheck` — exit 0.
+- `rtk npm run lint` — exit 0.
+- `rtk npm run build` — exit 0.
+- The synthetic path tests used the built CLI and an isolated `HOME` under `/tmp`, not any actual `.claude`, `.codex`, or other target directory.
+
+## Nexus Memory disposition
+
+Keep only as a **SkillBundle/ResourceInstaller design lead**, not a migration dependency or compatibility proof. Its pack/version/target/install-registry concepts may inform a separate resource plane, provided a future Nexus implementation adds strict canonical relative-path validation for every source and target entry, resolves realpaths after symlinks, rejects traversal and duplicate/unsafe names, stages installs atomically with rollback, and includes adversarial path tests before copying untrusted Skills. Do not equate a SKILL.md copied into `~/.claude/skills` with a Claude Desktop Chat/Cowork/Code session, or with MCP/plugin, Project/Section, memory or transcript migration.
+
+## Pinned sources
+
+- Repository/README: https://github.com/t59688/skillpack-manager
+- Reviewed commit: https://github.com/t59688/skillpack-manager/commit/2d8f5507c4926fccb776c121879b5bed449d7f9d
+- Manifest schema: https://github.com/t59688/skillpack-manager/blob/2d8f5507c4926fccb776c121879b5bed449d7f9d/src/types/schema.ts
+- Installer: https://github.com/t59688/skillpack-manager/blob/2d8f5507c4926fccb776c121879b5bed449d7f9d/src/core/installer.ts
+- Static audit: https://github.com/t59688/skillpack-manager/blob/2d8f5507c4926fccb776c121879b5bed449d7f9d/src/core/audit.ts
+- File copy helper: https://github.com/t59688/skillpack-manager/blob/2d8f5507c4926fccb776c121879b5bed449d7f9d/src/utils/fs.ts
+- Sync replace logic: https://github.com/t59688/skillpack-manager/blob/2d8f5507c4926fccb776c121879b5bed449d7f9d/src/core/sync.ts
+- Pack/extract logic: https://github.com/t59688/skillpack-manager/blob/2d8f5507c4926fccb776c121879b5bed449d7f9d/src/core/packer.ts
+- Target directory adapter: https://github.com/t59688/skillpack-manager/blob/2d8f5507c4926fccb776c121879b5bed449d7f9d/src/adapters/targets.ts
+- GitHub Actions CI history: https://github.com/t59688/skillpack-manager/actions
+- No GitHub Releases at review: https://github.com/t59688/skillpack-manager/releases
+- npm package: https://www.npmjs.com/package/@t59688/skillpack
+
+## Tool error/correction ledger
+
+- Initial `rtk grep` was called with directory arguments in the wrapper's positional slot (`rtk grep ... test src`), which emitted `grep: test: Is a directory` and `grep: src: Is a directory`. Captured exit 2. Corrected with `rtk proxy grep -R ... test src`; exit 1 / no traversal-specific tests or source guards found. The actual source review used CodeGraph and targeted execution rather than this grep result alone.
+- `https://www.npmjs.com/package/@t59688/skillpack` was blocked by the web fetcher with HTTP 403; package metadata was independently checked with the npm registry command `rtk npm view ...`, exit 0.

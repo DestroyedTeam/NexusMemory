@@ -1,0 +1,35 @@
+# Candidate #173 — GoblinRules/ecpa-connections-manager / ECPA Plugins workspace
+
+Review date: 2026-11-23. Dedicated release repository HEAD 791a22a52f2cfabda279bfa893f3dc3f74d5af11; latest public release at review was Connections Manager v0.8.1 (2026-11-11), built from exact shared source commit GoblinRules/ecpa-plugins@5275342b6f8bfc2c3e5da6f453509292561df0ad. The current source HEAD is 67404f8f5c8439fcf1b9e973a4148df459572f1f; git diff --stat between the release source and current HEAD over Connections Manager, MCP gateway, plugin-suite, MCP Manager, Agent Skills and shared agent-tools docs was empty. MIT; release repository page reported 0 stars/forks.
+
+## What this candidate actually provides
+
+Connections Manager is a Windows x64 ECPA plugin/helper for named Cloudflare/GitHub/Portainer connections, local Windows Credential Manager storage, project-directory assignments, agent/client setup and an optional separate central MCP gateway. Its Project assignment is an existing absolute local path with nearest-parent resolution for connection selection; it is not a ChatGPT/Codex Project object, a Section Group, or a session parent/child graph. Data-directory JSON can be moved but vault credentials do not follow; credentials must be entered again on the destination. The shared gateway/provider routes are a separately installed Windows runtime, not a ChatGPT/Claude Desktop conversation importer. Provider model routing through CLIProxyAPI authentication and MCP service grants are explicitly separate.
+
+The source workspace includes two separate plugins that are more relevant to Nexus Memory than the Connections Manager release alone:
+
+- MCP Manager edits individual Claude Code and Codex configs (~/.claude.json and CODEX_HOME/config.toml). It can explicitly copy supported local stdio and Streamable HTTP fields between these formats. It uses previews, per-file version checks, backups, conflict prompts and reviewed restore; it preserves unrelated entries/settings. Client-specific or unsupported fields (for example token environment references or tool restrictions) block translation instead of being silently dropped. The server command is never executed or connectivity-tested. Full-file previews can contain credentials; plugin config backups are local plaintext. These are strong narrow-transfer/data-loss-control patterns, not transcript migration and not ongoing synchronization. The docs name Claude Code, not Claude Desktop Chat/Cowork/Code, and do not include ChatGPT as a source/destination.
+- Agent Skills is another separate plugin that views/creates/edits one local SKILL.md at a time, with minimal YAML metadata validation, preview, backups and restore. It scans one level, max 500 entries, across Claude Code and Codex roots plus an optional extra root. Supporting scripts/references/assets remain untouched; no remote Skills installation, bundle copy, or guarantee of target discovery is claimed.
+- The gateway-side MCP import accepts only claude, codex, or native gateway configuration, and creates a disabled credential-free draft. It refuses literal environment/header secrets and unsupported client-specific fields for review; this is safer than blindly copying a full MCP config, but it is still only server-definition import.
+
+## Fit to the user’s end state
+
+No importer was found for ChatGPT/Codex Projects or Section Groups; session/conversation/event or parent-child/fork graphs; transcripts, branches, images/attachments/links, usage/tokens; scheduled tasks; or Harness memory. No session/history adapter exists for local/self-hosted Claude Code. Claude Desktop third-party-gateway Chat, Cowork and Code are not config targets here. Therefore, reject as the requested cross-Harness Project/Session migration engine, but retain as a high-value adjacent architecture/reference for MCP config translation, explicit loss rejection, target snapshots and rollback, SKILL.md file management, per-client grants, and secrets kept out of portable config. Connections Manager alone should not be described as a Harness migrator.
+
+## Source, quality and local verification
+
+- Pinned release root: 791a22a52f2cfabda279bfa893f3dc3f74d5af11. Release notes identify v0.8.1 source revision 5275342b6f8bfc2c3e5da6f453509292561df0ad; the linked source workspace was cloned and audited at that exact commit. Current source HEAD 67404f8f5c8439fcf1b9e973a4148df459572f1f has no diff in the reviewed components. CodeGraph release source: 125 files, 2,075 nodes, 6,101 edges; current source HEAD: 126 files, 2,082 nodes, 6,116 edges. Both indexes verified up-to-date and their .codegraph/.gitignore now contains only *; git worktrees remained clean.
+- cargo test -p connections-manager --locked: exit 0, 8 passed across three suites.
+- Initial cargo test --workspace --locked and cargo test -p plugin-suite --locked failed on macOS because the default TMPDIR included /var, a symlink to /private/var; shared agent-files::check_links() deliberately rejects any symlinked ancestor. This was a host fixture-path issue, not an assertion/code failure. With a real non-symlink TMPDIR at /Users/vincentadamnemessis/Library/Caches/NexusMemory/nm-release-test-tmp-20261123, the full workspace passed 32/32 and plugin-suite passed 9/9. The latter directly covers Claude↔Codex MCP translation, conflicts, lossy-field rejection, preserving unrelated settings, stale-preview refusal and per-agent delete.
+- cargo fmt --all --check and full-workspace cargo clippy --workspace --all-targets --locked -- -D warnings: exit 0.
+- Isolated Python 3.12 gateway tests: python -m pytest -q tests, 22 passed / 5 skipped / 0 failed. Skips require Windows Credential Manager, consoleless worker or opt-in real Windows core installation. Tests use fixture identities, mock upstream transports and temp files; no service credential or provider call was made.
+- Not exercised: actual ECPA plugin/core install, Windows Credential Manager, actual Claude/Codex config editing in a user profile, real service API, gateway deployment, real Claude Desktop or ChatGPT login, or any live session import.
+
+## Primary source references
+
+- Release repo and latest v0.8.1 release/source metadata: https://github.com/GoblinRules/ecpa-connections-manager/releases
+- Pinned Connections Manager source README: https://github.com/GoblinRules/ecpa-plugins/blob/5275342b6f8bfc2c3e5da6f453509292561df0ad/plugins/connections-manager/README.md
+- Pinned MCP Manager contract: https://github.com/GoblinRules/ecpa-plugins/blob/5275342b6f8bfc2c3e5da6f453509292561df0ad/plugins/mcp-manager/README.md
+- Pinned Agent Skills contract: https://github.com/GoblinRules/ecpa-plugins/blob/5275342b6f8bfc2c3e5da6f453509292561df0ad/plugins/agent-skills/README.md
+- Pinned MCP gateway/runtime guide: https://github.com/GoblinRules/ecpa-plugins/blob/5275342b6f8bfc2c3e5da6f453509292561df0ad/runtime/mcp-gateway/README.md
+- Shared config/auth/backups safety guide: https://github.com/GoblinRules/ecpa-plugins/blob/5275342b6f8bfc2c3e5da6f453509292561df0ad/docs/agent-tools.md

@@ -1,0 +1,38 @@
+# Hardt-LLC/AgentPack — cross-agent extension package manager review
+
+Date: 2026-11-22. Candidate #122 of the 303-name primary GitHub corpus. Scope remains ChatGPT Projects/Section Groups/Destruction Era sessions and transferable Skills/MCP/plugins/memory/context/schedules to local/self-hosted Claude Code and Claude Desktop Chat, Cowork, and Code as separate modes. This review used only the public source and disposable build/test files; no user app, account, session store, API key, or global agent configuration was opened or changed.
+
+## Pinned source and maturity
+
+- Repository: https://github.com/Hardt-LLC/AgentPack (MIT).
+- Pinned checkout: `b76f0e49ef39bbf4c32535c94e5ad08105416d29`, release v0.3.0, commit date 2026-08-22. GitHub displayed 1 star, 0 forks, 21 commits and v0.3.0 as Latest when checked 2026-11-22. The source checkout and CodeGraph index were current; index status reported 237 files, 2,165 nodes and 9,170 edges.
+- The repo is a TypeScript/pnpm monorepo targeting Node 20+, MIT, with an `agentpack` CLI; the README says it is not yet published on npm and documents source/binary installation.
+
+## What it models and where it stops
+
+- Useful ResourcePlane model: canonical YAML/Markdown packs compiled into native Skills, MCP definitions, persistent instructions, hooks and plugin metadata for 18 coding-agent targets. Full sync/plugin-bundle/import/collect adapters are Codex, Claude Code and Kimi; the other 15 use the simpler skills/MCP/instructions/import adapter. It has dry-run planning, atomic writes, backups, ownership checksums, conflict detection, trust gating, reversible adoption/uninstall, an MCP gateway, watch mode and inward collection into a review inbox.
+- The actual `CanonicalPack` includes metadata, rootDir, skills, instructions, MCP servers, hooks, optional plugin metadata, and target extensions/enablement. Workspace profiles select packs, targets, scope and install mode; optional workspace config enables the gateway. There is no Project/Section/Session/Conversation entity, parent-child/fork/task graph, transcript/event/media payload, token ledger, schedule/task record, or source/target session codec. `sessionStart` / `sessionEnd` are hook event names, not a portable session model. Its import/collect feature is about extension/config files, not ChatGPT chat history.
+- Target IDs are `codex`, `claude`, `kimi`, and 15 others. README/source identify `claude` as Claude Code; there are no independent Claude Desktop Chat, Cowork, or Desktop Code targets. It does not cover ChatGPT Project/Section semantics or the API-key local Claude Desktop session store. A logged-in provider key/gateway config cannot turn config sync into transcript migration.
+- Candidate disposition: strong extension/resource-plane architecture reference (especially capability classification, safe sync/ownership, review-before-promote collection and adapters), **not** a SessionGraph or project/session migrator and not the end-to-end Nexus Memory solution.
+
+## Source-level and verification evidence
+
+- Pinned source inspected: `README.md`, `packages/schema/src/targets.ts`, `packages/schema/src/pack.ts`, `packages/schema/src/ir.ts`, `packages/core/src/load-pack.ts`, Codex and Claude adapters/importers, filesystem sync, capability and adapter interfaces. The canonical schema and loaders confirm the limited component model above.
+- `rtk proxy pnpm install --frozen-lockfile --ignore-scripts` → exit 0 (195 packages installed; lifecycle scripts deliberately disabled).
+- `rtk proxy pnpm test` → exit 0; **65 test files, 487 tests passed**. Coverage exercises pack/config import, adapter generation, safe sync, adoption/uninstall, gateway, collection and CLI lifecycle. It does not demonstrate conversation/session import or live Claude Desktop operation.
+- `rtk proxy pnpm typecheck` → exit 0 across the 10 workspace packages/apps.
+- `rtk proxy pnpm lint` → exit 0.
+- `rtk proxy pnpm build` → exit 0; CLI bundle built (415.03 KB) and all workspaces completed.
+- First `rtk proxy pnpm audit --prod` → exit 1 because this environment's configured `registry.npmmirror.com` audit endpoint does not implement the bulk advisory API. Corrected command `rtk proxy pnpm audit --prod --registry=https://registry.npmjs.org` → exit 1, reporting 3 production dependency advisories: 1 moderate, 2 high. `pnpm why` resolved `smol-toml@1.7.0` through adapter-codex, adapter-ext and filesystem; GitHub advisory GHSA-7w5x-hrqm-74c2 covers <=1.7.0 (malformed TOML can hang parsing), and GHSA-r4xh-jqrq-34v2 covers <=1.8.0 (quadratic parse path). It resolved `zod@3.25.76` through core/schema; audit reports it affected by GHSA-mrhx-c7xc-m3w5 (<4.6.6). These are dependency advisories, not reproduced exploit demonstrations. Before parsing untrusted imported config at scale, upgrade/mitigate and rerun audit.
+- No test applied patches to candidate source; install/build/test generated disposable ignored files only. No host-specific app integration, live user data or real target restore was tested.
+
+## Disposition
+
+Retain as a high-value design reference for Skill/MCP/plugin/instruction configuration distribution, per-target capability reporting, safety gates, reversible sync and inbox-based collection. Do not count its target count as support for every Claude/Desktop surface. Nexus Memory must add a separate session/project graph and converters, explicit `claude-code` versus Desktop Chat/Cowork/Code adapters, versioned capability matrices, and fidelity/restore tests. Resolve the three production advisory reports before reuse of parser/schema dependencies.
+
+## Primary sources
+
+- Repo/README and v0.3.0 release: https://github.com/Hardt-LLC/AgentPack ; https://github.com/Hardt-LLC/AgentPack/releases/tag/v0.3.0
+- Pinned commit: https://github.com/Hardt-LLC/AgentPack/commit/b76f0e49ef39bbf4c32535c94e5ad08105416d29
+- Pinned schema sources: https://github.com/Hardt-LLC/AgentPack/blob/b76f0e49ef39bbf4c32535c94e5ad08105416d29/packages/schema/src/targets.ts ; https://github.com/Hardt-LLC/AgentPack/blob/b76f0e49ef39bbf4c32535c94e5ad08105416d29/packages/schema/src/pack.ts ; https://github.com/Hardt-LLC/AgentPack/blob/b76f0e49ef39bbf4c32535c94e5ad08105416d29/packages/schema/src/ir.ts ; https://github.com/Hardt-LLC/AgentPack/blob/b76f0e49ef39bbf4c32535c94e5ad08105416d29/packages/core/src/load-pack.ts
+- GitHub-reviewed dependency advisories: https://github.com/advisories/GHSA-7w5x-hrqm-74c2 ; https://github.com/advisories/GHSA-r4xh-jqrq-34v2 ; https://github.com/advisories/GHSA-mrhx-c7xc-m3w5

@@ -1,0 +1,41 @@
+# ai-agent-manager/agent-manager — cross-Harness resource-plane review (2026-11-21)
+
+## Identity, release, and source verification
+
+- Repository: https://github.com/ai-agent-manager/agent-manager
+- Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ai-agent-manager-agent-manager-20261121`; default branch `main`.
+- Exact source SHA: `c2be46db0be58c653cd285044fe598b4a63c2fb2`, tag/release v1.24.0, Apache-2.0, 81 commits, 4 stars / 2 forks, source pushed 2026-11-19. CodeGraph: 357 source/config/test files, 3,990 nodes, 13,675 edges.
+- GitHub CI run `44516943638` and Integration run `44516944453` both completed successfully on this exact SHA. CI jobs include Ubuntu/Windows Node 22/24/latest, browser/tarball/desktop checks, and Git-skill importer smoke. All seven verify/smoke jobs succeeded; release/publish jobs were skipped because this was a branch push. Source `.github/workflows/ci.yml` runs web UI build/tests, typecheck, lint, unit/integration tests and builds; the current SHA therefore has stronger upstream verification than local only.
+- GitHub release v1.24.0 is latest. npm registry has package `@ai-agent-manager/cli@1.24.0`, but the npm `latest` dist-tag still resolves to 1.23.1. README examples use `@latest`, so package-manager consumers can lag the GitHub release unless they pin `@1.24.0`.
+- `npm pack @ai-agent-manager/cli@1.24.0 --registry=https://registry.npmjs.org --ignore-scripts` exited 0. Tarball SHA-256 `9c596eb0a3547c8ac654b2651175d27a8a7362eaaa9d413e1efc0ed4242dd2d0`; read-only comparison showed `dist/operations/session.js`, `dist/ui-server/session-store.js`, `dist/discovery/git-importer.js`, `dist/provisioners/registry.js`, and UI asset manifest match the locally built v1.24.0 source. No lifecycle code in the tarball was executed.
+
+## Actual model boundary
+
+The product is a team Skill-bundle distribution and installation manager plus an Atlassian Rovo agent provisioner. It obtains a discovery catalogue (`.well-known/agents/discovery.json` or `.agents/discovery.json`), authenticated/versioned bundles, optional Git/zip sources, and installs Skills into repo or system paths. The six actual Skill provisioners are `agents`, `claude-code`, `cursor`, `github-copilot`, `kiro`, and `windsurf` (renamed in UI to Devin Desktop). The generic `agents` target writes `.agents/skills`; its source docs name Pi/OpenClaw-style tools. This is resource installation, not semantic Skill translation or activation verification inside every harness.
+
+`src/operations/session.ts` does define `Session`, but the source shape is an application/UI snapshot: `StartupResolution`, bundle manifest/directory/content, resolved discovery Skills, OAuth auth state, project membership, catalogue scope, and warnings. The UI server exposes `/api/session`, load, auth login/logout and SSE job/session state. It does not represent user conversation turns, messages, transcript, forks/subtasks, attachments, model context, token costs, or history import/export. `src/api/types.ts` `Project` is an Atlassian API object (`id`, `teamId`, name, `toolIds`, admin emails, timestamps), not a ChatGPT conversational Project, Claude Project, or Codex Project; it has no Section or Session tree.
+
+The Git importer scans a Claude Code plugin marketplace repository for `skills/<name>/SKILL.md` and optional `.claude-plugin/plugin.json`, then imports the **Skills only**. Source/docs do not implement plugin installation, MCP server configuration/credentials, Harness hooks, ChatGPT Projects/Sections, memory, scheduled tasks, or provider session APIs. No ChatGPT/Codex session exporter/importer was found. All three Claude Desktop modes—Chat, Cowork, Code—remain in scope and unsupported as sessions here. The project’s browser/OIDC bearer token is for bundle/catalogue APIs, not an Anthropic/Claude model API key.
+
+## Positive architectural value and limitations
+
+- Strong adjacent reference for a `ResourceBundle` + `DiscoveryCatalogue` + `SourcePin` + per-source version/cache/provenance + `SkillInstall` ledger, repo vs system scope, and explicit target provisioner registry. It uses namespaced links for Git/artifact sources, source-specific bundle caches, OIDC/PKCE and a hash-pinned artifact option; CLI/UI/CI share the catalogue and installer.
+- Path segments are explicitly validated; ZIP extraction resolves the target root and requests `safeSymlinksOnly`; archive security and provisioner/symlink tests exist. `npm audit --registry=https://registry.npmjs.org` reports 0 vulnerabilities for the locked dependency tree at review time. Artifact `.sha256` sidecars are optional: absent sidecars warn and continue unless the operator supplies `artefact-sha256`, so provenance/hash policy remains an explicit trust setting.
+- The root “Session” is not portable conversation history; Rovo “Projects” are a provider-specific access/catalogue concept. Never map those nouns to ChatGPT/Codex objects by name.
+
+## Test and tooling evidence
+
+Local host: Node `v26.7.0`, `.nvmrc` says 22 and package requires Node `>=22.12`; install was `npm ci --ignore-scripts` (scripts disabled for supply-chain safety), then CI-ordered web UI dependency install/build and root tests. `npm run typecheck`, `npm run lint`, `npm run build`, `npm run build:web-ui`, and `npm run test:web-ui` all exited 0; Web UI tests: 51 passed. Root `npm test` before building the web UI had 4 failures: two UI-launch failures because `assets/web-ui` had not been built, plus two keychain tests. After following the CI web UI build steps, root tests had 1,366 passed / 2 failed out of 1,368. The remaining two failures are in `tests/unit/auth/token-store.test.ts`: the native `@napi-rs/keyring` module imports (so the test does not skip), but the host keychain save falls back to filesystem, contrary to those tests’ assumption. This is a local macOS/keychain/backend mismatch under Node 26 with install scripts disabled; root cause was not isolated. Upstream exact-SHA CI succeeds on Ubuntu/Windows Node 22/24/latest; that matrix does not include macOS, so native macOS Keychain behavior remains unverified by upstream CI.
+
+- First `npm audit --omit=dev` against the configured npm mirror failed (mirror returns 404 `[NOT_IMPLEMENTED]` for npm audit). Corrected by setting `--registry=https://registry.npmjs.org`; both production-only and full lockfile audit returned `found 0 vulnerabilities` (exit 0).
+
+## Disposition
+
+**Shortlist as a high-value Skills/resource-plane reference, not as the requested session/project migration engine.** Its bundle/version/provenance/discovery and per-target install patterns can inform Nexus’s resource adapters, but it does not migrate conversation Sessions, Projects/Sections, memory or provider-specific context. It cannot satisfy the target end state on its own. Keep API `Project`, local UI `Session`, Rovo agent config, Skill bundle and external conversation records as distinct entities. Full source pin: `https://github.com/ai-agent-manager/agent-manager/tree/c2be46db0be58c653cd285044fe598b4a63c2fb2`.
+
+## Event ledger
+
+- Candidate cloned from current registry next-item; origin `https://github.com/ai-agent-manager/agent-manager`, HEAD `c2be46db0be58c653cd285044fe598b4a63c2fb2`; CodeGraph 357 files/3,990 nodes/13,675 edges, current and clean.
+- Root `npm ci --ignore-scripts` exit 0; web UI `npm ci --prefix web-ui --ignore-scripts` exit 0. Root typecheck/lint/build exit 0; web UI build/typecheck exit 0; web UI tests 51/51 pass.
+- Root tests before web UI build: 1,364 pass, four fail (two missing UI assets; two keychain). After web UI build: 1,366 pass, only the same two keychain failures.
+- Upstream exact-source CI and Integration run exit success; npm pack 1.24.0 exit 0; selected compiled code matched local build. npm audit mirror failure was corrected with the official registry (full audit exit 0, 0 vulnerabilities).

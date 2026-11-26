@@ -1,0 +1,22 @@
+# Candidate #228 — WoodSettler/CyberGuild review (2026-11-24)
+
+Pinned `main`/`origin/main`: `a199c207087e99217cae2d456fa4b915b10e8fba` (2026-10-21; clean checkout). GitHub snapshot: Python, 0 stars/forks, no SPDX license, `LICENSE`, release, or CI workflow; three commits. No code was reused.
+
+## Product and scope fit
+
+A cross-Harness `guild-appoint` Skill for Claude Code, Codex, and DeepSeek Harness (DSH). The entrypoint requires explicit appointment, loads a small roster/project-membership summary, then expands profiles and QuestBoard details on demand. The bundle has a Skill, three public profiles, Markdown roster/protocol/templates, a Python package/reference checker, and an optional PowerShell DSH adapter. This is a collaboration convention and Skill distribution—not a conversation importer, canonical memory archive, Project manager, or native Session manager.
+
+QuestBoard consists of manually maintained project-local Markdown (`成员.md`, `消息列表.md`, per-message detail files). It may record a roster, tasks, message IDs and statuses, but its rules are not filesystem access controls and it has no daemon, automatic wake-up, or session-resume writer. Public names/titles do not create product hierarchy. It cannot stand in for ChatGPT/Codex Project/Section Group structure or source session history.
+
+## Adapter observations
+
+The README installs the package for Claude Code/Codex through the upstream `skills` installer and shares it by symlink. DSH's `connect-dsh.ps1` is Windows-only and junction-links user `~/.agents/skills/guild-appoint` to `~/.dsh/skills/guild-appoint`; it backs up a different existing destination outside the discovery directory and attempts restoration if junction creation fails. It does not cover DSH project-local `.dsh/skills` or `.agents/skills`, Session storage, Workspace membership, or project scope. README explicitly declines to claim an upstream `-a dsh` installer option. Official DSH docs show separate project and user Skill roots, so this is one narrow user-scope adapter—not equal discovery or behavior across DSH modes.
+
+Observed checker command:
+`rtk python3 -X utf8 skills/guild-appoint/scripts/check-install.py --package skills/guild-appoint`
+
+Exit 0; literal stdout `PASS: package completeness and internal references`; stderr empty. It checks packaged files and internal Markdown links only. It does not prove any harness discovers/invokes the Skill or that the QuestBoard coordination works. README explicitly requires separate live-session acceptance; no native session was run here.
+
+## Missing migration surface and disposition
+
+No ChatGPT/Codex Project or Section Group reader/writer, Project asset importer, session/event archive/import/export format, edit/append/interrupt lineage model, fork/subagent graph, attachment/media archive, token/cost provenance, MCP/plugin configuration transfer, schedule conversion, target-native import or resume mapping. Retain only explicit opt-in, minimal/on-demand context and safe link/backup concepts as adjacent design ideas. Reject as a migrator and do not reuse the unlicensed source. No user Skill, account, API key, profile, Session, or private data was accessed. Detailed fit: `deepseek-harness-session-project-profile-2026-11-24.txt`.

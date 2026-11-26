@@ -1,0 +1,51 @@
+# Candidate #275 — DanDavD/Universal-AI-Sync (2026-11-25)
+
+## Decision
+**Closest reviewed candidate so far for browser-based context handoff, but not a native conversation/session migration tool.** It scrapes text from the currently open ChatGPT, Claude.ai, Gemini, or Copilot page and either replays it as synthetic prompt chunks in another open web chat or attaches a generated Markdown transcript. It creates a new destination conversation, not a restored source session. It does not preserve ChatGPT Projects/Section Groups, the Destruction Era hierarchy, source message IDs/timestamps, attachments, branches, tools, memory, MCP, Skills, plugins, usage, or schedules. It does not support Claude Desktop Chat/Cowork/Code, local/self-hosted Claude Code API-key sessions, or remote Cloud workspaces.
+
+## Identity and provenance
+- Repository: https://github.com/DanDavD/Universal-AI-Sync
+- Pinned HEAD: `cc143db94405e56f1764135caa9c106c4347c355` (`2026-11-16T15:45:18-06:00`, README-only commit); source includes a packaged `universal-ai-sync-v1.0.1.zip` whose manifest version is 1.0.1. `ai-sync-extension/package.json` says 1.0.0. README claims MIT, but no LICENSE text exists in the checkout or packaged ZIP; primary registry SPDX is null, so code reuse license is not cleared.
+- Shallow clone succeeded at `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-dandavd-universal-ai-sync-20261125-followup275`.
+- CodeGraph current: 35 files, 378 nodes, 941 edges. `.codegraph/.gitignore` was kept and only `!.gitignore` removed; checkout status is clean.
+- On Node 26.7.0 / npm 11.19.0, `npm ci` installed 20 packages and `npm run build` produced all six extension bundles (background, four platform content scripts, popup) successfully. The extension is buildable, but there is no test script/test suite in its package. No live browser, Chrome Web Store install, user session, API key, or provider account was used.
+
+## Actual data flow and fidelity
+### Text-based context sync
+- Manifest content scripts run only on browser URLs for chat.openai.com/chatgpt.com, claude.ai, gemini.google.com, and copilot.microsoft.com. There are no desktop app, Claude Code CLI, or other harness adapters.
+- The source scraper queries DOM nodes and extracts `innerText`/`textContent`; there is no scroll-back/pagination or source-native history API. Therefore “full conversation” is not proven for unloaded/virtualized history.
+- The background worker converts rows to plain `Human:` / `Assistant:` text and sends chunks to the destination's content script. The destination injector auto-submits those chunks as new user prompts, attempts to stop each generated response, and then continues. This can produce a new conversation with synthetic continuation prompts; it does not create original user/assistant turns or restore source state.
+- Per-message IDs are generated from role plus the first 120 characters using a short djb2 hash. They are not original message identifiers and are not included in either transfer format.
+
+### File-based context sync
+- The extension builds one Markdown file with source platform, export date, message count, and plain `Human` / `Assistant` blocks. It sends a request for the destination model to read the attachment and acknowledge the main topics.
+- This is a context document, not a native archive: no original timestamps/IDs, project/Section metadata, active branch, parent/fork IDs, tool calls, execution state, model/token usage, or structured attachment/image payloads. Images/files not represented as visible text are not captured.
+
+### Mirror / persistent data
+- The service worker contains mirror-pair/message handlers, but a source scan of every extension JS file found `MIRROR_MESSAGE`, `SET_MIRROR_PAIR`, and `REMOVE_MIRROR_PAIR` only in the service worker's dispatch switch; no popup/content source sends those types. Treat mirror code as unconnected/dormant, not a verified live feature.
+- `chrome.storage.session` stores tab pairs and transfer progress; `chrome.storage.local` stores selectors, license key, device ID, cooldown. No source code evidence of persisted conversation archives or project/session mapping.
+- Source scan found only three client `fetch` call sites: license validation and the file-sync cooldown check, which send license/device identifiers rather than transcript content. The actual chat text is sent through extension messages to the destination webpage; this is source inspection, not a packet capture. Destination provider handling remains subject to that provider.
+
+## Fidelity against the requested matrix
+| Requirement | Result |
+|---|---|
+| ChatGPT Projects / Section Groups | No API or hierarchy reader. The extension sees whichever web chat DOM is open and ignores project metadata. |
+| Destruction Era session tree / branches / child tasks | Not represented. A flattened role/text transcript cannot restore ancestry, turn IDs, branch DAG, checkpoints, or interrupt history. |
+| Claude Desktop third-party-gateway Chat/Cowork/Code | Not supported; these are web-page content scripts for Claude.ai, not the desktop client. |
+| Local/self-hosted Claude Code API-key/gateway | Not supported; no local JSONL reader/writer or gateway session store integration. |
+| Attachments / images / tools / token accounting | Not serialized except any text rendered into scraped DOM. |
+| Skills, MCP, plugins, memory, schedules, provider configuration | No import/export or capability registry for these. |
+
+## Security and operability notes
+- Manifest requests `tabs`, `scripting`, `storage`, and host permissions on all supported chat origins plus the licensing backend; these privileges are expected for DOM scraping/injection but put substantial trust in the extension.
+- Backend source endpoints handle license validation and `deviceId` file-sync cooldown, not conversation archives. README describes an optional Express/Supabase/PayPal subscription backend.
+- README says the extension is published on the Chrome Web Store; this review did not install it or verify the listing. No CI workflow, automated browser fixture tests, or license file was present in the reviewed checkout.
+- Browser DOM selectors are inherently version-sensitive; Claude's fallback can collapse an entire page into one assistant-role text block and Copilot can infer roles by alternation. CodeGraph shows no tests for parser/sync functions; no live page behavior or history completeness was validated.
+
+## Reuse recommendation
+- For a **manual, browser-only context handoff**, this is more relevant than simple clipboard prompt tools: it has per-site DOM scrapers, a destination injector, file upload, background progress, and a buildable MV3 package.
+- For Nexus Memory's objective, treat as **low-fidelity adjacent prior art**, not migration coverage. It is not safe to describe it as “moving a session”; it only transfers a text rendering into a new chat. Do not reuse its code until the MIT license is supplied and the production transfer format is a versioned, lossless archive with explicit capabilities and real browser fixtures.
+- Score: browser context handoff **3/5**; session/project migration **0/5**; platform breadth **1/5** (four web surfaces, not desktop/CLI/cloud); code reuse readiness **1/5** (no license file or tests).
+
+## Sources
+Pinned primary sources: [README](https://github.com/DanDavD/Universal-AI-Sync/blob/cc143db94405e56f1764135caa9c106c4347c355/README.md), [Manifest V3 permissions/hosts](https://github.com/DanDavD/Universal-AI-Sync/blob/cc143db94405e56f1764135caa9c106c4347c355/ai-sync-extension/public/manifest.json), [service-worker transfer implementation](https://github.com/DanDavD/Universal-AI-Sync/blob/cc143db94405e56f1764135caa9c106c4347c355/ai-sync-extension/src/background/service-worker.js), [ChatGPT scraper](https://github.com/DanDavD/Universal-AI-Sync/blob/cc143db94405e56f1764135caa9c106c4347c355/ai-sync-extension/src/content/chatgpt/scraper.js), [Claude scraper](https://github.com/DanDavD/Universal-AI-Sync/blob/cc143db94405e56f1764135caa9c106c4347c355/ai-sync-extension/src/content/claude/scraper.js), [popup/backend requests](https://github.com/DanDavD/Universal-AI-Sync/blob/cc143db94405e56f1764135caa9c106c4347c355/ai-sync-extension/src/popup/popup.js), [backend sync endpoint](https://github.com/DanDavD/Universal-AI-Sync/blob/cc143db94405e56f1764135caa9c106c4347c355/backend/routes/sync.js).

@@ -1,0 +1,41 @@
+# Candidate #176 — Heverton-web/skill-manager monorepo
+
+Review date: 2026-11-23. Pinned main and `git ls-remote origin refs/heads/main`: `4c9acccad4644b62896dcb63e794f0d936b35d94` (commit dated 2026-08-05). Isolated checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-Heverton-web-skill-manager-20261123`; `rtk git status --short` clean. CodeGraph: 1,824 files, 35,151 nodes, 73,321 edges.
+
+## Disposition
+
+**Reject as a direct Skills/session migration tool and do not run the local dashboard unmodified.** The repository is a monorepo containing a book-generation project, a 13-IDE Skills Manager, and an OpenCode event monitor. The Manager's selected IDEs are persisted but not applied to the install call: `doInstall(ides, skills, scope, dashboard)` invokes `installBatch(skills, scope)`, whose command is generic `npx skills add ...`; a runtime probe generated the exact same command for Codex and Claude. Fallback copies only under `.claude/skills`. It has no ChatGPT/Codex Project/Section/session graph, transcript importer/exporter, Claude Desktop Chat/Cowork/Code mapping, or local Claude Code session transfer. The repo `.mcp.json` is a developer config with a Windows absolute CWD, not a portable or session-bound MCP converter.
+
+## Reproduced security issue — Skills Manager dashboard
+
+`skills-manager/scripts/skill-manager/dashboard-server.mjs` binds loopback (`127.0.0.1`) but sets wildcard `Access-Control-Allow-Origin: *` and has no authentication. `/api/toggle` accepts `skill` from JSON and interpolates it into `execSync('npx skills add "${skill}" -y')`.
+
+A localhost-only POC used a temporary working directory, synthetic `demo` skill, fake `npx` shim and a marker file under that same temporary directory. It sent `Origin: https://attacker.example` and skill value `demo"; touch <temp>/injection-marker; #`. Observed: GET config returned 200 with wildcard CORS; POST toggle returned 200 with wildcard CORS and `success: true`; the injected marker was created; the fake `npx` log contained only `skills add demo`. No real `npx`, Skills install, user file, or external command target was executed. This proves a shell-injection primitive; browser-specific localhost/private-network protections were not tested. **Do not start/expose this dashboard until it uses safe argument arrays, a strict target allowlist, authentication and restrictive CORS.**
+
+## OpenCode Monitor module — useful signal, not migration
+
+`opencode-monitor` is an OpenCode-only live dashboard. Its plugin emits JSONL for `chat.message`, `message.updated`, `tool.execute.before/after`, selected `session.*` events and compaction. It clips chat text to 500 characters and tool output to 1,000, but records tool args, output metadata and compaction context without a general redaction layer. `SessionTracker` keeps a single current session state plus aggregate tokens; it does not represent a session parent/fork graph. `/api/events` loads all JSONL files into one list and selects a single sessionId from the first event. It has no session export/import or other Harness source/target writer.
+
+A separate POC seeded one synthetic JSONL event, bound the monitor to `127.0.0.1`, and pointed OpenCode at refused port `127.0.0.1:1`. GET `/api/events` with an external Origin returned 200, `Access-Control-Allow-Origin: *`, and the synthetic content. No real event file or OpenCode session was read. The local server can also proxy clear/compact/summarize actions to OpenCode; do not expose it publicly without auth, origin controls, data redaction and retention safeguards.
+
+## Current OpenCode API is a better source/target seam
+
+Official OpenCode API documentation reviewed 2026-11-23 describes (experimental HTTP routes) full projected transcript export/import. `GET /api/session` supports parent/project/directory/cursor filters; creation can attach `parentID`, fork creates children, and import requires parents first. Session info carries project, agent/model, costs/tokens, times, permissions and revert metadata. Message schemas include user/synthetic/system/skill/shell/assistant/compaction and typed assistant text/reasoning/tool states. File attachments expose base64 data, MIME, source and optional filename/description; tools include input/content/metadata. The event subscription is volatile over disconnects, so use an export snapshot as reconciliation source. This enables a version-pinned OpenCode adapter but is not a universal cross-Harness format. See the companion `opencode-native-session-transfer-api-2026-11-23.txt`.
+
+## Verification
+
+- Candidate main HEAD equals `git ls-remote origin refs/heads/main`; source `git status --short` empty.
+- `skills-manager` package version/latest is `1.0.4`; safe `node scripts/skill-manager.mjs --help` exits 0. It declares no tests/scripts. Direct runtime command generation showed 13 IDs and identical Codex/Claude `npx skills add @owner/demo -y` commands.
+- `opencode-monitor` subproject `rtk npm ci --ignore-scripts` exit 0 (one package); full `rtk proxy npm test` exit 0: 23 passed / 0 failed, with `OPENCODE_URL=http://127.0.0.1:1` to prevent any real OpenCode contact.
+- npm `opencode-monitor@0.2.0` resolves to `futpib/opencode-monitor`, a different project; this repo's nested folder declares `1.0.0` without a repository URL.
+- No real npx, user home, credentials, user sessions, provider request, or user files were used. The isolated checkout remains clean.
+
+## Sources
+
+- Repository: https://github.com/Heverton-web/skill-manager
+- Skill Manager package: https://github.com/Heverton-web/skill-manager/blob/4c9acccad4644b62896dcb63e794f0d936b35d94/skills-manager/package.json
+- Skills dashboard API: https://github.com/Heverton-web/skill-manager/blob/4c9acccad4644b62896dcb63e794f0d936b35d94/skills-manager/scripts/skill-manager/dashboard-server.mjs
+- OpenCode API: https://opencode.ai/docs/api
+
+
+Literal reproduction and OpenCode Monitor test captures: `heverton-security-poc-transcripts-2026-11-23.txt` and `heverton-opencode-monitor-test.stdout.txt`.

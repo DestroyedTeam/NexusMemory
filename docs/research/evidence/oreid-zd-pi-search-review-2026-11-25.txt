@@ -1,0 +1,26 @@
+CANDIDATE #291 — oreid-zd/pi-search — review date 2026-11-25
+
+IDENTITY / PROVENANCE
+Repository: https://github.com/oreid-zd/pi-search
+Disposable checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-oreid-zd-pi-search-20261125-followup291
+Reviewed commit: 042e0321f682d75de595e3a1159b87f9827d8aea (2026-10-16; tag v1.2.0)
+GitHub repository page: 0 stars, 0 forks, 23 commits, no License field. Local LICENSE, LICENSE.md and COPYING files are absent. SPDX disposition: NOASSERTION. This report is read-only research; do not reuse candidate code until license permission is established.
+The GitHub Releases page has no published release entry even though the repository has a v1.2.0 tag.
+
+WHAT IT ACTUALLY DOES
+This is a Pi-only local search/export/view/resume utility, not a cross-Harness migrator. `pi-export-history` reads Pi session JSONL below `~/.pi/agent/sessions/` and emits Markdown below `~/.pi/agent/sessions-md/`; `-t` emits a separate full corpus that includes tool-result text. Keyword search uses ripgrep; optional `-v` semantic search uses a `qmd` collection. `fzf` selects a result; `ctrl-o` opens a transcript, and `enter`/`resume` maps the exported path back to its original JSONL and invokes `pi --session` in the recorded cwd. This is source-native Pi resume only; it does not create or restore a session in another Harness.
+
+FIDELITY / DATA MODEL LIMITS
+- The README advertises text export while excluding thinking blocks, tool plumbing and HTML blobs; default export omits `toolResult`, while `-t` includes it. The Markdown output is a flattened rendered text transcript, not a structured event-preserving interchange format. It does not preserve message/event IDs, parent links/branches, token/cost usage or executable tool state; image/multimodal payloads are not represented in the text export.
+- Parent/subagent filtering is path-based: the CLI recognizes `subagent-artifacts/` and `run-N/` and can hide those rows. It does not construct a parent-controlled session DAG or preserve control/task edges.
+- Project identity is essentially the session cwd encoded in the Pi session path, not a portable Projects / Sections / Section Group hierarchy.
+- No source reader or destination writer exists for ChatGPT/Codex, Claude Desktop third-party gateway Chat, Cowork or Code, or local/self-hosted Claude Code. No Skills, MCP, plugins, memory, credentials/API-key configuration or scheduled-task migration is present.
+- Plain local Markdown exports and any qmd index are created under the user's home tree. Do not infer encryption-at-rest or a migration backup policy from the README. No live history, account, clipboard, semantic index, cron job, or API key was accessed here.
+
+TESTS / OBSERVED RESULTS
+Commands were run in the disposable checkout. The repository's tests use synthetic temporary sessions and mocked integrations (as the README states); they are not live Pi or cross-Harness transfer acceptance.
+1. `bash tests/parents-only.sh`, with `HOME=/tmp/nm-pi-search-home-291`: exit 0; stdout `parents-only tests passed\n`; stderr empty. Literal nonempty stdout is recorded at `docs/research/evidence/oreid-pi-search-parents-only.stdout`.
+2. `python3 -m unittest discover -s tests -p 'test_*.py'`, with `HOME=/tmp/nm-pi-search-home-291`: exit 1; stdout empty; stderr captured at `docs/research/evidence/oreid-pi-search-unittest.stderr`; 22 tests ran, 21 passed and 1 failed. The failure is `test_incremental_export_and_invalid_source_preserve_transcript`: expected `output.stat().st_mtime_ns` to remain `1795586765648888191`, but observed it change to `1795586765681044645` on a repeat export. This test has been rerun and the same test failure reproduced. In the same isolated synthetic setup, the source and output mtimes were nanoseconds apart but within the same whole-second timestamp; Bash 3.2's `-nt` comparison returned false for the output/source recency check, so the exporter rewrote the transcript. This is a reproducible local incremental-export regression; treat the timestamp-resolution explanation as an inference from the code and observed stat/`-nt` results.
+
+SCOPE / DISPOSITION
+Retain only as a low-scope Pi history-search and local navigation UX reference. It does not solve Nexus Memory's multi-Harness migration requirement. The candidate was screened/reviewed, not accepted as code or a product foundation. No install script, maintenance/cron command, real Pi resume, live qmd, or clipboard UI was run.

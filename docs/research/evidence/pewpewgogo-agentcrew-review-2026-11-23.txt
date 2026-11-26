@@ -1,0 +1,38 @@
+# Candidate #205 — pewpewgogo/agentcrew (2026-11-23)
+
+## Identity and pin
+- Repository: https://github.com/pewpewgogo/agentcrew
+- Branch: `main`; `origin/HEAD` = `origin/main`; pinned HEAD / origin/main `5af3a362fc1c37834ad0c60c8d3d2d6bb84c65e5` (2026-06-01; `chore: scope under @crewagent org`). Checkout clean at review start.
+- Package: `@crewagent/agentcrew` v0.1.0, Node >=20, MIT. CodeGraph: 71 files, 602 nodes, 1,867 edges, up to date.
+- No `.github/workflows` folder and no AGENTS.md in the pinned checkout. GitHub Actions page shows the generic Actions landing page/no workflow run; Releases page says no releases. Official repo, [Actions](https://github.com/pewpewgogo/agentcrew/actions), [Releases](https://github.com/pewpewgogo/agentcrew/releases).
+
+## Product fit: a project/task context relay, not a chat/session importer
+AgentCrew provides a hosted/self-hostable REST + Streamable HTTP MCP server and CLI. Its real domain tree is **Project → Milestone → Task** (a task's milestone is optional), with per-project knowledge fields (`repos`, `urls`, tech stack, notes), membership roles, and an append-only context log. This is a useful adjacent pattern for shared human/agent project notes and task status. It is not a ChatGPT Project or Claude Desktop project/session store.
+
+The context record schema is only `{id, projectId, targetType(project|milestone|task), targetId, authorUserId, authorKind(human|agent), note, createdAt}`. MCP `add_context` appends one text note; `get_context` queries them. No source-harness ID, conversation/session ID, message ID/parent, fork, turn/task relation to a chat session, transcript blocks, reasoning/tool-call records, attachments, token usage, or schedules are modeled. No import/export route or adapter for ChatGPT, Codex, Claude Desktop Chat/Cowork/Code, or other harnesses was found. The Skill asks an agent to read project/task state and append findings—an AI/user-triggered context workflow, not deterministic no-AI history migration.
+
+**Important terminology:** the server's `cs_s_` “session token” is an application login/auth bearer, stored hashed in the database with `name='__session__'`; it is not a conversation session. `cs_k_` is an AgentCrew MCP/API bearer key, also Argon2-hashed server-side. Neither is an Anthropic/OpenAI/model-provider API key, nor does AgentCrew configure a third-party inference gateway. README's only bundled Skill install target is Claude Code (`~/.claude/skills/...` and `~/.claude.json`), not Claude Desktop's three 3P modes.
+
+## Data integrity and access control from source
+- Context append derives project ID from the target and REST/MCP routes check caller membership before allowing writes; read results are constrained to member projects. Task routes check membership and block viewer mutations.
+- Context is append-only at the service level and indexed by project/target/time; `context_log.target_id` is not a foreign key to task/milestone, so deleting a target can leave historical records pointing at an absent entity. Project deletion cascades its context log.
+- `Task` includes optional `milestoneId`, goal, status, priority and assignee; no `parentTaskId` / nested subtasks.
+- `ApiKey`/password hashes use Argon2, and `~/.agentcrew/config.json` writes are chmod 0600. However, `init` also writes the raw app MCP API key into `~/.claude.json` via `writeFileSync` without chmod/permission hardening.
+
+## Synthetic credential-file probe
+Using only a synthetic value and a new temporary directory, called the built `upsertMcpEntry` function with `cs_k_SYNTHETIC_NOT_REAL`. Literal stdout:
+```json
+{"mode":"644","syntheticTokenPresent":true,"mcpServer":{"type":"http","url":"https://example.invalid/mcp","headers":{"Authorization":"Bearer cs_k_SYNTHETIC_NOT_REAL"}}}
+```
+The temp directory was removed immediately. The `~/.claude.json` writer therefore created a plaintext bearer-key config with POSIX mode 0644 under the default umask in this environment; this is source/runtime evidence for a local file-permission risk. It was not a real key or real home file. The separate `.agentcrew/config.json` writer does chmod to 0600, so the two key-bearing config paths differ. No actual API key or network request was used.
+
+## Build/tests and environment limit
+- `rtk npm ci --ignore-scripts --no-audit --no-fund`: exit `0`, stdout `added 281 packages in 1s`.
+- `rtk npm run build`: exit `0` (`tsc -p tsconfig.json` and bundled skill copy).
+- `rtk npm run lint`: exit `0` (`tsc --noEmit`).
+- Full `rtk npm test`: exit `1`. Summary: 29 files, 6 passed / 23 failed to initialize; 16 tests passed and one DB test failed. The database-backed suites call `freshSchema()`, whose first query drops/creates `public`; the configured DB is `localhost:54329`. No Docker daemon (`docker.sock` missing), `postgres`/`psql` binaries, or listener on `54329`/`5432` existed; failure was `ECONNREFUSED ::1:54329` and `127.0.0.1:54329`, before database assertions. I did not run the suite against an unknown/shared database.
+- Explicit non-DB subset, `rtk npm exec -- vitest run test/init/claude-config.test.ts test/init/skill-install.test.ts test/shared/schemas.test.ts test/shared/errors.test.ts test/skill-template/template.test.ts test/cli/config.test.ts`: exit `0`, 6 files / 16 tests passed.
+- A first targeted test command selected all of `test/init`, which also included DB-backed `test/init/init.test.ts`; it exited `1` on the same missing `localhost:54329` and had 16 passing tests. The corrected exact-file subset above passed. No CI/release result is claimed: the checkout has no workflow file, and the official Actions page shows no runs.
+
+## Disposition
+Keep as a high-value **shared Project/Task/append-only human-agent context** reference; reject as a Nexus session migration engine. A Nexus adapter might map project metadata or user-approved session summaries to project/task context, but cannot reconstruct vendor session trees from this schema. Its bearer key is an app authorization token, not a model gateway key. Before any reuse, fix CLI config permissions for raw keys, constrain URL transport to HTTPS for remote servers, and expose provenance (`harness`, source project/session/message IDs, ancestry) plus attachments/event payloads without flattening them into `note`.

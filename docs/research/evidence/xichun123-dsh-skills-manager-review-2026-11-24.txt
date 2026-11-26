@@ -1,0 +1,39 @@
+# Candidate #231 — Xichun123/dsh-skills-manager review (2026-11-24)
+
+## Identity, pin and availability
+
+Pinned `main` and `origin/main` at `13004c2e00c90e68d383ae63a31932dfb12a172a` (2026-09-09); checkout was clean. GitHub showed 30 commits, 0 stars, 0 forks, no Releases, and a `UNLICENSED` npm package. The repository contains GitHub Actions for test and npm publication; the observed workflows at this pin completed successfully for CI and publish on 2026-09-09. That green run predates the newer open issue below. `package.json` exposes `build`, `prepare`, and `test`, but not the README's documented `pnpm validate` command.
+
+## Product / data model / fit
+
+This is a DeepSeek Harness (DSH) plugin for the DSH Skills provider, not a general cross-Harness migration product. It installs selected `SKILL.md` bundles into the plugin-private `$DSH_HOME/skill-manager/.agents/skills/` directory. `skills-lock.json` records source provenance; `state.json` stores separate global and workspace/project enablement and a manual-only invocation override. “Project” here means a DSH workspace root and descendant paths for Skill scope, not a ChatGPT/Codex Project/Section hierarchy or a conversation Session. The plugin adds a Settings panel and a composer toggle; the toggle is resolved against the current session's workspace path.
+
+Positive adjacent patterns for a future Nexus ResourcePlane: isolate imported Skill files from active workspaces; keep origin/lock metadata and enablement state separately; preserve source `SKILL.md` bytes when applying manual-only policy; invoke the packaged CLI with argv rather than shell text; reject escaping source symlinks; expose per-workspace scope. These are design observations, not code reuse permission. The package explicitly declares `UNLICENSED`.
+
+## Source review and current DSH compatibility report
+
+Pinned source review covered the plugin entry, manager/provider, RPC client/server, Settings and composer UI, tests, package manifests, lockfile and workflows. The source registers `ctx.connection.rpc.handle('/skill-manager', ...)`, gates local file mutation controls on loopback, and uses Connection's RPC integration. It also preflights a remote source before invoking the Skills CLI, but the remote ref can change between preflight and the CLI's second clone (a TOCTOU window).
+
+The public repository's still-open [issue #1](https://github.com/Xichun123/dsh-skills-manager/issues/1), opened 2026-10-16, reports three install/runtime blockers against DSH 0.2.0-rc.2 and the published 0.2.0 plugin: (1) plugin activation throws `cannot get property "webServer" without inject` at `connection.rpc.handle`; (2) after the reporter locally injects `webServer`, browser POSTs to `/skill-manager/list` return HTTP 405; and (3) the declared DSH peer ranges stop at `0.1.5-alpha.1`, so 0.2.0-rc.2 is rejected by the installer absent a risk override. The issue reporter proposes call-site injection or exact `/api` routes through `connection.fetch.register`, plus widened peer ranges. Source inspection independently confirms the custom `/skill-manager` RPC registration and the peer-range ceiling; the activation/UI 405 reproductions are the issue author's report, not a live DSH runtime test by this review. The issue page was open with no linked fix/PR when checked. README's assertion that the RPC uses the authenticated `/api` fence is therefore not treated as proof of a working route on current DSH builds.
+
+## Build, tests and dependency audit
+
+Environment: Node `v26.7.0`, pnpm `11.25.0` (workflow config uses Node 22 / pnpm 10). `pnpm install --frozen-lockfile --ignore-scripts`: exit 0. `pnpm test`: exit 0; TypeScript/tsdown build passed and all 24 Node tests passed (0 failed, 0 skipped). Tests cover scope resolution, updates, source validation, symlink containment, URL credentials, state handling and serialized mutations; they do not substitute for activating the plugin in DSH 0.2.0-rc.2 or verifying the Desktop/Web RPC transport.
+
+`pnpm audit --prod --registry=https://registry.npmjs.org`: exit 0, stdout `No known vulnerabilities found`. Full `pnpm audit --registry=https://registry.npmjs.org`: exit 1, 2 advisories (1 high Zod `<4.6.6`, 1 low KaTeX `<0.18.2`) in the full dependency tree, with the reported paths through DSH packages; this is not a claim of a production-only vulnerability in the plugin's runtime dependency set. Advisory references: [Zod GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), [KaTeX GHSA-238p-pmpm-9mq7](https://github.com/advisories/GHSA-238p-pmpm-9mq7).
+
+`pnpm run`: exit 0; listed scripts are `build`, `prepare`, and `test`. This confirms README's `pnpm validate` command is absent from the pinned package scripts.
+
+## Migration boundary and disposition
+
+No ChatGPT/Codex Projects, Sections/Section Groups, Session transcripts/events, parent/fork/subagent graph, interruption/edit history, images/files/links, token/cost provenance, MCP/plugin inventory, schedules, memory, export/import bundle, or target-session resume exists here. It is a narrow DSH Skill adapter and cannot migrate the user's ChatGPT/Codex source into Claude Desktop third-party-provider Chat, Cowork or Code, or local/self-hosted Claude Code. Those four profiles remain separate in Nexus; the user's explicit all-three Desktop-mode scope is unchanged.
+
+**Disposition:** adjacent DSH ResourcePlane reference only; reject as a Nexus session/project migrator. Do not reuse the source as-is: it is unlicensed, and the open current-DSH report identifies serious install/transport blockers not covered by the green repo test run. Reconsider only after a compatible, licensed revision passes an isolated native DSH activation and authenticated browser-to-plugin round-trip test on the intended version. No user account, API key, profile, Skill, Session, project, or private file was accessed.
+
+## References
+
+- [Pinned repository](https://github.com/Xichun123/dsh-skills-manager/tree/13004c2e00c90e68d383ae63a31932dfb12a172a)
+- [Pinned plugin entry](https://github.com/Xichun123/dsh-skills-manager/blob/13004c2e00c90e68d383ae63a31932dfb12a172a/src/index.ts)
+- [Pinned package metadata](https://github.com/Xichun123/dsh-skills-manager/blob/13004c2e00c90e68d383ae63a31932dfb12a172a/package.json)
+- [Open current-DSH compatibility issue #1](https://github.com/Xichun123/dsh-skills-manager/issues/1)
+- [GitHub Actions](https://github.com/Xichun123/dsh-skills-manager/actions), [GitHub Releases](https://github.com/Xichun123/dsh-skills-manager/releases)

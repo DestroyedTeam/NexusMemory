@@ -1,0 +1,37 @@
+# Candidate #282 source review: goodappsstore/sessions-box
+
+- Review date: 2026-11-25 (Asia/Shanghai).
+- Repository: https://github.com/goodappsstore/sessions-box; default branch `main` HEAD `aab64a1dd55375b044f41dbb85db3b5d8edc5622` (2026-10-12, `Adding ai usage disclosure`), version 0.1.0.
+- Latest release is **v0.1.1**, tag commit `1c86c7a1b3d864c32b43ba6511ca0427f364ab85` (2026-10-15). GitHub compare reports that v0.1.1 is 3 commits ahead of current main; those include OpenCode v2 schema support, the release-version bump, and release-workflow changes. The default branch is therefore stale relative to the latest release; reviewed both snapshots.
+- GitHub API snapshot: MIT; 0 stars / 0 forks; latest release v0.1.1; repository has 7 commits. Latest Actions run `38743776738` on the release tag succeeded: source validation, all six native builds (macOS/Windows/Linux × Intel/ARM64), verification of all twelve installers, and publication. One earlier run failed at the source-validation job before the successful run. CI runs on release tags only; branch/PR pushes do not run checks.
+- CodeGraph: main 41 files, 723 nodes, 2,658 edges; release tag 41 files, 735 nodes, 2,706 edges; both indexes current. Source tree contains no test directory, test files, Rust `#[test]` blocks, dedicated test runner, or JS lint configuration (also explicitly stated in README).
+- No account or source agent store was read, and no real session was opened. Sync/build commands were not run against any agent profile.
+
+## Product and data boundary
+
+- Sessions Box is a local-first Tauri desktop **session history browser/indexer** for coding-agent CLIs. The Rust importer discovers nine source families: Codex, Claude Code, OpenCode, Pi, Command Code, Muse, Hermes Agent, Cline and Antigravity. It syncs local JSONL transcripts and selected local SQLite stores into its own SQLite library; source agent stores are read-only.
+- It directly covers **Claude Code local** history and can invoke `claude --resume <id>` to resume in the original CLI/workspace. It does **not** read Claude Desktop Chat/Cowork/Code session stores, ChatGPT/ChatGPT export data, or third-party gateway profiles. `claude --resume` is a source CLI continuation command, not a target-native importer.
+- The local normalized schema has `agent`, `workspace` (path), `repository`, `model`, `session`, `session_context`, `entry`, `content_part`, `tool_invocation`, `file_activity`, tags, stars, analytics and sync checkpoints. Entries can retain `parent_entry_id`; the session entity has no native parent/child-session graph and there is no Project/Section Group entity. Workspace path, flat session rows, bookmarks and tags are not a native nested project/section/session hierarchy.
+- The importer preserves raw source JSON alongside normalized content/tool calls/results, model/context fields, and reported usage for browsing and analytics. Unfamiliar/media blocks can remain in source-shaped JSON, but this is **not** a target-native session writer or proof that media can be rehydrated in another Harness. Export saves full transcript/tool activity as Markdown or JSON. `Export SQLite backup` / `Import backup` is for restoring Sessions Box's own versioned schema, with integrity validation, ID remapping, collision policy, and an atomic transaction—not cross-Harness conversion.
+- Resume launches the originating CLI using its source session ID and original workspace. It does not translate a conversation into another tool's native store, copy project/workspace files, transfer Skills/MCP/plugins, or port memory/schedules.
+- Sync is incremental and read-only to sources. JSONL/SQLite sources are skipped if size+mtime (including SQLite sidecars) match; no content hash or format-version fingerprint is used, so same-size/same-mtime edits or parser changes may not trigger a rescan. Changed sources are rebuilt; interrupted SQLite batches roll back while completed batches stay available. This is a useful local Archive/Inventory/AnalyticsPlane pattern, not a universal migration format.
+- The app's own session database uses SQLite WAL; the source says Unix directory/file modes 0700/0600, but backups and conversations are unencrypted at rest and should be treated as private. Desktop packages are multi-platform; README notes macOS ad-hoc signing (not notarized) and unsigned Windows installers.
+
+## Build and verification
+
+- Pinned main 0.1.0 and latest released v0.1.1 were built separately on macOS using isolated `/private/tmp/nexusmemory-sessions-box-282` npm/Cargo caches; no project/global install. Both `npm ci --ignore-scripts` runs succeeded (175 packages each), both `npm run build` commands succeeded (TypeScript plus Vite), and both `cargo check --locked --manifest-path src-tauri/Cargo.toml` commands succeeded.
+- Vite reports a 534.03 kB minified JS chunk above its 500 kB advisory threshold (gzip 158.03 kB). This is a performance/splitting warning, not a build failure.
+- No unit/integration tests exist in either snapshot, and README states that CI builds do not verify runtime behavior. GitHub release CI is useful packaging evidence, not transcript-ingestion/resume behavioral acceptance. No native runtime was launched against the user's stores.
+
+## Disposition
+
+**VALUABLE_LOCAL_MULTI-HARNESS_HISTORY_HUB; NOT A_CROSS_HARNESS_SESSION_MIGRATOR.** This is a useful MIT reference for local multi-agent discovery, read-only ingestion, normalized searchable transcripts, context/tool/token analytics, source-native resume, and safe backup/restore of the hub's own database. It covers one of the four requested Claude-related routes (local Claude Code) as a source/resume option, but cannot migrate to Claude Desktop Chat/Cowork/Code or restore ChatGPT Project/Section/session trees. Retain as a product/ArchivePlane and local UX reference, not as the migration engine or universal Harness compatibility layer.
+
+## Pinned sources
+
+- [README at v0.1.1](https://github.com/goodappsstore/sessions-box/blob/v0.1.1/README.md)
+- [Source discovery at v0.1.1](https://github.com/goodappsstore/sessions-box/blob/v0.1.1/src-tauri/src/importer.rs)
+- [Session database schema at v0.1.1](https://github.com/goodappsstore/sessions-box/blob/v0.1.1/src-tauri/src/db.rs)
+- [Backup import/export at v0.1.1](https://github.com/goodappsstore/sessions-box/blob/v0.1.1/src-tauri/src/data_management.rs)
+- [v0.1.1 release and assets](https://github.com/goodappsstore/sessions-box/releases/tag/v0.1.1)
+- [Successful six-target release workflow](https://github.com/goodappsstore/sessions-box/actions/runs/38743776738)

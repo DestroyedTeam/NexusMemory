@@ -1,0 +1,45 @@
+# KRISH-exe-29/ai-agent-skill-router source review — 2026-11-21
+
+## Target, identity, disposition
+
+- Controller action cloned https://github.com/KRISH-exe-29/ai-agent-skill-router; clone exited 0. Exact checkout HEAD: 50bd7bbdde14ceca5f2ed0db255497d6e6ccaa13.
+- Release v0.1.0 is the same source commit, tagged/signed on 2026-11-04; Apache-2.0. GitHub showed 3 stars, 0 forks, and only 2 commits at review time.
+- Classification: an AI task router plus an explicit Skill/MCP/plugin inventory and cleanup assistant. It is NOT a cross-Harness Project/Section/Session migrator. Keep only as an adjacent ResourcePlane / per-item approval / inventory pattern; no migration-fidelity score applies.
+- It supports the Agent Skills folder model across Claude Code, Codex, Cursor, Gemini CLI, Copilot, Antigravity, OpenCode, Windsurf/Devin. It does not convert provider-native sessions, Projects, Section Groups, files, memory, schedules, MCP/plugin definitions, credentials or client-specific settings. Claude Desktop Chat/Cowork/Code and a Desktop 3P inference session writer are absent.
+- The router is explicitly model-driven: it classifies a task and instructs the AI to choose existing tools. It does not provide the user's desired no-AI cross-harness conversion.
+
+## What source actually implements
+
+- skill-router is a SKILL.md instruction plus a Claude Code SessionStart reminder hook. It asks the host model to select the minimum existing skills, one subagent and needed MCP tools; it is routing policy, not a file/state adapter.
+- skill-audit scans local skill directories, Claude Code plugin/agent/command metadata, and MCP config server names for Claude, Codex, Cursor and Gemini. It writes inventory, overlap clusters and candidate actions under ~/.skill-router. MCP env values, args, headers and URLs are intentionally not serialized.
+- Opt-in usage statistics walk only Claude Code ~/.claude/projects JSONL, parse selected event types and aggregate Skill/Agent/MCP names with timestamps. Source allowlists typed command names/tool metadata, and self-tests assert transcript marker text is absent from outputs. This is usage counting, not session export/import; there is no ChatGPT/Codex source parser or target-native archive writer.
+- Safe apply design is useful adjacent evidence: a candidate trash operation revalidates a direct child of known skill roots, rejects links, rechecks SKILL.md SHA-256, refuses an existing trash destination, takes a lock, moves the directory to trash, logs an undo command, and supports undo. Claude plugins are toggled with the Claude CLI rather than hand-editing settings. The instructions, not an autonomous background service, require asking the user about each action.
+- Security policy acknowledges sanitized third-party descriptions remain untrusted prompt text; the Claude auditor is read-only, but on other hosts analysis runs inline with the main agent and its normal tools. This is a residual cross-host prompt-injection boundary to preserve in any Nexus design.
+
+## Local source, install, and test evidence (isolated checkout/HOME)
+
+- CodeGraph init command rtk codegraph init --yes <path> exited 1 with unknown option --yes. Corrected to installed CLI syntax rtk codegraph init <path>; it exited 0. Verified index: 8 files, 95 nodes, 373 edges. Preserved .codegraph/.gitignore and removed only its !.gitignore exception.
+- Local commands using Node 26.7.0: cap-scan --selftest exited 0 and printed cap-scan selftest: PASS; apply --selftest exited 0 and printed apply selftest: PASS; scripts/validate-skills.mjs exited 0 and printed validate-skills: PASS for both Skills, the auditor and Claude plugin/hook manifests.
+- Reproduced the repository's pinned install-smoke command with skills@1.7.6 into an OS-temporary HOME, with DISABLE_TELEMETRY=1 and DO_NOT_TRACK=1. Install exited 0 and created both Skill trees, scanner and auditor reference. No user's HOME/configuration was touched.
+- A separate macOS path-alias reproduction found a silent CLI no-op. Invoking the installed cap-scan through HOME/.claude/skills/skill-audit/scripts/cap-scan.mjs (the npx installer-created symlink into .agents) returned exit 0, stdout empty, stderr empty. Invoking the same file by its canonical real path HOME/.agents/skills/skill-audit/scripts/cap-scan.mjs returned exit 0 and printed cap-scan selftest: PASS. The checked-in main guard in cap-scan.mjs and apply.mjs compares path.resolve(process.argv[1]) with fileURLToPath(import.meta.url); those may differ when launched through a symlink or macOS /var→/private/var alias. This is an observed path-form-dependent no-op, not a test failure on canonical paths. The CI install-smoke runs only on Ubuntu and calls the .agents path, so it does not exercise the macOS Claude-symlink invocation.
+- GitHub exact-main CI workflow includes selftests on Linux/macOS/Windows with Node 18/20/22, pinned Claude plugin validation, an Ubuntu install smoke, and hygiene scan. The latest main push CI #2 for this exact SHA completed successfully. Local selftests exercise synthetic fixtures, not cross-Harness conversion or real session restoration.
+
+## Tooling corrections
+
+- A CodeGraph lookup for guessed symbol validateSkills returned exit 0 with “Symbol not found”; corrected by reading the actual scripts/validate-skills.mjs path (exit 0).
+- A recursive code search initially passed a directory to non-recursive rtk grep and exited 2 (“Is a directory”); corrected with rtk grep -r, which returned the two main-guard sites successfully.
+- A one-off snapshot-hash check over-escaped the NUL separator and produced an inconsistent digest. Corrected with the canonical tree-hash helper; active snapshot and MODIFIED_FILE.zip both had 81 files and identical digest c764e4bef14cc5a3d9fe1214ca30f090bd84dfd4e65c52f1421f5bcd27e15eaa.
+- Candidate source worktree remained clean. No real user app, account, credential, MCP server, transcript or session was read or modified.
+
+## Primary sources
+
+- Repository / README: https://github.com/KRISH-exe-29/ai-agent-skill-router
+- v0.1.0 signed release: https://github.com/KRISH-exe-29/ai-agent-skill-router/releases/tag/v0.1.0
+- Exact source commit: https://github.com/KRISH-exe-29/ai-agent-skill-router/commit/50bd7bbdde14ceca5f2ed0db255497d6e6ccaa13
+- Exact CI workflow/runs: https://github.com/KRISH-exe-29/ai-agent-skill-router/actions/workflows/ci.yml
+- Security policy: https://github.com/KRISH-exe-29/ai-agent-skill-router/blob/50bd7bbdde14ceca5f2ed0db255497d6e6ccaa13/SECURITY.md
+- Scanner: https://github.com/KRISH-exe-29/ai-agent-skill-router/blob/50bd7bbdde14ceca5f2ed0db255497d6e6ccaa13/skills/skill-audit/scripts/cap-scan.mjs
+- Apply / undo: https://github.com/KRISH-exe-29/ai-agent-skill-router/blob/50bd7bbdde14ceca5f2ed0db255497d6e6ccaa13/skills/skill-audit/scripts/apply.mjs
+- CI definition: https://github.com/KRISH-exe-29/ai-agent-skill-router/blob/50bd7bbdde14ceca5f2ed0db255497d6e6ccaa13/.github/workflows/ci.yml
+
+Evidence boundary: static source/docs and self-contained synthetic tests only; the installer was tested in a disposable temporary HOME with telemetry disabled. No real user skill directory, Claude plugin store, Codex configuration, session log, API credential, Cloud gateway or provider account was accessed.

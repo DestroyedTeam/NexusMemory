@@ -1,0 +1,41 @@
+# nemesiscodex/pulse-tm source review — 2026-11-21
+
+## Identity and disposition
+
+- Controller clone: https://github.com/nemesiscodex/pulse-tm; exact main/master HEAD aa76ba14baa8d3e3115e91cb7447ed3889b7116e, committed 2025-12-02. MIT. GitHub describes the project as WIP/personal; 3 stars, 0 forks, 28 commits. The release page has no GitHub releases and the Actions workflow page shows 0 runs at review time.
+- The npm registry reports pulse-tm latest 0.1.9, published 2025-12-02; package.json is 0.1.9. This is a small, low-activity project, not an established cross-Harness migration package.
+- Classification: adjacent TaskGraph / local project work ledger. It is NOT a ChatGPT/Codex Project/Section/Session importer or an export/conversion framework. Keep only as a task-context model reference; no session-fidelity score applies.
+- README advertises a CLI, TUI and MCP server to help a developer resume tasks across work sessions. The product's tag/epic is a task group, not a Project or SectionGroup. A Task has title/description/status/tag/order/subtasks/timestamps; a Subtask has title/status/order/timestamps and cannot itself contain children. There is no conversation/session/message/branch/subagent graph, transcript, attachments, token/cost ledger, memory store, schedule or harness-state importer/exporter.
+- MCP exposes five CRUD/read tools: pulse_add_task, pulse_update_task, pulse_get_tasks, pulse_manage_tags, pulse_get_info. These operate on the same local task files; they do not read or create Claude Desktop Chat/Cowork/Code sessions or ChatGPT/Codex sessions. The app may give a manually written tag description to an agent as context, but it does not copy or restore conversation context.
+- Data lives in YAML at a project-root .pulse/<tag>.yml path (default project root is found by walking to .git; explicit working-directory override is available). One file is used per tag. It is portable as ordinary files, but moving YAML by hand is not a session converter.
+
+## Source and data-integrity review
+
+- Task IDs increment independently per tag file. There is no stable global task UUID; lookups without a tag scan tags and return the first matching numeric ID. This is weaker than an identity model for migration across multiple projects.
+- Subtask tree depth is exactly one level. Subtasks are embedded in the parent task YAML. Parent/child task ordering is not a conversation turn/branch relation.
+- Storage uses synchronous readFileSync/writeFileSync and no file lock or atomic replace. The source does not provide a multi-process merge/transaction layer; concurrent independent writers could overwrite a tag file. This is a static integrity risk, not a reproduced concurrent-write loss.
+- Reproducible synthetic malformed-YAML test: an isolated project contained .pulse/feature.yml with exactly the invalid text “next_id: [not valid yaml” followed by newline. Running the CLI add command returned exit 0, stdout “✓ Created task #1: "Synthetic recovery test" (feature)”, while stderr logged a YAMLParseError; the original malformed file was replaced by a new YAML file containing only the new task. This confirms that loadTagFile's parse-error fallback to an empty TagFile lets later mutation overwrite the malformed file. No user files were used.
+- A normal synthetic CLI flow created a task and subtask under a test-only feature tag. It produced a YAML record with task id 1 and nested subtask id 1, confirming task persistence, not session persistence.
+- Tag names are normalized to lower-case letters/digits/hyphens, reducing path traversal risk. Task deletion is permanent in CLI; no native undo/rollback or migration preview exists.
+
+## Local source and gate results
+
+- CodeGraph was initialized and verified on this candidate checkout: 41 files, 276 nodes, 835 edges. Preserved .codegraph/.gitignore and removed only its !.gitignore exception; final source checkout status is clean.
+- Bun was absent locally; repository AGENTS.md/development docs require Bun 1.0+ and explicitly say Node.js is unsupported. Bun 1.3.0 was obtained through an isolated npm cache from the official Bun npm distribution, matching the CI workflow's pinned runtime.
+- On the original checkout, bun install --frozen-lockfile exited 1 because bun.lock's root specs are @opentui/core/react ^0.1.46 while package.json requires ^0.1.54. The exact CI uses non-frozen bun install. In a disposable checkout, Bun 1.3.0 bun install exited 0, updated only that sandbox's lockfile, and resolved @opentui/core/react 0.1.107; it emitted an incorrect peer-dependency warning for web-tree-sitter@0.26.0.
+- Reproduced CI gates on that disposable checkout: bun run test exited 0: 4 files passed, 21 tests passed. bun run build exited 0. bun run lint exited 2 at its TypeScript step before ESLint: src/ui/components/Modal.tsx(175,15), TS2322, (v: string) => void is not assignable to expected ((event: SubmitEvent) => void) & ((value: string) => void).
+- The local typecheck failure occurs after the non-frozen install resolves the current semver range to a newer OpenTUI API. The workflow pins Bun but does not freeze the lockfile; GitHub currently shows no CI runs, so there is no upstream green run to contradict or validate the local result.
+- No MCP-server tests exist in tests/; current tests cover CLI args, CLI subtasks, task manager, and subtask/tag behavior. The tests exercise local task persistence, not cross-Harness migration.
+
+## Primary sources
+
+- Repository and README: https://github.com/nemesiscodex/pulse-tm
+- Exact source commit: https://github.com/nemesiscodex/pulse-tm/commit/aa76ba14baa8d3e3115e91cb7447ed3889b7116e
+- No releases page: https://github.com/nemesiscodex/pulse-tm/releases
+- CI workflow and current run list: https://github.com/nemesiscodex/pulse-tm/actions/workflows/ci.yml
+- Storage implementation: https://github.com/nemesiscodex/pulse-tm/blob/aa76ba14baa8d3e3115e91cb7447ed3889b7116e/src/storage/filesystem.ts
+- MCP tools and server: https://github.com/nemesiscodex/pulse-tm/blob/aa76ba14baa8d3e3115e/src/mcp/server.ts
+- Official Bun install/runtime docs used for isolated test runtime: https://bun.sh/docs/installation
+- npm registry query observed latest 0.1.9 and publish timestamp 2025-12-02; npm page: https://www.npmjs.com/package/pulse-tm
+
+Evidence boundary: repository source/docs, registry metadata, and synthetic local tests only; no ChatGPT/Codex export, Claude Desktop store, MCP account, provider key, user workspace or personal task directory was read or changed.

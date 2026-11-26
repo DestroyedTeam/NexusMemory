@@ -1,0 +1,44 @@
+# andrader/jup implementation review — 2026-11-20
+
+## Identity and review scope
+
+- Repository: https://github.com/andrader/jup
+- Reviewed checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-andrader-jup-20261120`
+- Default branch `main`, reviewed HEAD `2019ba873fb316d685d09c29bfe30b8c281af8bf` (2026-08-08).
+- GitHub metadata snapshot: 17 stars, 3 forks, `archived=false`, license field `null`; no root `LICENSE` file was present. Do not adopt as a code dependency without a license grant/repository clarification.
+- Package version `0.20.0`; latest GitHub release observed was v0.20.0 (2026-05-04). The checkout is later than that release. This is a point-in-time snapshot.
+- CodeGraph was initialized and verified on this checkout (55 files, 561 nodes, 1,245 edges). `rtk git status --short` was empty after preserving `.codegraph/.gitignore` with only `*`.
+
+## What the code actually manages
+
+`jup` is a Python CLI for installing and synchronizing Agent Skills (`SKILL.md` directories). It accepts local and GitHub sources, stores downloaded material under `~/.jup/skills`, tracks source/layout/category/skill names/version and update/install timestamps in a `skills.lock`, and links or copies those Skills to configured local/global harness skill folders. It has built-in harness locations and custom providers, plus add/list/sync/update/remove/move/config/TUI commands. This is a useful resource-plane reference for Skill provenance, source locks and per-harness directory projection.
+
+The symbol `skills_lock_session` in `src/jup/config.py:104` is a context manager that obtains a file lock, loads a `SkillsLock`, yields it, then saves the lock on exit. It is **not** an AI conversation/session-history API. CodeGraph source paths reviewed included `src/jup/config.py`, `src/jup/models.py`, `src/jup/core/sync.py`, `src/jup/core/filesystem.py`, `src/jup/commands/add.py`, and the tests below.
+
+No Projects, Sections/Section Groups, conversation or Session graph, turns/events, parent/fork/child tasks, attachments/images, token usage, MCP server configuration, plugin lifecycle, personal/project memory, schedules, Cloud conversation store, ChatGPT export reader, or Claude Desktop/Claude Code session writer was found in the scoped source/docs review. The tool cannot satisfy Destruction Era ChatGPT/Codex → Claude Desktop Chat/Cowork/Code or local/self-hosted Claude Code session transfer. It does not write Anthropic-hosted Claude Code Cloud sessions either.
+
+## Safety and limitations
+
+- `src/jup/core/filesystem.py:11` resolves paths and checks that they remain under an allowed base; `safe_copytree` validates its destination. `tests/security/test_path_validation.py` covers absolute paths outside the base, relative traversal and symlink escape. No path-traversal exploit was reproduced in this review.
+- Static review of `src/jup/core/sync.py:307-349` found that when a same-named target already exists and differs from the source, synchronization can unlink it or recursively remove the destination directory before creating a symlink/copy. The code labels this a managed target, but a same-slug unmanaged destination collision should be treated as a potential destructive overwrite. No valuable user files were used in the demo; Nexus should preview conflicts, back up and require approval.
+- The lockfile has no per-Skill content digest in the reviewed schema. Link-based installation reflects later edits to the source directory; it is not a content-addressed archive.
+- Custom skill-directory mapping does not prove the harness has loaded or activated a Skill. Require per-host discovery/version checks.
+
+## Quality and isolated behavior
+
+- `uv` was unavailable. An isolated venv was created at `/tmp/nm-jup-test-venv`; package plus test dependencies were installed there. Built wheel: `jup-0.20.0-py3-none-any.whl`, SHA-256 `01800e545102d48e53e867be17a8f7ec717b8995809f4844aca305e9fcc05b62`.
+- Full test suite in that venv, with disposable HOME/config and bytecode disabled: exit 0, **95 passed in 1.47s**. Pytest emitted a deprecation warning because `asyncio_default_fixture_loop_scope` is unset. `tests/conftest.py` redirects configuration and default harness directories into pytest temporary paths; relevant source-network operations are mocked.
+- A separate end-to-end test used only synthetic local files in `/tmp/nm-jup-e2e-replay-20261120`, HOME `/tmp/nm-jup-e2e-replay-20261120/home`, and project `/tmp/nm-jup-e2e-replay-20261120/project`. With `scope=local`, harnesses `claude,codex`, and default link mode, `jup add /tmp/nm-jup-e2e-replay-20261120/source --category test` exited 0, created `.agents/skills/demo-skill` as a symlink to the synthetic `source/demo-skill`, and created `.agents/skills/skills.lock`. No real user Skills, account, API key or provider request was used.
+- Exact CLI stdout/stderr/exit events are in `/Users/vincentadamnemessis/NexusMemory/artifacts/verified-workspace-routing-2026-11-20/VERIFICATION.txt`.
+
+## Disposition
+
+Classification: **reviewed adjacent Skills-library/synchronization reference; not a Project/Session migrator**. Borrow source provenance, lock-driven sync and safe-path validation concepts only. Do not count Skill installation success as session migration fidelity, do not call `skills.lock` a conversation session, and do not copy user credentials as part of an asset archive. The registry records the repository as non-archived (GitHub metadata snapshot), with license unresolved/no LICENSE.
+
+## Source references
+
+- Repository/README: https://github.com/andrader/jup
+- Pinned tree: https://github.com/andrader/jup/tree/2019ba873fb316d685d09c29bfe30b8c281af8bf
+- Package release: https://github.com/andrader/jup/releases/tag/v0.20.0
+- Source files: `src/jup/config.py`, `src/jup/models.py`, `src/jup/core/sync.py`, `src/jup/core/filesystem.py`, `src/jup/commands/add.py`
+- Tests: `tests/security/test_path_validation.py`, `tests/integration/test_sync_safety.py`, and the remaining `tests/` suite.

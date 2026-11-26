@@ -1,0 +1,58 @@
+# Candidate #296 — rucnyz/agents-sesame review (2026-11-25)
+
+## Scope, provenance, and license
+
+- Repository: https://github.com/rucnyz/agents-sesame
+- Reviewed snapshot: shallow clone, commit `3d3ab396a08a96c0a8a9f063eb2ba31c17069fcb` (2026-03-04); package/release version 0.1.2; Rust 2024.
+- Root manifest declares MIT and README says MIT, but checkout has no `LICENSE`/`COPYING` text. Record declared SPDX `MIT`; require license-text/provenance review before code reuse.
+- Official repo described a Rust TUI for local session-history search across 10 coding agents and showed 0 stars / 0 forks at review time. The release page showed v0.1.2 assets. README/metadata are not transfer proof.
+
+## Finding and fit
+
+`agents-sesame` is a local, single-machine history index/search/preview/resume TUI, not a cross-Harness importer/exporter. Its flat `Session` record has `id`, `agent`, `title`, `directory`, `timestamp`, `content`, `message_count`, `mtime`, and `yolo`; it has no Project/Section/Section Group or canonical event/branch/parent-child/subagent graph. Reviewed adapters cover Claude Code CLI, Codex CLI, GitHub Copilot CLI/VS Code, Crush, Gemini CLI, Kimi CLI, OpenCode, Qwen Code, and Vibe. Search and `resume` dispatch back to a source CLI; no Claude Desktop Chat/Cowork/Code reader/writer exists. Claude-only `ase relocate` moves Claude Code storage between project directories; it is not harness conversion and does not implement ChatGPT/Codex import.
+
+No ChatGPT export/Project/Section source exists. No writer exists for local/self-hosted Claude Code or Claude Desktop third-party-inference Chat, Cowork, or Code. It does not migrate Skills, MCP servers, plugins, memory, API keys, schedules, attachments/assets, token/cost usage, or session/tool-call fidelity. Keep it as a narrow local-search UX reference only.
+
+## Source-level coverage and limitations
+
+- Claude Code JSONL parsing turns user/assistant text into indexed content, uses first user prompt and cwd as metadata, skips subprocess `agent-*` files and command messages. Non-text blocks and most tool payload details are not preserved as a portable archive.
+- Codex rollout JSONL is indexed as a flat search record. OpenCode is read from SQLite; text parts are indexed, tool results are shallow/truncated (up to 200 characters).
+- Roadmap lists export, MCP, semantic search, and AI skill/tool integration as future work, not current capability.
+- Incremental scan treats an unavailable adapter as deletion of all known sessions for that agent; parse errors may be silently skipped; adapter error callbacks are ignored. Index identity is session ID alone, not `(agent, session_id)`, a static cross-agent collision risk.
+- Tantivy stores searchable session text locally without encryption. Index creation does not enforce owner-only modes; recovery/index-wipe behavior and writer-lock removal are broad. Avoid shared hosts until permissions are fixed and verified.
+- `ase relocate` writes destination JSONL before moving/copying data and deleting source, rewrites cwd by string substitutions, removes source index metadata without creating target `sessions-index.json`; relocation lacks focused tests.
+- `src/update.rs` uses predictable `/tmp/ase-update-<pid>` staging and treats missing checksum as optional; installer guidance uses curl-to-shell. Treat as supply-chain hardening concerns; no exploit was demonstrated.
+
+## Synthetic-only reproduction: relocation can target a missing directory
+
+Using a disposable fake HOME and fabricated Claude JSONL/data dir, `ase relocate <id> <nonexistent-target>` exited 0, moved JSONL/data under the encoded Claude project path, rewrote `cwd` to the nonexistent target, and did not create a destination sessions index. This can leave a session pointing at a nonexistent worktree. Happy-path synthetic relocation also exited 0 and removed the source; the target index was absent. A fake `/var/folders` path displayed as `/private~/workspace-new` because canonical path display and HOME string replacement do not align. No real HOME/history was opened or modified; fake homes were removed.
+
+JSON evidence: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/agents-sesame296/synthetic-relocate-nonexistent-target.json` and `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/agents-sesame296/synthetic-relocate.json`.
+
+## Synthetic-only reproduction: indexed transcripts can be group-readable
+
+A fabricated private marker in synthetic Claude JSONL under fake HOME mode 0755/umask 022 was indexed; `ase --rebuild --list` and `ase --preview` exited 0 and preview returned the marker. Index root was mode 0755 and Tantivy segment files mode 0644 (some metadata files 0600). This proves conditional same-machine account readability if HOME ancestry is searchable, not exposure of this user's data. Fake HOME was deleted after evidence capture. JSON: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/agents-sesame296/synthetic-index-permissions-worldhome.json`.
+
+## Build, tests, and quality gate
+
+Build/test output was isolated under `/Users/vincentadamnemessis/Library/Caches/NexusMemory/cargo/agents-sesame296` and `/Users/vincentadamnemessis/Library/Caches/NexusMemory/build/agents-sesame296`; no user agent data was read. Host macOS arm64, Rust/Cargo 1.95.0.
+
+- `cargo test --locked`: exit 0; 75 tests passed (36 unit + 16 adapter + 23 index/search); synthetic fixtures only.
+- `cargo build --locked`: exit 0.
+- `cargo fmt --all -- --check`: exit 0.
+- CI strict `cargo clippy -- -D warnings`: exit 101 with 12 style-lint errors (primarily `collapsible_match` and `unnecessary_sort_by`); real quality-gate failure, no source patch.
+- No `cargo audit` was run; no vulnerability-clearance claim is made.
+- CodeGraph initialized only in disposable checkout: 35 files, 807 nodes, 2,038 edges; status current; `.codegraph/.gitignore` kept and `!.gitignore` self-exception removed. Candidate source was not changed.
+
+Captured test output: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/agents-sesame296/`.
+
+## Tool and runner corrections retained
+
+1. `rtk read AGENTS.md` initially ran from Nexus Memory root, not candidate checkout, and failed because no root `AGENTS.md` existed; checked candidate root, where none existed, then initialized CodeGraph correctly.
+2. Initial `rtk grep` passed source directories in the wrong argument position and exited 2 (`grep: src is a directory`); corrected using CodeGraph.
+3. First relocation checker used a non-canonical expected path and falsely reported absence; corrected to use `os.path.realpath`, reran, and confirmed the behavior above.
+4. Strict Clippy exit 101 is preserved as a candidate result; upstream source was not modified.
+
+## Decision
+
+Disposition: **reviewed; not a migration candidate; narrow search UX reference; reuse gated on MIT license text/provenance; privacy and relocation defects require remediation before recommendation**. Implement canonical, event-preserving archive and mode-specific target adapters rather than treating flat search indexes as portable sessions.

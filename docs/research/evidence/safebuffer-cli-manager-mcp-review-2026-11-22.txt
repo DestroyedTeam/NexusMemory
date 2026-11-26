@@ -1,0 +1,38 @@
+# GitHub candidate #138: safebuffer/cli-manager-mcp
+
+Review date: 2026-11-22. Source pinned to `92fd151a239994cbf8c94e723c2c7b59d5ca8d68`. No live MCP server was started and no command string was sent to the candidate.
+
+## Identity and intended capability
+
+- Repository: https://github.com/safebuffer/cli-manager-mcp
+- GitHub metadata: Apache-2.0; 1 star / 0 forks; not archived; created and last pushed 2025-09-22; no tags, releases or Actions runs.
+- Tracked tree: `.gitignore`, `LICENSE`, `README.md`, `server.py`. One 1,114-line Python implementation imports `mcp.server.FastMCP`; repository contains no dependency manifest, lockfile, tests, or CI workflow.
+- README describes a background command MCP server with four tools: execute a command, get result/status, list processes, and clean up. This is an MCP capability provider, not a Project/Section/Session importer, transcript/resource migration tool, or harness configuration transfer adapter.
+
+## Source-level behavior and security boundary
+
+- MCP execute tool accepts `cmd: str` (server.py lines 590–639). The manager sees a string, sets `shell = isinstance(cmd, str)`, and passes it to `subprocess.Popen(..., shell=True, stdout=PIPE, stderr=PIPE, text=True)` (lines 310–330). No allowlist, sandbox, per-call approval, cwd, timeout, env policy, or resource limit on output is enforced. The README's trusted-agent/sandbox warning is advisory only.
+- The global `_process_manager` holds process records in a Python dict (line 584), so state is server-process-local and disappears on restart. The server is not a durable session store. One shared registry has no per-user namespace in source.
+- Status/result tools expose command text plus stdout/stderr/return code (lines 353–413, 649–691); the launch path logs the full command (line 346). There is no redaction layer for credentials accidentally placed in command arguments or output.
+- Default capacity is 100 process entries (constructor line 258); completed entries age out after an hour from creation (cleanup loop lines 539–580). `communicate()` collects complete output before storing it; no output-size ceiling is defined. This can create memory pressure for high-output commands.
+- `cleanup()` terminates/kills only the Popen process object, not an explicit process group. Inference from the shell-based execution path: on platforms where `/bin/sh -c` or another shell spawns grandchildren, terminating the shell may not terminate every descendant; this was not dynamically tested.
+
+## Checks and disposition
+
+- `rtk proxy python3` AST parse of `server.py` → exit 0 (`AST_PARSE_OK`). No formal tests/build/dependency install available because no such project scripts/manifests exist.
+- CodeGraph init → exit 0, indexed 1 Python file / 44 nodes / 86 edges; status up-to-date. Checkout is clean at pinned HEAD.
+- `rtk gh repo view` reports Apache License 2.0, 1 star, 0 forks. `rtk gh run list` → exit 0, stdout `[]`; `rtk gh release list` and `rtk git tag --list` both produced empty stdout.
+- Disposition: record as a red-flag example for MCP permission modeling. It may be useful only in an isolated, trusted execution environment with external policy controls; do not install/bundle it as a generic Nexus resource and do not infer project/session migration from an MCP label.
+
+## Corrected CodeGraph lookup
+
+`rtk codegraph node` with an absolute path printed “No indexed file matches”; corrected to run from the checkout with relative `server.py`, which returned the indexed source. `.codegraph/.gitignore` was retained with only the `!.gitignore` self-preserving exception removed; subsequent `git status --short` was empty.
+
+## Primary references
+
+- Pinned repository: https://github.com/safebuffer/cli-manager-mcp/tree/92fd151a239994cbf8c94e723c2c7b59d5ca8d68
+- Pinned source: https://github.com/safebuffer/cli-manager-mcp/blob/92fd151a239994cbf8c94e723c2c7b59d5ca8d68/server.py
+- Pinned README: https://github.com/safebuffer/cli-manager-mcp/blob/92fd151a239994cbf8c94e723c2c7b59d5ca8d68/README.md
+- Apache license: https://github.com/safebuffer/cli-manager-mcp/blob/92fd151a239994cbf8c94e723c2c7b59d5ca8d68/LICENSE
+- GitHub Actions: https://github.com/safebuffer/cli-manager-mcp/actions
+- GitHub Releases: https://github.com/safebuffer/cli-manager-mcp/releases

@@ -1,0 +1,35 @@
+# Candidate #297 — sabaiway/agent-workflow-kit (2026-11-25)
+
+## Provenance, license, and release
+
+- Repository: https://github.com/sabaiway/agent-workflow-kit
+- Disposable shallow checkout HEAD `0037c39a44d5aca692bf2d231c4c4637d6365c6e`, commit date 2026-11-24, message `chore(stats): snapshot 2026-11-24`. Package and README version 1.3.0, Node >=18, ESM.
+- Verified local root `LICENSE`: MIT, copyright 2026 sabaiway. `package.json` declares MIT. No package dependencies or npm audit run; do not make a dependency audit claim.
+- Official repo describes a portable memory/workflow kit for Claude Code, Codex, Cursor, Devin Desktop, GitHub Copilot, Gemini CLI, Cline, Aider and other tools that read `AGENTS.md`. GitHub page at review time showed 0 stars/forks and 166 commits. Official releases list v1.3.0 as latest. These are repository/vendor claims, not independent proof that each Harness consumes identical semantics.
+
+## What it actually does
+
+The project packages a Claude Code-native `SKILL.md`, an npm/Node installer, launcher glue for Codex and Devin Desktop, templates and small local maintenance scripts. `bin/install.mjs` copies the skill payload into `~/.claude/skills/agent-workflow-kit` (or `--dir`), then optionally invokes a POSIX shell launcher. Windows skips the POSIX launcher. The skill procedure is executed by an AI agent: it performs repository reconnaissance, asks user-controlled visibility/language/attribution questions, and populates project files. The kit itself explicitly says these questions must be answered before writing. `disable-model-invocation: true` is Claude-Code-specific; the launcher documentation warns that Codex may auto-trigger absent an `agents/openai.yaml`. This is not a deterministic, model-free universal conversion utility.
+
+Its project-level continuity surface is a repo-local `AGENTS.md` entry point, `CLAUDE.md` alias, and `docs/ai/` files including handover, active plan, current state, architecture, technical spec, decisions, known issues, changelog and rolling history, plus cap/index/archive scripts. This is useful **curated project-memory/workflow prior art**. It is not a conversation/session archive or cross-Harness session migration: no source session IDs, message/event stream, role/time/token/cost record, tool-call/result record, conversation fork/parent/child/subagent graph, ChatGPT Project/Section/Section Group reader, or destination-native transcript writer was found. No attachment bytes/manifest, Skill/MCP/plugin inventories, credentials, scheduled-task migration, or Claude Desktop Chat/Cowork/Code-specific importer/writer exists. `active_plan.md`/`handover.md` are human/agent-maintained summaries, not proof of complete history or exact resumption.
+
+Cross-agent functionality is mainly a shared Markdown convention (`AGENTS.md`) and launchers: Claude Code reads the skill natively; Codex receives a symlinked skill; Devin Desktop receives a generated global workflow; Cursor/other tools are described as manual integrations. The project bootstrap and upgrade instructions are prompts for an agent, and language/visibility/attribution choices require user answers. Windows gets no Bash launcher. There is no macOS `.app` or Windows `.exe`.
+
+## Source and test review
+
+- CodeGraph initialized in the disposable checkout: 12 files, 146 nodes, 471 edges; status current. `.codegraph/.gitignore` retained with only its required `!.gitignore` self-exception removed. Candidate source remained clean: `rtk git status --short` stdout empty. No root `AGENTS.md` existed.
+- The package has no declared external dependencies. The in-tree suite is the three `references/scripts/*.test.mjs` files; it exercises pure changelog, issue/archive and docs-size/index helpers, not `bin/install.mjs`, launchers, agent-driven bootstrap, upgrade migrations, or harness integrations.
+- `rtk proxy node --test references/scripts/archive-changelog.test.mjs references/scripts/archive-issues.test.mjs references/scripts/check-docs-size.test.mjs`: exit 0, 44 passed, 0 failed. `rtk proxy node --check bin/install.mjs`: exit 0. `rtk proxy bash -n launchers/install-launchers.sh`: exit 0.
+- `rtk proxy node bin/install.mjs --version`: exit 0, stdout `1.3.0\n`. `--help`: exit 0, stderr empty. In a disposable `--dir <test-results>/install-target --no-launchers` run, installer exit 0; stdout said installed v1.3.0 and skipped launchers; output contained 34 files including `SKILL.md` and references, and no `package.json`. This verifies local skill payload copying only, not end-to-end project bootstrap or target-Harness behavior. No actual user home/config or source project was used. Logs: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/agent-workflow-kit297/logs/`.
+
+## Reproduced launcher safety defect (synthetic fake HOME only)
+
+`launchers/install-launchers.sh` claims to be additive and to leave an exact launcher slot untouched unless kit-managed or `--force` is passed. The Codex branch, however, enters the overwrite path for **any symlink** at `~/.codex/skills/agent-workflow-kit`, without checking whether the link points to this kit or backing it up, then runs `ln -sfn`.
+
+Reproduction: a fake HOME contained `.codex/skills/agent-workflow-kit` as a user-owned symlink to a separate synthetic `original-user-skill` directory. Running the launcher with no `--force` exited 0, replaced the symlink target with the reviewed kit path, and produced zero `.bak.*` backups. The sentinel file at the original target remained intact, so this overwrote the pointer, not the target data. A control probe with a regular file at the slot exited 0 and left the file unchanged, confirming the bug is symlink-specific. All probes stayed inside `/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/agent-workflow-kit297/`; no real `~/.codex` was read or changed. Evidence JSON: `synthetic-symlink-replacement.json` and `synthetic-regular-file-conflict.json` in that directory.
+
+This contradicts the README's safe-by-default/no-clobber claim for the symlink case. Before adopting the launcher, require the target to equal the kit path or carry an ownership marker; otherwise refuse and request `--force` with a backup.
+
+## Fit decision
+
+Disposition: **useful adjacent project-memory/Skill distribution reference; not a Nexus Memory session/project migrator**. Its `AGENTS.md`/`docs/ai` context can be treated as a distinct curated-memory plane, but must never be conflated with immutable session history, project/sidebar hierarchy, or target-native resumption. It does not meet the user's “without AI intervention” automatic universal migration target. MIT permits review/reuse subject to notice, but the launcher defect should be corrected before adopting it operationally.

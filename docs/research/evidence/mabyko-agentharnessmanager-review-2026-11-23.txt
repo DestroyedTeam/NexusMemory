@@ -1,0 +1,24 @@
+# Review: mabyko/AgentHarnessManager — Skills/resource plane, not conversation migration
+
+As-of review date: 2026-11-23. The repository was shallow-cloned into a disposable checkout and pinned to `main` / `origin/main` at `e64249777df41377e93d5ce12a259d6fd264e4c5` (2026-10-22T09:18:34+09:00). GitHub lists MIT, zero stars/forks at review time, 36 commits, and no Releases. The latest visible GitHub Actions run for this head (#14, Oct 22) succeeded. The source checkout stayed clean. Candidate page: https://github.com/mabyko/AgentHarnessManager ; Releases: https://github.com/mabyko/AgentHarnessManager/releases ; Actions: https://github.com/mabyko/AgentHarnessManager/actions.
+
+## What it implements
+
+A native SwiftUI macOS manager for local Skills, global instruction files, selected agent configuration, safety-reviewed filesystem changes, local profiles and CLI/stdio-MCP management. README requirements are macOS 26+, Xcode 26+ and Swift 6.2+. It reports that automated grouping, plugin installation, and general MCP/hook management are not implemented. Its own README warns that discovery/enabled state does not prove an agent loaded a Skill into a conversation.
+
+Source confirms `SkillGroup` is a `Codable` record of `{id, name, symbol, skillIDs}` stored under `AppPreferences.groups`; active group IDs and group selection mode drive enabling/disabling installed Skill paths. A `WorkProfile` contains a name/note and `ProfileMember` snapshots (`id`, name, path, agent name), not Projects or sessions. The app's “history” page is inspection/change activity. No conversation, transcript, ChatGPT Project/Section, session-parent/child, branch, attachment, schedule or generic import/export data model was found. The word “group” is therefore not evidence of ChatGPT sidebar Section Group compatibility.
+
+The bundled local MCP is intentionally a Skills manager, not a session writer. Its eight tools are `status`, `list`, `show`, `check`, `groups`, `plan`, `request`, and `requests`. `request` queues a local Skill enable/disable intent for human approval in the app; there is no apply tool in MCP. The README says the app does not sign in to a model provider or read agent credentials. It manages Skills, some global instruction files and agent CLI/MCP registrations, not Claude Desktop 3P Chat/Cowork/Code conversations or API-key migration.
+
+## Reproducible isolated checks
+
+- `rtk swift test --package-path Packages/SkillCore` — exit 0; 93 tests executed, 0 failures/0 unexpected. The command output ended `Executed 93 tests, with 0 failures (0 unexpected)` and `All tests passed`; the wrapper returned a combined terminal stream, not a separate stderr stream.
+- `rtk xcodebuild -project AgentHarnessManager.xcodeproj -scheme AgentHarnessManager -destination 'platform=macOS' -derivedDataPath /tmp/nm-review-agentharnessmanager-followup196 CODE_SIGNING_ALLOWED=NO build` — exit 0. It built for the first of two matching macOS destinations (Xcode warned about the multiple matches); no signing, provider, account or live-session interaction.
+- `rtk sh scripts/check-management.sh && rtk sh scripts/check-app-state.sh` — exit 0. The first emitted `PASS: actual CLI/MCP initialization, negotiation, schemas, paging, documents, local checks, strict inputs, safe intent queue, JSON-RPC errors and message bounds; no login or real skill changes`. The app-state script emitted 11 `PASS:` lines covering synthetic Skill/group/profile/file state, journal-backed operations and settings; fixtures used isolated temporary files/preferences.
+- CodeGraph was initialized/verified on this candidate: 55 files, 1,691 nodes, 6,447 edges. Source-focused exploration followed the `SkillGroup`, `AppPreferences`, `WorkProfile`, `ManagementCommands`, `MCPServer`, `AppStore` and package/test call paths. This is structural/source evidence, not live target-app import validation.
+
+During source discovery, three `rtk grep` attempts passed directory paths to the non-recursive wrapper and exited 2 (`grep: docs: Is a directory`; `grep: AgentHarnessManager: Is a directory` and `grep: Packages: Is a directory`; `grep: .: Is a directory`). They were not treated as successful searches. CodeGraph exploration/node queries were used instead; they surfaced the complete group model, MCP command allowlist, profile model and app state, and succeeded. No candidate code or user data was changed.
+
+## Disposition
+
+Keep as a useful **local ResourcePlane/management UX and transaction-safety reference** (grouped Skill activation, managed configuration, human-reviewed plans, backup/journal/recovery, local MCP). Reject it as a ChatGPT/Codex Projects/Sections/SessionGraph migration engine and as evidence that a Skill group represents a chat Section. It has no session/import writer, no target-native Chat/Cowork/Code 3P resume test, and no transcript or attachment transfer. Do not count it as a fidelity-compatible adapter.

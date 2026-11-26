@@ -1,0 +1,45 @@
+# evoerax/awesome-harness-engineering — static catalogue review (2026-11-21)
+
+## Identity and review boundary
+
+- Repository: https://github.com/evoerax/awesome-harness-engineering
+- Reviewed branch/ref: `main`, HEAD `0569df715fed9c42cb5ab3658655a2b55cf1c6b9`; local `git ls-remote origin refs/heads/main` matched. Latest commit is dated 2026-03-26T23:18:35+08:00 (“fix: enrich Chinese superpowers prompts to match English versions”). Local checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-evoerax-awesome-harness-engineering-20261121`.
+- GitHub snapshot on 2026-11-21: 5 stars, 5 forks, 11 commits. No workflow files are tracked and the repository Actions page shows the generic “get started” splash, not project CI. The repository contains Markdown documentation only: two READMEs, seven harness notes, five tool notes and 50 prompt markdown pages; there is no runtime/source code or test suite.
+- README claims MIT, but no LICENSE file is tracked and the GitHub root lists only `docs/`, `prompts/`, and two READMEs. Treat the license as **unverified**, especially before redistributing the 50 prompt bodies; their per-file upstream commit/version/license provenance is not recorded.
+- CodeGraph initialization found no indexable source files; status was current with 0 files/nodes/edges. Working tree remained clean.
+
+## Verdict
+
+**Pass as a migration implementation; retain only as a low-confidence discovery/index lead.** It is a static “awesome” catalogue of five workflow/tool families across seven harnesses. It does not parse or write native data, and provides no Session, message/event, project/section, branch/subtask, attachment, token-usage, scheduler, credential, MCP, plugin, or memory migration engine. Its “support” tables are not interoperability tests or measured transfer fidelity. No candidate should be considered compatible from a checkmark in this repository.
+
+## Source/document audit
+
+The comparison matrix is demonstrably stale and has no “as of” date, source links for individual cells, product-version matrix, confidence grading, or executable validation:
+
+- The README says Codex has no hooks. Current first-party Codex docs enumerate lifecycle hooks including `PreToolUse`, `PermissionRequest`, `PostToolUse`, compact/model request, session/subagent, interrupt and stop events, describe user/project/system hook locations and plugin-bundled hooks, and document MCP-tool hook handlers. This is a direct material error, not just a missing feature count. Source: https://developers.openai.com/codex/hooks
+- It marks OpenClaw as having neither hooks nor MCP. Current first-party docs describe separate internal and typed plugin hook systems, and supported outbound MCP client configuration plus `openclaw mcp serve`; both cells are materially false. Sources: https://docs.openclaw.ai/automation/hooks, https://docs.openclaw.ai/plugins/hooks, https://docs.openclaw.ai/tools/mcp
+- The matrix says Gemini CLI has no hooks/MCP. Current Gemini CLI docs define a configurable hooks system and list hooks such as `BeforeTool`, `AfterTool`, session, model and agent events; its extension format also packages MCP servers. Sources: https://geminicli.com/docs/hooks/reference/, https://geminicli.com/docs/extensions/
+- The OpenCode page claims “20+ event types (most of any harness)” without a count method or comparison baseline; it describes a `plugin` config field while current OpenCode docs configure a `plugins` array. Its GitHub hyperlink points at `nicholasgasior/opencode`, not the project’s official `anomalyco/opencode` repository. First-party sources: https://opencode.ai/docs/plugins, https://opencode.ai/docs/mcp-servers, https://github.com/anomalyco/opencode
+- The Cursor “15+” hook count is not enough for compatibility grading: official docs separate Agent Chat, Tab and app-lifecycle event families and distinguish local/cloud support, with events behaving differently by surface. Source: https://cursor.com/docs/hooks
+- Headline quantitative claims (PUA “18 experiments” and +36/+65/+50% improvements; gstack “~100x/~30x” effort compression; ECC inventory counts) are presented without a linked protocol, raw data, version/date, baseline, or reproducible benchmark in this catalogue. Treat as unverified marketing claims, not evidence of quality or transfer accuracy.
+- The collection uses subjective “best” labels without selection rubric, version pinning, update schedule, or maintainer/source provenance. It does not list ChatGPT Projects/Sections or Claude Desktop Chat/Cowork/Code as native migration endpoints.
+
+## Nexus Memory disposition
+
+Do not add it to the migration-engine or interoperability-test shortlist. It can serve as a rough lead list for workflow tools and prompt inspirations only after independently pinning upstream sources, verifying licenses, and checking each feature against current first-party docs. The primary Nexus evidence ledger and versioned adapter matrix must supersede its static checkmarks. No benchmark/accuracy score is assignable: no conversion implementation or migration test exists.
+
+## First-party sources checked
+
+- Candidate GitHub repo (5 stars, 5 forks, 11 commits in page snapshot): https://github.com/evoerax/awesome-harness-engineering
+- Candidate final commit: https://github.com/evoerax/awesome-harness-engineering/commit/0569df715fed9c42cb5ab3658655a2b55cf1c6b9
+- Actions page: https://github.com/evoerax/awesome-harness-engineering/actions
+- Codex hooks: https://developers.openai.com/codex/hooks
+- OpenClaw internal hooks: https://docs.openclaw.ai/automation/hooks
+- OpenClaw plugin hooks: https://docs.openclaw.ai/plugins/hooks
+- OpenClaw MCP: https://docs.openclaw.ai/tools/mcp
+- OpenCode plugin configuration: https://opencode.ai/docs/plugins
+- OpenCode MCP: https://opencode.ai/docs/mcp-servers
+- OpenCode official repository: https://github.com/anomalyco/opencode
+- Cursor hooks: https://cursor.com/docs/hooks
+- Gemini CLI hooks: https://geminicli.com/docs/hooks/reference/
+- Gemini CLI extensions: https://geminicli.com/docs/extensions/

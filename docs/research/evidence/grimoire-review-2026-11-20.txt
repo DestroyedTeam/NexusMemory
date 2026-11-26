@@ -1,0 +1,61 @@
+# grimoire-rs/grimoire implementation review — 2026-11-20
+
+## Identity and version
+
+- Repository: https://github.com/grimoire-rs/grimoire
+- Reviewed checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-grimoire-rs-grimoire-20261120`
+- Reviewed `main` HEAD `5676c2c32e46efed7c624ebb4fff79f6ff01e443` (2026-11-19; CI workflow pin update). Cargo workspace version v0.16.1, Apache-2.0; initialized external submodules at their recorded gitlinks before building.
+- GitHub release v0.16.1 was published Nov 19 at tag commit `ed811621dbb7c457ac8205d6a6276fe9019abc42`; reviewed main is one commit ahead. The current docs website reports 0.16.0 while latest GitHub release is 0.16.1. The previous registry snapshot records 15 stars / 2 forks as of its capture; the GitHub HTML search cache is older and showed 14 / 1, so popularity counts are not used as a quality signal.
+- CodeGraph index: 675 files, 32,174 nodes, 161,727 edges; status reported current. Source checkout Git status was clean after submodule initialization.
+
+## Product model / what it actually transfers
+
+Grimoire (`grim`) is a pre-1.0 package manager for **agent configuration assets**. It declares Skills, Rules, Agents, MCP servers, Hooks, Settings and Bundles in `grimoire.toml`, resolves/pins registry content in `grimoire.lock`, and renders each artifact into client-native paths/config formats. `LockedArtifact` records a name/kind, pinned OCI identifier or local path+SHA-256, bundle provenance and dependency edges; it is not a conversation/session model. The resolver and install record use digests, client scopes and file/config footprints.
+
+Its published compatibility matrix is explicit and nuanced: Claude Code, Codex, Copilot, Cursor, Gemini, Zed, Amp, Kiro, Junie, OpenCode and other coding clients have per-artifact support/degraded/declined cells. It may refuse a transformation rather than write a file the client ignores. A separate marketplace guide documents distribution of plugin artifacts to ChatGPT/Codex and the Claude Desktop Chat/Cowork UI, but this is repository/plugin packaging—not ChatGPT Project or conversation import. ChatGPT's desktop app reads a local `.agents/plugins/marketplace.json` or an administrator imports a GitHub marketplace. The official OpenAI help article says marketplace sync imports plugin content, not member accounts or app access.
+
+The Grimoire compatibility matrix's “Claude” target is Claude Code (`code.claude.com`), not a distinct Claude Desktop Chat/Cowork/Code session adapter. Grimoire's separate marketplace guide documents a Chat/Cowork marketplace route; it does not establish a generic Desktop session store/import path. Anthropic's current help article says plugin sync into Claude Code requires signing into a Claude account; plugins do **not** sync when Claude Code is using API-key authentication or a cloud provider. It distinguishes plugin assets from chat history. It also states local MCP servers run in Cowork and Claude Code, not Chat. Therefore, do not imply that Grimoire migrates API-key-mode sessions or conversation history into any of the three Desktop modes.
+
+No ChatGPT/Codex Projects, Sections/Section Groups, transcript/session tree, user/assistant/tool turns, interruption/fork lineage, files/images/links, token/cost history, project memory, scheduled conversations or cloud-session import/export model was found in the reviewed manifest/lock/install/export/MCP surfaces. Its `project` means a config/working-directory scope used for installing assets, not a hosted conversation Project; plugin `project` export renders a locked asset set, not a ChatGPT/Codex Project archive.
+
+## MCP / Skills / plugin boundary
+
+- The tool registers a canonical MCP descriptor into host-native JSON/TOML configuration and supports client-specific formats/declines. Its staging/export code can package a project's locked assets into Claude plugin and Agent Plugins (Codex) layouts. This is valuable **asset distribution**, not the ability to read arbitrary existing MCP server entries or conversation sessions back into Nexus.
+- A synthetic local path Skill (`skills/demo-skill/SKILL.md`) was installed in isolated project scope to Claude and Codex. Grimoire wrote a SHA-256 path pin to `grimoire.lock`; the identical Skill bytes appeared at `.claude/skills/demo-skill/SKILL.md` and `.agents/skills/demo-skill/SKILL.md` (Codex's shared Agent Skills pool).
+- `grim export plugin --project` then generated separate Claude and Codex plugin trees, each carrying `demo-skill/SKILL.md` with the same digest and client-specific manifests. This is a real, synthetic local packaging probe; no external registry, account, model, user Skill or session was used.
+- A local `grim add ./mcp/demo-server.toml --kind mcp` probe exited 64 with `path sources are not supported for mcp artifacts`; no client config was written. A remote/OCI MCP artifact can be consumed and rendered, but this tool path does not import arbitrary local MCP config. No AI process was started during any probe.
+- Official Claude Help says Claude plugins may bundle Skills, connectors and sub-agents. In Cowork and Claude Code they can also include hooks and local MCP servers; in Chat, hooks/sub-agents/local MCP are not active. For Claude Code, sync from Claude account does not occur under API-key or cloud-provider authentication. OpenAI's workspace marketplace import instead syncs plugin packages from GitHub and does not connect member accounts or grant app access.
+
+## Safety / use as a reference
+
+Grimoire has a digest lock, staged rendering, per-client capability matrix, non-destructive conflict checks/force flags, content-drift status and explicit hook consent state. These are useful Nexus patterns. However, MCP descriptors contain executable commands/URLs and hook artifacts can control agent actions: importing them must be previewed, provenance-checked and separately approved. Claude's own docs warn that local MCP servers run with local process permissions; ChatGPT marketplace sync may automatically pick up future repository plugins, so pinning/administrator review matters. Do not invoke imported commands as part of a session import.
+
+## Isolated runtime behavior
+
+- The initial `grim install ./skills/demo-skill ...` probe exited 79 because no `grimoire.toml` existed; `grim init --offline` then created the config. After setting `[options].clients = ["claude", "codex"]`, `grim add ./skills/demo-skill --kind skill --offline` exited 0 and materialized the Skill for both clients. This corrected CLI flow is recorded in the transaction ledger.
+- The same temp project exported `demo-plugin.claude` and `demo-plugin.codex`; both outputs carried the same source SKILL content and their expected `.claude-plugin/plugin.json` / `plugin.json` manifests. The probe used `GRIM_HOME`, `HOME`, project, registry cache and output paths only under `/tmp/nm-grimoire-skill-probe-20261120`.
+- `grim add ./mcp/demo-server.toml --kind mcp --offline` exited 64 with the local-MCP-path error; this was a deliberate negative boundary probe, not a test-suite failure.
+
+## Quality gates and exact scope
+
+- Temporary `HOME`, `GRIM_HOME`, `CARGO_HOME`, and `CARGO_TARGET_DIR` were used. The first `cargo test --workspace --locked` attempt exited 101 before compilation because the two declared git submodules had not been initialized. `git submodule update --init --recursive` fetched exactly the pinned submodule commits; the corrected same test command exited 0.
+- `cargo test --workspace --locked`: **7,563 passed, 0 failed** across the workspace; no ignored tests. The main `grim` suite ran 7,417 tests in 1,562.66s in the debug profile; long chain/cap tests explain the slow run. This is not the project's official release-profile `cargo nextest` gate.
+- `cargo fmt --all -- --check`: exit 0. `cargo check --workspace --locked`: exit 0. `cargo build --locked --bin grim`: exit 0.
+- `cargo clippy --workspace --locked --all-targets -- -D warnings`: exit 101, because `crates/grim-hook/tests/launcher.rs:449` defines unused `run_unlinked_image` (`dead-code`). This is a local HEAD result. The repository's full `task verify` was not run: `task` is not installed, its Rust unit task would install cargo-nextest, the full task also performs license/catalog/acceptance/hook-size checks and writes a `.claude/hooks/.state/commit-verified` file in the checkout. No exact upstream CI result was used to overrule the local failure.
+- Exact commands, stderr/stdout, CLI failures/corrections, test counts, E2E generated files, BASELINE/MODIFIED/ROLLBACK outputs and hashes are in `/Users/vincentadamnemessis/NexusMemory/artifacts/verified-workspace-routing-2026-11-20/VERIFICATION.txt`.
+
+## Disposition
+
+Classification: **strong adjacent cross-harness configuration/Skills/MCP/plugin asset package manager; not a Session/Project migrator**. The best pattern to borrow is the typed `artifact → digest lock → per-client capability decision → staged native projection → output drift record` pipeline. Keep the data planes separate: never reinterpret that asset lock or a generated marketplace as a session archive, ChatGPT Project, Claude Desktop mode store, or API-key Cloud conversation. Preserve imported asset commands and hooks as inert data pending human approval.
+
+## Sources
+
+- Repository and README: https://github.com/grimoire-rs/grimoire
+- Latest release v0.16.1: https://github.com/grimoire-rs/grimoire/releases/tag/v0.16.1
+- Pinned reviewed source tree: https://github.com/grimoire-rs/grimoire/tree/5676c2c32e46efed7c624ebb4fff79f6ff01e443
+- Official client compatibility matrix: https://grimoire.rs/clients.html
+- Grimoire marketplace guide (verified 2026-09-29): https://grimoire.rs/guides/use-a-marketplace.html
+- Anthropic plugin behavior: https://support.claude.com/en/articles/13837440-use-plugins-in-claude
+- Anthropic organization repository sync: https://claude.com/docs/plugins/org-sync
+- OpenAI plugin package guide: https://developers.openai.com/plugins/build/plugins
+- OpenAI GitHub marketplace import/sync: https://help.openai.com/en/articles/20001504-importing-and-syncing-plugin-marketplaces-from-github

@@ -1,0 +1,51 @@
+# Candidate #106 — weiox/skm
+
+Review date: 2026-11-21
+Pinned HEAD: cb2ab2e7ebca2668777f1168084eaff3dd76a132; tag/version v1.0.1.
+GitHub metadata: 2 stars, 0 forks, no recognized license metadata, not archived; last pushed 2026-03-08 and last updated 2026-03-30. Root contains shell lifecycle scripts, eight SKILL.md tools, vendored Git submodules and shell fake-home tests. CodeGraph initialized successfully but indexed no files because this is a shell/Markdown repository.
+
+## Product fit
+
+SKM is a local Agent Skill lifecycle manager specifically for Codex and Claude Code. It defines ~/.skm as source of truth, exports skill directories under exports/shared, and symlinks ~/.agents/skills and ~/.claude/skills to that generated view. It diagnoses, organizes, imports, updates and releases Skills. It does not manage ChatGPT Projects/Section Groups, conversation history, runtime caches, session trees, attachments or Claude Desktop Chat/Cowork/Code state. The README explicitly lists chat history and tool-internal state as out of scope. It is a narrow Skill ResourcePlane manager, not a Nexus session migrator.
+
+Good independent architecture ideas: one source tree, personal/vendor boundaries, a generated runtime view, a doctor-before-change workflow, conflict detection, fake-home testing, and user confirmation before destructive changes. SKM can help explain how a separate Skill bundle is mounted into Codex/Claude Code; it does not convert a Skill's harness-specific semantics or credentials.
+
+## Source/test findings
+
+### Destructive bootstrap/sync behavior reproduced in isolated fake home
+
+bootstrap.sh --force's ensure_entrypoint_link removes any existing target path with rm -rf before linking exports/shared. The targets default to the entire ~/.agents/skills and ~/.claude/skills directories. skm-sync-agent-skills, skm-install-linked-skill, skm-update-vendor-skills and organize --apply all invoke bootstrap with --force; their SKILL.md workflows do not independently stop for a content inventory and explicit per-entry deletion confirmation.
+
+Harmless probe: created disposable real directories ~/.agents/skills/foreign-skill and ~/.claude/skills/foreign-skill with marker SKILL.md files under a temp HOME, then ran the checked-in bootstrap.sh --force with SKM_DIR pointing only into that temp home. Observed exit 0; both foreign-skill directories disappeared and each entrypoint directory became a symlink to the empty SKM exports/shared. The entire fake home was removed. No user's actual ~/.agents or ~/.claude paths were accessed.
+
+The repository's own network-free shell suite also passed (exit 0), but tests/test-sync.sh seeds unmanaged entrypoint symlinks and records REMOVED shared unmanaged-skill; it asserts stale managed-export pruning, not preservation or confirmation for foreign real directories. Thus green tests do not prove safe synchronization.
+
+### Diagnosis and organization coverage gaps
+
+- skm-doctor-agent-skills.sh examines only symlink entries under the Claude/Codex entrypoint directories. Regular skill directories/files are not classified as OK, BROKEN, UNMANAGED or CONFLICT, despite their importance when the force-sync path can delete them.
+- README's universal prompt says to tell the user before deleting/replacing entrypoint links, but the directly loaded sync/install/update Skills do not enforce a confirmation state in scripts; they call destructive force sync automatically.
+- install-linked imports a Git repository as a submodule and checks only that some SKILL.md exists. It does not validate package content, licenses, or safety before wiring the imported skill into both agent entrypoints.
+- update-vendor-skills advances Git submodules to remote-tracking revisions (or fast-forward pulls non-submodule repos) without a lock/pin review workflow; this can change the code/instructions agents execute.
+- organize supports dry-run by default and explicit --apply; it moves directories into personal/vendor and then force-syncs. It uses find -L and canonicalizes discovered directories, so symlinked external skill paths need careful ownership/containment tests before use.
+
+## Quality and license
+
+- Command: rtk proxy bash /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-weiox-skm-20261121/tests/run-all.sh
+- Result: exit 0; included doctor, organizer, bootstrap, sync, local-Git install and update fake-home tests all completed. The output included REMOVED shared unmanaged-skill. Test harness uses temporary HOME/local git fixtures; it does not provide data-migration or Desktop-mode fixtures.
+- No GitHub Actions runs or CI workflow were found. Root has no dedicated tests for the destructive real-directory entrypoint case.
+- No root LICENSE file or GitHub license classification was found; do not reuse or redistribute code/content until the license is clarified.
+- Repository footprint is small and adoption low (2 stars / 0 forks); tag v1.0.1 exists but no GitHub release or CI run was observed. No real user environment or skill tree was accessed.
+
+## Disposition
+
+Reject as a Nexus Memory migration dependency. Keep only the independently reimplemented source-of-truth/exported-view model for a separate Skill ResourcePlane. Add stronger guardrails than this candidate demonstrates: ownership manifests, no implicit force replacement, dry-run diff of every destructive path, explicit approval for deleting user entries, symlink-aware realpath containment, a reversible journal, and cross-platform fixtures. None of those are evidence of session fidelity.
+
+The target scope remains local/self-hosted Claude Code plus Claude Desktop Chat/Cowork/Code through third-party inference, each mode as a separate adapter; Anthropic-hosted Cloud remains distinct. This candidate supports none of those migration surfaces. No ChatGPT/Codex export or Destruction Era session was accessed or migrated.
+
+Primary sources:
+- Pinned repository: https://github.com/weiox/skm/tree/cb2ab2e7ebca2668777f1168084eaff3dd76a132
+- README scope/model: https://github.com/weiox/skm/blob/cb2ab2e7ebca2668777f1168084eaff3dd76a132/README.md
+- bootstrap force behavior: https://github.com/weiox/skm/blob/cb2ab2e7ebca2668777f1168084eaff3dd76a132/scripts/bootstrap.sh
+- sync implementation: https://github.com/weiox/skm/blob/cb2ab2e7ebca2668777f1168084eaff3dd76a132/skills/skm-sync-agent-skills/scripts/skm-sync-agent-skills.sh
+- doctor implementation: https://github.com/weiox/skm/blob/cb2ab2e7ebca2668777f1168084eaff3dd76a132/skills/skm-doctor-agent-skills/scripts/skm-doctor-agent-skills.sh
+- license: https://github.com/weiox/skm/blob/cb2ab2e7ebca2668777f1168084eaff3dd76a132/LICENSE

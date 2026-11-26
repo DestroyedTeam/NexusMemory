@@ -1,0 +1,53 @@
+# omarmfouad25/google-marketing-agent — MCP safety / Harness relevance review (2026-11-21)
+
+## Identity and current version boundaries
+
+- Repository: https://github.com/omarmfouad25/google-marketing-agent
+- Main checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-omarmfouad25-google-marketing-agent-20261121`.
+- Default `main` HEAD `298cdedbc7b73658a9c04f207fe098b2097e912a` (2026-10-15), MIT, npm/GitHub release v0.3.0, 4 stars/0 forks. `google-marketing-agent` package latest is 0.3.0.
+- An open PR #1 titled “0.4.0: the safety model, enforced by the server” has separate head `46e0d2ce5000a87c38f9a2dfddc46800e6264cb2` on `feat/safety-model`. It is **not merged or published** at review time. Its exact CI run `39063688272` passed; PR status rollup shows test and CodeRabbit SUCCESS, publish skipped. Treat it as a proposal, not v0.3 behavior.
+- Main CodeGraph: 70 files / 895 nodes / 3,159 edges. PR worktree CodeGraph: 72 files / 1,013 nodes / 3,653 edges.
+
+## Harness / data-model fit
+
+This is a domain-specific Google Ads, GA4, Search Console and Google Tag Manager MCP/CLI with 63 tools and 14 Google-marketing Skills. Claude Code gets a plugin package; Claude Desktop/Cursor and other MCP apps use a local MCP configuration. Skills can also be loaded directly from `skills/` by clients that support Agent Skills. The skills are marketing workflows, not imported context or model memory. Google OAuth client/refresh-token credentials are used for Google APIs; they are not Claude API keys or a provider-session transport.
+
+No ChatGPT/Codex conversation importer/exporter, message/transcript tree, Project/Section mapping, session branch/subtask model, attachments, token/cost ledger, user-memory store, or scheduled-task history/import was found. It does not migrate sessions between harnesses; the MCP server gives an AI client access to Google marketing tools. All three Claude Desktop modes (Chat, Cowork, Code) remain separate target surfaces; this repo only documents Claude Desktop's MCP client configuration and does not claim mode-specific session support.
+
+## Main v0.3.0 safety review — verified source and test path
+
+- Account profiles are read-only unless `writes: true` is set; this is a useful baseline least-privilege design.
+- However the main tool schema uses `confirm?: boolean`. `runAdsWrite()` sends a Google `validate_only` request when `confirm` is absent, but `confirm: true` directly proceeds to mutation without a server-issued Preview ID or binding that apply to a prior preview. `packages/mcp/test/runner.test.ts` explicitly exercises `confirm: true` and expects it to apply/log the write. Thus the README's “preview first / your yes” workflow is agent/skill-mediated, not guaranteed by the main MCP server API. With a writable profile and a misdirected/prompt-injected tool call, callers can bypass the intended preview flow.
+- Main `workspacePath()` interpolates supplied `workspaceId` into a GTM API path without validation. The open PR adds a digits-only check because an injected path could escape the profile's allowed GTM container scope; this is a material main-branch risk, not a merely cosmetic change.
+- Main `ads_demand_gen_audience` creates a new custom audience (`validate_only: !confirm`) before sending the larger audience/batch write through `runAdsWrite`. For `confirm: true`, the child custom segment is already live if later batch operations fail. The PR delays that create until after the preview confirmation.
+- No live Google OAuth, Ads/GA4/GSC/GTM account, write operation or customer data was used in this review; the confirmation bypass is source + mock unit-test evidence, not a live-service exploit.
+
+## Open PR #1 (0.4.0) — genuinely improved, but still not the released product
+
+The PR replaces boolean confirmation with a single-use Preview ID (`pv_…`) bound to profile alias, tool name, canonical JSON SHA-256, and a 15-minute expiry. It consumes the ID once, refuses altered content or mismatched profile/tool, and asks through MCP elicitation when the host supports it. Profile `requireHumanApproval: true` fails closed when elicitation is unavailable; when that setting is false and the host cannot elicit, the PR permits a preview-matched second call, so operators still need strict profiles for mandatory human approval. The PR also validates GTM `workspaceId` as numeric, defers the custom audience create until after confirmation, and adds rollback/drift protection for Ads/GTM/GA4.
+
+The PR branch build passed and all 272 tests passed locally with mocked Google clients; upstream CI on the PR SHA succeeded. `gh pr view` still reports the PR open; publish was skipped. Dependencies did not change (only version strings changed in package.json/lock), so the dependency-audit findings below remain on that branch unless separately updated.
+
+## Dependency audit (main lockfile, official npm registry)
+
+- `npm audit --omit=dev --registry=https://registry.npmjs.org`: **17 production-tree advisories** (15 moderate, 2 high), exit 1. High items include `body-parser` (through MCP SDK/Express; request-body DoS advisory) and `follow-redirects` (through axios/Google Ads API; redirect credential-forwarding advisory). Direct Google packages also include affected `google-ads-api`/`googleapis` ranges; npm proposes major-version upgrades for some fixes.
+- Full `npm audit --registry=https://registry.npmjs.org`: **20 total** (16 moderate, 2 high, 2 critical), exit 1. The additional critical issues are dev/test `vitest`/`tinypool` advisories. Audit ranges are registry results, not a reachability proof; review the [body-parser advisory](https://github.com/advisories/GHSA-27r3-jxmh-p828), [follow-redirects advisory](https://github.com/advisories/GHSA-mrwp-f3q8-3g9p), and [Tinypool advisory](https://github.com/advisories/GHSA-5gmw-xhrv-c9v3) before any credentialed deployment. The PR does not update dependency versions/lock entries.
+
+## Build/test/repro ledger
+
+- Main v0.3.0: `npm ci --ignore-scripts` exit 0; `npm run build` exit 0; `npm test` exit 0 (21 files / 244 tests passed). Exact `--ignore-scripts` install was used to avoid executing arbitrary package lifecycle code during review.
+- Main-code unit tests show `confirm: true` directly results in a live mocked mutation; this did not contact Google.
+- PR #1 branch: `npm ci --ignore-scripts` exit 0; build exit 0; 22 files / 272 tests passed. `confirm.test.ts` verifies missing/expired/reused/wrong-profile/wrong-tool/mutated-content previews fail closed, elicitation accept/decline/cancel/timeout behavior, and strict profiles without elicitation.
+- `rtk npm audit` against the configured mirror failed with 404 `[NOT_IMPLEMENTED]` on its audit endpoint (exit 1); corrected to the official `registry.npmjs.org`, which returned the full audit results above.
+- No Google accounts, local API credentials, Ads campaigns, conversions, GTM containers, or external services were touched.
+
+## Disposition
+
+**Exclude as Nexus Memory's session/project migrator.** Keep only as an adjacent reference for local OAuth-backed MCP tools, domain Skills, read-only-by-default accounts, preview/approval gates, and drift-aware rollback. Do not treat the open 0.4.0 safety PR as released behavior. Even after the PR merges, it still does not migrate cross-Harness conversations, project/section hierarchy, memory, attachments, tokens, or scheduled tasks. Full source pins: main `https://github.com/omarmfouad25/google-marketing-agent/tree/298cdedbc7b73658a9c04f207fe098b2097e912a`; PR `https://github.com/omarmfouad25/google-marketing-agent/tree/46e0d2ce5000a87c38f9a2dfddc46800e6264cb2`.
+
+## Tool and state event ledger
+
+- Atomic dispatcher read only the candidate registry state (73/303; pending `omarmfouad25/google-marketing-agent`) and cloned it; origin confirmed and exact main HEAD recorded.
+- CodeGraph main index: 70 files / 895 nodes / 3,159 edges. PR #1 fetched into a separate worktree and independently indexed (72 files / 1,013 nodes / 3,653 edges); in the first worktree-local init attempt, `rtk codegraph init --yes` returned `unknown option '--yes'` (exit 1). Corrected by running the same init from the NexusMemory workspace root (exit 0); removed only `.codegraph/.gitignore`'s `!.gitignore` exception.
+- A grep command without `-E` returned exit 1; corrected with `rtk proxy grep -E` and captured the main test's explicit `confirm: true` apply assertion.
+- Main build/test and PR build/test results are recorded above. PR status was inspected separately: test SUCCESS, CodeRabbit SUCCESS, publish SKIPPED; PR remains open.

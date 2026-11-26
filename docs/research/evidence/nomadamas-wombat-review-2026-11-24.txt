@@ -1,0 +1,38 @@
+# Candidate #260 review — NomaDamas/wombat (2026-11-24)
+
+## Decision
+**Useful adjacent prior art: local multi-Harness session reader, distiller, mirror and search index; not a cross-Harness migration engine.** Do not classify it as a ChatGPT-to-Claude migrator. Its broad parser inventory can inform source adapter coverage and source-pointer preservation, but its central projection is intentionally lossy and it has no destination writer.
+
+## Provenance and license
+- Repository: https://github.com/NomaDamas/wombat (public; GitHub page showed 1 star, 0 forks, 20 issues during this review).
+- Shallow checkout branch: `main`; origin: `https://github.com/NomaDamas/wombat`; local HEAD and remote `refs/heads/main`: `f51431a818bfd9b3f33fc9d26f850d18d52197cf`.
+- Remote `v0.1.4` tag peels to the same commit; tag object: `9b84d3a8fa8f720b4ceac89753a6c546e09d8c01`. GitHub release page lists v0.1.4 as the latest release (2026-11-20) and shows GitHub's verified-signature badge. The repository contains an MIT license. `Cargo.toml` identifies package `wombat-sessions` version 0.1.4, binary `wombat`, Rust 1.88+, and external `minsync >=0.7.5`.
+- Sources: repository README, checked-out `Cargo.toml`/`LICENSE` and current code at the pinned commit, `git ls-remote`, the official GitHub repository and release pages. No credentials or user session stores were accessed.
+
+## What the implementation actually does
+- Implements 20 **local source readers**: Codex, Claude Code CLI, OpenCode, Pi, OMP, Hermes, Aside, Kiro, Droid, Goose, Mistral Vibe, Aider, CodeBuddy, iFlow, Continue, Copilot CLI, Crush, Qwen, Kilo and Gemini CLI. Sources include local JSONL/zstd logs, SQLite databases and provider-specific JSON layouts. The source-root and parser registries in `src/parsers/mod.rs` and `src/model.rs` confirm the list.
+- Reads local source records, normalizes them to `ParsedSession` and `Turn`, writes a prefix-stable local Markdown mirror and SQLite catalog, then can invoke an external MinSync CLI for sparse/dense search. CLI help exposes `doctor`, `sync`, `index`, `search`, `sessions`, `show`, `trace` and `chunk`; it exposes no `import` or `export` subcommand and no target-Harness/session creation API.
+- The normalized `ParsedSession` holds agent, session ID, source path, cwd, start/end timestamps, title, `is_subagent`, optional `parent_session_id` and turns. A `Turn` is only role, text, timestamp and source offset. This supports useful local source lineage and subagent filtering, not ChatGPT Project/Section Group or session-to-session orchestration graphs. There are no fields for attachments/media, links as typed blocks, token accounting, Skills, MCP servers, plugins, scheduled jobs, memories or target-side configuration.
+- The mirror renderer retains local source path and cwd in ordinary Markdown and records offsets back into the source; `wombat trace` re-reads the source file to show raw records (including tool/thinking material). Raw trace is therefore not a self-contained portable export. No encryption layer was found in the reviewed mirror/catalog path; the local mirror is plain text. If indexing is enabled/configured with a remote embed endpoint, that configuration needs a separate data-boundary review.
+- README documents parser-specific loss: system/developer prompts and injected context, reasoning/thinking, tool calls/results, snapshots, images/attachments or provider-only events are excluded from the dialogue projection. This is appropriate for text search, but not fidelity-preserving session migration.
+- It reads local **Claude Code CLI** histories; no ChatGPT export/Projects parser and no Claude Desktop Chat, Cowork, or Code provider-mode adapter was found. It also has no Claude Code API-key/gateway destination writer.
+
+## Verification performed
+Commands ran in the pinned checkout; candidate tracked source was not changed (the only untracked item is the local `.codegraph/` analysis index).
+
+- `rtk cargo test` — exit 0; 74 passed, 0 failed across seven result groups (test result counts: 0, 0, 15, 7, 51, 1, 0). These are repository unit/parser/CLI fixture tests; they are not a real client-to-client migration or Claude Desktop/API-gateway test.
+- `rtk cargo fmt --all -- --check` — exit 0, stdout/stderr empty.
+- `rtk cargo clippy --all-targets -- -D warnings` — exit 101. One lint: `src/parsers/pi.rs:177`, `clippy::collapsible_match`; no runtime test failure is implied.
+- `rtk ./target/debug/wombat --help` and `... sync --help` — each exit 0, stderr empty; help lists the reader/search commands and no import/export or target-writer command. `sync --help` lists 20 source agents.
+- No real user logs, live provider apps, external MinSync daemon or target-side API calls were used. No migration accuracy or round-trip rate was measured.
+
+## Nexus Memory disposition
+Keep as a **reader/parser/source-offset and local-search architecture reference**. Its 20-provider inventory is valuable for broad Harness discovery; its normalized text mirror is explicitly not a canonical lossless SessionGraph and not a restore artifact. Nexus Memory should keep raw provider-native events/attachments and Project/Section/session relations separately from searchable text projections, emit per-field loss reports, and add destination-specific import adapters only where the target supports an actual restore path. Treat its clear-text mirror/local paths and optional external embedder as privacy boundaries. Do not claim session conversion accuracy from this repository.
+
+## Primary sources
+- https://github.com/NomaDamas/wombat
+- https://github.com/NomaDamas/wombat/releases
+- https://github.com/NomaDamas/wombat/blob/f51431a818bfd9b3f33fc9d26f850d18d52197cf/README.md
+- https://github.com/NomaDamas/wombat/blob/f51431a818bfd9b3f33fc9d26f850d18d52197cf/src/model.rs
+- https://github.com/NomaDamas/wombat/blob/f51431a818bfd9b3f33fc9d26f850d18d52197cf/src/parsers/mod.rs
+- https://github.com/NomaDamas/wombat/blob/f51431a818bfd9b3f33fc9d26f850d18d52197cf/src/mirror.rs

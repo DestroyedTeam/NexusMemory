@@ -1,0 +1,35 @@
+# Candidate #255 — Lain-in-coding/agent-session-grep review (2026-11-24)
+
+## Identity, license and maturity
+- Repository: https://github.com/Lain-in-coding/agent-session-grep
+- Pinned `main` / remote `HEAD`: `de2c95d2c93f7453ce5b5ccc169614d3aa7892ee` (commit date 2026-10-14; `git ls-remote` matches).
+- GitHub metadata at review: Apache-2.0 SPDX, 1 star, 0 forks, 9 open issues; root carries `LICENSE-APACHE`, `LICENSE-MIT`, and `NOTICE`. README declares `MIT OR Apache-2.0`.
+- The repo declares workspace version/release 0.1.0, but explicitly says this main checkout includes unreleased changes after that tag and has no uploaded release binaries. Findings below are pinned to the reviewed main SHA, not the 0.1.0 release artifact.
+- CodeGraph status is current: 189 indexed files (135 Rust, 44 Python, 9 YAML, 1 JavaScript), 8,036 nodes, 32,296 edges. Its `.codegraph/.gitignore` exception was removed per workspace rules; repository tracked status remained clean.
+
+## Implemented scope and canonical data model
+README lists **14 implemented / 16 planned local coding-agent providers**: Claude Code, Codex CLI, Grok Build, Antigravity, OpenCode, Pi, Hermes, Cursor, Kimi Code, OpenClaw, Qoder, Tencent CodeBuddy, Cline and Aider. DeepSeek Harness and ZCode are deferred. The authoritative capability matrix marks every implemented adapter `Experimental`; ChatGPT and ChatGPT Codex Projects are not providers.
+
+The implemented model is a valuable message-level graph: a stable `Session` identity; text `Message` plus optional timestamp; `SourceDocument` keyed by provider/variant and byte fingerprint/length; `MessagePlacement` for session/document occurrence, ordinal, sidechain and optional exact source span; and `MessageEdge` from child occurrence to parent message with relations Reply/Retry/Fork/Continuation/Subagent/ToolResult. This preserves intra-session branch/sidechain topology when the source exposes native parent pointers. `SessionContextGraph` is one selected Session graph, not a Project/Section/session-to-session parent graph. `Session` itself currently stores only its stable ID; repo/CWD are separate metadata/search facets, not first-class Projects or Section Groups.
+
+The actual canonical `Message` body is normalized **plain text**, with provider timestamp. Current domain/storage does not implement attachment blobs or ContentOccurrences. RFC-0001's richer `ContentBlob`/`ContentOccurrence` model (including `attachment_ref`) is explicitly **Draft**, not shipped code. Tool activity and token-usage observations exist as separate typed events, but only selectively: capability matrix says Claude Code has partial tool activity/native usage and Codex partial tool activity/derived usage; most other providers mark these unsupported. Activity records are bounded observations (kind/actor/name/optional target/status/short message), not full provider tool payloads or permission transcripts. The capability matrix marks native context only for Claude Code; the other 13 implemented providers are unsupported for context-graph reconstruction.
+
+All 14 providers currently report Experimental maturity. A README/provider matrix is honest about capability differences; there is no parity promise and no conversion-fidelity or source→target round-trip metric.
+
+## Actual operations and destination boundary
+This is a local-first, read-only **search/catalog and handoff** tool, not a converter. It discovers/parses coding-agent local transcript stores into SQLite/FTS; supports context retrieval, evidence spans, MCP/Robot/TUI/loopback Web, and deterministic redacted handoff packs. The `HandoffTarget` is a suggested provider/agent/command, and the handoff implementation explicitly outputs a pack rather than silently injecting it. This may help a human/agent reconstruct context, but it is not a lossless export or destination writer.
+
+`asg resume` builds a safe native CLI resume descriptor for a subset of providers (`claude --resume <id>`, `codex resume <id>`, etc.). That is same-provider resume of the original session, not transfer: it does not synthesize a Claude Desktop Chat/Cowork/Code session or import a ChatGPT Project/Section/Session. The CLI refuses to fabricate commands for unverified providers. The separate `resume`/`handoff` paths do not migrate Skills, MCP servers, plugins, scheduled tasks, model credentials, project instructions or uploaded files.
+
+Session identity is not automatically portable across machines: README says the `ses_v1` namespace still depends on installation path and cross-machine relocation needs an explicit alias migration. Four of fourteen adapters cannot provide exact byte spans (two SQLite and two whole-document formats), and the provider readiness ledger labels missing/derived facts instead of inventing them. These are useful honest-loss/provenance patterns, not full-fidelity guarantees.
+
+## Validation
+- `cargo test --workspace --offline` first exited **101** because the local Cargo cache lacked locked crate `dyn-stack-macros` (required through optional `candle-core` dependency resolution). Corrected by running the locked workspace build/test online in an isolated HOME/XDG test home; the full `cargo test --workspace` then exited **0**. Re-ran `cargo test --workspace --offline --quiet` after fetching the pinned lockfile dependencies; exit **0**, all emitted test targets reported zero failures (some tests are explicitly ignored).
+- `cargo fmt --all --check` exited **0**.
+- `cargo clippy --workspace --all-targets --offline -- -D warnings` exited **0**.
+- The workspace suite includes network-egress tests; both passed: default build has no HTTP-client dependency and the only network socket is the opt-in loopback server.
+- Tests ran with `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME` redirected to `/private/tmp/nexusmemory-research-followup255-20261124/test-home`; Cargo/Rust toolchain caches were separate. No user's actual provider transcript, app, provider credential or target client was used. No provider was live-resumed and no chat/project conversion was attempted.
+- These green checks validate this commit's local code/tests and advertised boundaries; they do **not** demonstrate compatibility with actual Claude Desktop 3P modes, ChatGPT exports or any cross-Harness migration.
+
+## Disposition for Nexus Memory
+**High-value adjacent prior art for the Search/Canonical SessionGraph core; not a direct migration engine, ChatGPT source adapter, or Claude Desktop target writer.** Consider the conceptual architecture: stable entity identity separated from placements/source snapshots; parent-edge/mainline semantics; exact evidence spans plus honest unknowns; per-provider maturity/capability matrices; read-only import with fingerprints; bounded/redacted handoff and fail-closed native resume. Do not adopt the current schema as the full Nexus interchange format: it omits Project/Section, session-parent links, multimodal attachments and most provider event/config planes. A Nexus canonical model must extend beyond this tool and must add round-trip/loss tests for Chat, Cowork, Code and local Claude Code independently.

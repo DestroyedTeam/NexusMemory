@@ -1,0 +1,139 @@
+# Candidate #216 validation gate stdout/stderr (pinned disposable checkout)
+
+COMMAND: rtk proxy npm test --prefix /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sefas-labs-ai-skills-manager-20261123-followup216
+EXIT_STATUS: 0
+STDOUT_BEGIN
+
+> ai-skills-manager@0.2.0 test
+> node -e "require('fs').rmSync('out-test',{recursive:true,force:true})" && tsc -p tsconfig.test.json && node scripts/run-tests.mjs out-test/test .test.js
+
+✔ repo inspection finds outermost skills, ignores node_modules, skips symlinks/submodules (18.256375ms)
+✔ folder URL on a branch with a slash resolves ref and subpath (0.521959ms)
+✔ non-skill repositories are rejected with a helpful hint (0.998458ms)
+✔ private repos need a token; token is only sent to GitHub hosts (0.448ms)
+✔ rate limit produces an actionable error (0.158125ms)
+✔ full flow: stage → install → discovered with provenance → conflict → replace with backup → uninstall (27.025458ms)
+✔ failed install rolls back to the previous version (4.742542ms)
+✔ uninstalling a symlinked skill removes only the link (3.278333ms)
+✔ read-only locations refuse install and uninstall (2.821542ms)
+✔ copy ~/.claude/skills → workspace .agents/skills: visibility diff, no exec bits, lock follows, source untouched (42.350583ms)
+✔ move global → workspace: original goes to backup, agents that lose it are listed, lock entry moves (12.195417ms)
+✔ destination conflicts need consent and keep a backup; duplicates are reported (7.432125ms)
+✔ symlinks, read-only and synced skills can be copied but not moved; read-only destinations refuse (8.424458ms)
+✔ root-of-repo installs record a tree SHA (needed for updates) (23.773042ms)
+✔ check: only the changed sub-folder reports an update; 2 API calls per repo+ref; pinned costs nothing (11.79175ms)
+✔ check stops on rate limit and reports it for the rest (8.254542ms)
+✔ prepare + apply update: file diff, local edits detected, backup kept, lock moves to the new commit (11.894792ms)
+✔ a skill installed by `gh skill` can be checked and updated from its frontmatter metadata (7.600458ms)
+✔ visibility follows each provider’s documented folders (32.353083ms)
+✔ same name in two real folders → duplicate warning only for agents that see both (4.271458ms)
+✔ symlinked copies of one folder are not reported as conflicts; target is resolved (5.579333ms)
+✔ broken symlink, wrong-case file, folder without SKILL.md, invalid frontmatter (5.814708ms)
+✔ claude.ai synced skills are read-only; untrusted workspace makes workspace read-only (4.233583ms)
+✔ extra locations from settings and admin location on non-Windows only (3.185417ms)
+✔ claude.ai synced skills one level below a per-account bucket are found (real layout) (5.1225ms)
+✔ parses simple scalars and body (1.155625ms)
+✔ handles quotes, booleans, numbers, comments, BOM and CRLF (0.749125ms)
+✔ block scalars (literal and folded) (0.635167ms)
+✔ nested metadata map and lists (1.942125ms)
+✔ no frontmatter (0.086667ms)
+✔ unclosed frontmatter is an error (0.108125ms)
+✔ garbage line is an error, not a guess (0.095167ms)
+✔ tab indentation is rejected (0.058959ms)
+✔ digit-only values that would lose precision stay strings (e.g. SHAs) (0.09425ms)
+✔ repo root detection, ancestors and bounded nested search (22.973167ms)
+✔ a linked worktree (.git file) is its own root (1.90625ms)
+✔ parent folders follow each agent’s documented rules (23.905542ms)
+✔ nested folders: Claude namespaces them (no clash), Cursor reads .cursor/.agents nested (7.342791ms)
+✔ monorepo scanning is opt-in at the core level and Copilot parent repo needs its setting (7.522917ms)
+✔ rejects traversal and absolute paths (0.87875ms)
+✔ accepts normal nested paths (0.408875ms)
+✔ safeJoin always stays inside root (0.159083ms)
+✔ isPathInside (0.165708ms)
+✔ toSkillDirName produces spec-valid names (0.294666ms)
+✔ gh skill provenance: branch ref is tracked, --pin is pinned (2.194459ms)
+✔ gh skill provenance: hostile or foreign metadata is ignored (0.163666ms)
+✔ lock provenance: a commit SHA as ref means pinned (0.099167ms)
+✔ gitBlobSha matches `git hash-object` (25.743583ms)
+✔ diffFiles and localFileShas (4.294333ms)
+✔ validate: valid skill has no issues (1.285458ms)
+✔ validate: missing description is an error, missing name a warning (0.158542ms)
+✔ validate: name rules from agentskills.io (0.135208ms)
+✔ github url: accepted forms (0.539291ms)
+✔ github url: rejected forms (0.226ms)
+✔ inspector: clean markdown has no findings (0.860709ms)
+✔ inspector: flags hidden unicode, overrides, remote exec, exfiltration (2.010833ms)
+✔ inspector: binary and executables (0.319584ms)
+ℹ tests 57
+ℹ suites 0
+ℹ pass 57
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 148.565458
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+
+COMMAND: rtk proxy npm run typecheck --prefix /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sefas-labs-ai-skills-manager-20261123-followup216
+EXIT_STATUS: 0
+STDOUT_BEGIN
+
+> ai-skills-manager@0.2.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+STDOUT_END
+STDERR_BEGIN
+STDERR_END
+
+COMMAND: rtk proxy npm run build --prefix /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sefas-labs-ai-skills-manager-20261123-followup216
+EXIT_STATUS: 0
+STDOUT_BEGIN
+
+> ai-skills-manager@0.2.0 build
+> node scripts/build.mjs
+
+STDOUT_END
+STDERR_BEGIN
+
+  dist/webview.js      30.6kb
+  dist/webview.js.map  57.4kb
+
+⚡ Done in 10ms
+
+  dist/extension.js      118.9kb
+  dist/extension.js.map  243.9kb
+
+⚡ Done in 12ms
+STDERR_END
+
+COMMAND: rtk proxy npm run test:smoke --prefix /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-sefas-labs-ai-skills-manager-20261123-followup216
+EXIT_STATUS: 0
+STDOUT_BEGIN
+
+> ai-skills-manager@0.2.0 test:smoke
+> node scripts/build.mjs && node scripts/run-tests.mjs test/smoke .test.mjs
+
+✔ extension activates, lists skills and answers the dashboard handshake (20.766166ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 73.198708
+STDOUT_END
+STDERR_BEGIN
+
+  dist/webview.js      30.6kb
+  dist/webview.js.map  57.4kb
+
+⚡ Done in 8ms
+
+  dist/extension.js      118.9kb
+  dist/extension.js.map  243.9kb
+
+⚡ Done in 10ms
+STDERR_END

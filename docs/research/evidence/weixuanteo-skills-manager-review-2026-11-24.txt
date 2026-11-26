@@ -1,0 +1,25 @@
+# Candidate #227 — weixuanteo/skills-manager
+
+Review date: 2026-11-24. Pinned main/origin/main at 3aa4419870ca2a73fc90aea919042d606736ea9c (2026-10-08), clean tracked tree; a live git ls-remote of refs/heads/main returned the same SHA. GitHub reports 0 stars, 0 forks and 14 commits; no releases, workflows, or LICENSE file were found, and the API metadata has no declared license. Source: https://github.com/weixuanteo/skills-manager and https://github.com/weixuanteo/skills-manager/actions.
+
+## Product and architecture
+
+This is a local browser UI for browsing, inspecting, installing, updating and removing SKILL.md folders. It searches skills.sh or GitHub, previews a remote Skill at a source commit, scans global/project skill directories across Claude Code, Codex, Cursor, Gemini CLI, Copilot, Windsurf, Kiro, OpenCode, Amp, Goose, Cline, Roo and a universal .agents/skills folder, and builds commands for the Vercel skills CLI, npm packages, git repos/symlinks and Claude Code plugins. Its typed model represents Skill path/frontmatter/files/install provenance/agent/scope; a project is a local filesystem root, not a ChatGPT Project or SessionGroup. The app does not read/write MCP server configurations, chat sessions, schedules, prompts, attachments, tool traces, token use or cross-session links.
+
+The useful adjacent ResourcePlane design includes one-command-per-agent install flows, symlink deduplication, source previews, explicit confirmation dialogs, generated-command allowlisting, loopback default, project-root selection, command history and update-status provenance. It is an inventory/management UI, not an interchangeable Skill package export/import format or SessionGraph migrator. Its Claude plugin detection only discovers Skills in plugins; it does not migrate plugins, MCP resources or Desktop 3P Chat/Cowork/Code sessions.
+
+## Security and fidelity findings
+
+- Mutating endpoints reject cross-origin requests; run requests are restricted to commands generated for the selected Skill. A synthetic temp-home runtime smoke observed GET /api/skills=200, GET of an in-scope SKILL.md=200, traversal path=400, arbitrary command=400, and cross-origin POST=403. Only temporary fixture directories were scanned. The server was bound to 127.0.0.1 and stopped after the probe.
+- Installs show an exact generated command and require confirmation. The source preview resolves the repository at a SHA and checks the ref still points to it immediately before install. However, the subsequent CLI command names the branch/ref rather than that immutable SHA, leaving a check-to-fetch race if the ref moves after the check. This is a useful provenance pattern, not proof that installed bytes are guaranteed to equal the previewed bytes.
+- Several generated removal options are destructive shell commands (rm -rf) and are explicitly marked dangerous/confirmed. The product is designed as a local manager; do not expose its server beyond loopback without a separate threat review.
+- A production dependency audit against the official npm registry found 9 advisories in the pinned lock: 8 moderate and 1 low. Installed Hono 4.13.7 is in affected ranges for multiple path/middleware-bypass issues; installed @hono/node-server 2.1.1 is affected by static-path and request handling advisories. The app uses Hono wildcard middleware for its local command endpoints. This is a dependency warning, not an exploit reproduced against this app. Advisories: https://github.com/advisories/GHSA-5r4p-p66f-jhc7 ; https://github.com/advisories/GHSA-rmxm-3fg6-px4f ; https://github.com/advisories/GHSA-4m76-xfj5-7975 ; https://github.com/advisories/GHSA-h7mg-cq63-vhpq .
+- No user home, installed Skill, plugin, GitHub token or private data was accessed. No migration or import fidelity was tested.
+
+## Verification
+
+The checkout uses pnpm 12.3.4, pinned in both package.json and the lockfile. In a temporary npm cache and pnpm store, pnpm install --frozen-lockfile --ignore-scripts succeeded; its supply-chain policy gate passed all 273 entries and installed 184 packages. The five test files ran 35 tests across 8 suites: 35 passed, 0 failed. TypeScript typecheck and Vite production build succeeded; Vite emitted a non-fatal chunk-size warning for the 782.38 kB JavaScript bundle. No CI workflow or test for source-project/session migration exists. Production pnpm audit initially failed because the configured npmmirror registry has no audit endpoint; retrying explicitly against registry.npmjs.org returned the 9 advisories listed above.
+
+## Nexus Memory disposition
+
+Classify as a useful but unlicensed adjacent Skill ResourcePlane manager, not a migration engine. Keep only product/design references: cross-agent skill discovery, provenance-aware installation preview, command confirmation/history, symlink grouping, and per-agent install-status reporting. Do not reuse its code or claim ChatGPT/Codex Projects, Section Groups, session history, attachments, MCP, plugins or Claude Desktop 3P Chat/Cowork/Code migration. Full review is source-pinned evidence only.

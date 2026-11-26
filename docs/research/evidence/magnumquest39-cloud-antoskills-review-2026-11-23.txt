@@ -1,0 +1,50 @@
+NEXUS MEMORY CANDIDATE REVIEW — #198
+Repository: https://github.com/magnumquest39-cloud/AntoSkills
+Reviewed: 2026-11-23
+Pinned source: main, d87ad2628e0f2840e25895f2af11cf064b47a3a7 (2026-06-15)
+License: MIT
+GitHub state: 0 stars / 0 forks at review; no GitHub Releases; Actions page reports no workflows and 0 runs.
+Package: antoskill 0.2.0 from the official npm registry.
+
+Question answered
+The user explicitly confirmed that the Claude Desktop destination covers Chat, Cowork, and Code, in addition to local/self-hosted Claude Code. This remains distinct from Anthropic-hosted Cloud Code sessions. AntoSkills was reviewed against that three-mode destination scope, not just its README description of Claude Code and Codex.
+
+Executive disposition
+Useful adjacent ResourcePlane research for discovery, pinned Skill content, reproducible install state, and profile grouping. Not a Nexus Memory SessionGraph, Project/Section or transcript migrator, and not a validated Claude Desktop 3P Chat/Cowork/Code adapter. Do not treat its Skill profiles as conversation Projects or Section Groups.
+
+Identity and provenance
+The cloned GitHub repo is magnumquest39-cloud/AntoSkills at d87ad2628e0f2840e25895f2af11cf064b47a3a7. Its About page links to github.com/YforC/AntoSkills, and package.json plus npm metadata identify YforC/AntoSkills as the published package repository. This is a visible source/fork relationship, not proof of a malicious mismatch. The npm 0.2.0 tarball was fetched from registry.npmjs.org with scripts disabled. Its computed SHA-512 integrity exactly matched npm's published dist.integrity value: sha512-KyI/e3IRASkvWSVnhPtcMQUGDVnzgOEgbvmbuVAVoUI0OCjLMkGtL7pv55B5nhsmDbDcSc/4dmRcML6b+OVWqA==. After building the pinned checkout, all 51 published dist files matched the local build byte-for-byte. No npm package code was executed from the tarball.
+
+Observed implementation
+- TypeScript/Node MCP server and CLI package; Node >=20; MIT.
+- Twelve MCP tools: detect_project, recommend_skills, preview_skill, list_installed, doctor, install_skills, remove_skill, sync, update_skill, list_profiles, define_profile, activate_profile. The stdio handshake advertised all 12. Six are annotated read-only; writes are exposed as separate tools.
+- Resource targets are Claude Code's .claude/skills and Codex's .agents/skills. The resolver follows GitHub refs to immutable commit SHAs; lock entries include source SHA and SHA-256 content integrity. The local content-addressed store, path validation, 200-file/10-MiB caps, per-project lock, integrity checks and ref tracking are meaningful reproducibility mechanisms.
+- Scanner is heuristic pattern matching, not AST or data-flow analysis. It assigns rule weights and requires explicit acknowledgeRisk at score 40; low/medium findings can proceed without that gate, so absence of a hit is not a safety guarantee.
+- Profiles are named lists of Skill IDs; activation installs that set and removes other lock-managed Skill entries. They are not chat Projects, Section Group membership, session parent/child trees or branch/fork graphs.
+- No ChatGPT/Codex Project/Section/session parser or writer, no transcript/message/event importer, attachment/token/usage mapper, cross-session controller-child relation, memory conversion, scheduled-task importer, or session fidelity test was found. There is no explicit adapter for Desktop's 3P Chat or Cowork. Code mode overlap is unverified; do not infer it from a .claude/skills target.
+- MCP approval is described as a client/human gate in project documentation, not enforced by an explicit server-side confirmation parameter. install_skills is annotated destructiveHint=false despite filesystem writes. activate_profile is destructive and removes managed skills outside the chosen profile.
+- Install path safety concern: uniqueDirName checks collisions only against entries in skills.lock, not an existing unmanaged directory. materialize calls linkSkill; clearExisting removes any real directory at the destination recursively. The unit test explicitly demonstrates stale contents disappearing when a real copied directory occupies the path. No ownership marker or preflight refusal is present in this path. Treat as a possible first-install clobber of a same-named unowned Skill directory; no user directory was touched in this review.
+- Positive safety work: traversal/Windows-name checks, explicit score gate for high-scoring content, content hashing including binary bytes, capped resolution, pinned installs, and rollback of partial profile activation. These are worth studying, not sufficient for session import.
+
+Verification performed in the isolated checkout
+- npm ls --depth=0 exited 0 and showed the declared dependency tree.
+- npm test exited 0: 18 test files passed; 121 tests passed and 6 skipped (127 total).
+- npm run typecheck exited 0; npm run lint exited 0; npm run build exited 0.
+- node test/smoke-offline.mjs exited 0 and printed SMOKE: ALL STEPS PASSED. This uses local synthetic GitHub-shaped fixtures and temporary projects.
+- node test/smoke-mcp.mjs exited 0; initialize/tools/list handshake advertised all 12 expected tools.
+- Isolated npm-pack provenance check: first pack attempt exited 254 because /tmp/nexus-antoskill-20261123 did not yet exist; after creating the directory, pack succeeded. The published integrity and 51/51 compiled dist-file comparison then passed.
+- No real Desktop app, gateway credential, Claude session, user workspace, or target importer was used. The above are source/build/synthetic-test results only, not destination-session fidelity evidence.
+
+Nexus disposition
+Keep as a low-to-medium-priority ResourcePlane/Skill-package-manager reference, especially SHA-pinned content and lock/store reproducibility. Reject as a SessionGraph adapter and do not claim any of the three Claude Desktop modes or ChatGPT-to-Claude session trees transfer. For Nexus, add filesystem ownership/collision checks and explicit preview/approval plus undoable transaction semantics before considering comparable installation features.
+
+Primary source links
+- GitHub source: https://github.com/magnumquest39-cloud/AntoSkills
+- Releases: https://github.com/magnumquest39-cloud/AntoSkills/releases
+- Actions: https://github.com/magnumquest39-cloud/AntoSkills/actions
+- npm metadata: https://registry.npmjs.org/antoskill/0.2.0
+- Current Claude Desktop 3P overview: https://claude.com/docs/third-party/claude-desktop/overview
+- Current Claude Desktop 3P feature matrix: https://claude.com/docs/third-party/claude-desktop/feature-matrix
+- Current Claude Desktop 3P Code: https://claude.com/docs/third-party/claude-desktop/code
+- Current Claude Desktop 3P data store: https://claude.com/docs/third-party/claude-desktop/data-storage
+- Current Claude Desktop 3P import: https://claude.com/docs/third-party/claude-desktop/import

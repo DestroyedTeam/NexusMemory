@@ -1,0 +1,27 @@
+# Candidate #256 — Lain-in-coding/AgentSessions review (2026-11-24)
+
+## Identity and provenance
+- Repository: https://github.com/Lain-in-coding/AgentSessions
+- Pinned `main` / remote `HEAD`: `b1216c976e3cd25661b4dd2f871b7832ef0fb818` (2026-10-07; refs match). The shallow checkout has no release tags, and `git ls-remote --tags origin` is empty.
+- GitHub API snapshot: 1 star, 0 forks, 12 open issues, Apache-2.0 SPDX. Root includes `LICENSE-APACHE`, `LICENSE-MIT`, and `NOTICE`; README declares `MIT OR Apache-2.0`. README says 0.1.0 is planned and no release artifact exists.
+- This is a separate public repository, not a GitHub fork of `agent-session-grep` (GitHub reports `fork: false` for both). A read-only tree comparison finds 199 shared Rust crate files, 160 byte-identical, 39 changed; all 199 AgentSessions crate paths also exist in `agent-session-grep`, which has eight additional crate files. This is a close product-family snapshot, not independent proof of another migration implementation. No shared Git ancestry was asserted.
+
+## Product and its extra Skill assets
+README identifies the product as `agent-session-grep` (`asg`): a read-only local coding-session search/catalog with CLI, MCP, Robot, TUI and loopback Web surfaces. It lists the same 14 local coding-agent transcript providers (all Experimental) and two deferred; ChatGPT/ChatGPT Codex is not a provider. The root `skills/agent-session-grep/SKILL.md` is a usage Skill that teaches a Harness to query this search tool over MCP or Robot; it does not transfer, translate or install Skills across Harnesses. The repo's own AGENTS.md explicitly says `.agents/`, `.codex/`, `.codebuddy/` and `.trellis/` are development-workflow tooling, not product adapters or user-facing portability features.
+
+The implemented canonical model remains close to candidate #255: per-Session stable ID; text Messages; source-document fingerprint/length; occurrence placements/spans/sidechains; message-level parent/fork/continuation/subagent edges. It has no Project/Section object or cross-Session parent graph, and no multimodal attachment model in current code. The Skill/MCP surfaces support search, context, handoff and structured resume metadata, not destination writes. `asg resume` is same-provider CLI continuation; the MCP skill contract explicitly says it returns metadata only. Handoff emits a redacted pack and suggested command, not a cross-Harness session import.
+
+## External adapter and duplication finding
+The README claims “Community provider adapters” follow a versioned external-process protocol. That overstates the implementation: `docs/PROVIDER-ADAPTER-CONTRIBUTOR-GUIDE.md` says RFC-0002 is Draft and the external-process boundary is planned, while the current `ProviderAdapter` trait is an in-process Rust trait (`provider_id`, `manifest`, `probe`, `parse`, `probe_source`, `parse_source`). The only published schemas are Robot and handoff; there is no external adapter manifest schema, loader or process bridge in the crates. Do not cite this repository as proof of an extensible arbitrary-Harness plugin runtime.
+
+The same-family comparison with #255 shows #255 is a later, more developed snapshot: it has 8 additional crate files and 39 changed shared crate files; its README documents an available 0.1.0 release and post-release main, while this AgentSessions README still says 0.1.0 is planned. The skill files differ in six sections; the later #255 skill adds stricter resume preview/approval wording. Treat the two GitHub rows as one close architecture family in product-count summaries, while retaining separate repository evidence and version-specific findings.
+
+## Validation
+- `cargo test --workspace --offline --quiet` exited **0** under isolated HOME/XDG; all emitted test-target summaries had zero failures (with some explicit ignored tests). `cargo fmt --all --check` exited **0**. `cargo clippy --workspace --all-targets --offline -- -D warnings` exited **0**.
+- Tests ran with `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_CACHE_HOME` under `/private/tmp/nexusmemory-research-followup256-20261124/test-home`; Cargo/Rust caches were separate. No real user session, browser profile, provider app, credential, ChatGPT export, or Claude Desktop client was used.
+- Passing workspace tests validate the pinned local search implementation and its fixtures. No actual ChatGPT→Claude Desktop import, Project/Section mapping, attachment/event/token transfer, Skill/MCP config migration, or 3P Chat/Cowork/Code resume was tested.
+
+## Disposition for Nexus Memory
+**Adjacent local search/Skill distribution prior art only; close sibling snapshot of candidate #255, not a distinct cross-Harness migrator.** The bundled Skill can inspire a lightweight client-facing search instruction, but its content assumes the `asg` local catalog and does not solve portable memory migration. The built-in MCP tools expose local search/context, not a generic tool/config transfer protocol. Preserve only conceptual graph/search patterns and the repository-family deduplication note; do not adopt its README's external-process adapter claim without implementation evidence.
+
+Full README/product source review, version comparison, commands, and error corrections are recorded in this file. No source or project code was changed.

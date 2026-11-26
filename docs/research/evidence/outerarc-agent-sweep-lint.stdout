@@ -1,0 +1,4 @@
+> node ./scripts/lint.js
+i18n · 188 keys × 2 locales · 163 referenced · 3 dynamic families
+agent-sweep lint · 47 modules checked
+OK

@@ -1,0 +1,50 @@
+# Candidate #223 — suqiangqiang2012-dot/agent-skill-manager
+
+Review date: 2026-11-24. Bound checkout /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-suqiangqiang2012-dot-agent-skill-manager-20261124-followup223. Default branch main; pinned HEAD e606f9604d675450a47c54ccad240a7902eaf298 (2026-09-11T12:09:52+08:00, “Add cross-agent release safeguards”), matching origin/main; Git clean. GitHub reports public, 4 commits, 0 stars/forks, no declared license, three stable releases through v0.3.0. Its validate workflow has five successful runs on Windows/macOS.
+
+## What the candidate is
+
+An Agent Skill package lifecycle system distributed as a SKILL.md skill plus Python standard-library scripts. It checks stable GitHub releases, installs a compatible package, detects local changes, lists versioned backups, rolls back, validates canonical skill source, prepares platform ZIPs, and uses separate exact confirmation tokens for Draft creation and stable publication. Release v0.3.0 contains two target package assets: Codex any-OS and WorkBuddy Windows any-architecture, plus a release manifest and SHA256SUMS.
+
+The core is a good adjacent ResourcePlane design reference: agent+skill scoped state, semver, read-only scheduled checks, published-stable-only installs, SHA-256 verification, ZIP path/symlink rejection, staging and atomic directory replacement, backup of the previous version, overwrite confirmation for locally modified files, rollback confirmation, per-agent OS/architecture/version/dependency declarations, fail-closed adapters, and separately authorized prepare/draft/publish/catalog actions.
+
+## Scope boundary for Nexus Memory
+
+This does not move ChatGPT/Codex Projects, Section Groups or any session object. It has no transcript/event/message parser, parent/fork/child graph, follow-up/interruption lineage, links/media/attachment bytes, token/cost data, MCP servers, plugin installation/auth state, memory, schedules, or target-native session resume IDs. It installs reusable Agent Skill packages only.
+
+Current declared adapters are Codex Windows/macOS and WorkBuddy Windows 5.5.4+. The compatibility guide explicitly says Claude Code, Cursor, OpenClaw, DeepSeek Harness, and WorkBuddy macOS are planned until their paths, metadata conversion, reload, dependency and rollback behavior are validated. The WorkBuddy Windows runtime/path is implemented and unit tested.
+
+## Concrete Codex path compatibility mismatch
+
+Candidate source skill/scripts/skill_manager.py::resolve_install_root chooses CODEX_HOME/skills when CODEX_HOME is present, otherwise ~/.codex/skills. A no-write synthetic probe with HOME=/tmp/nm-asm-codex-path and CODEX_HOME unset printed exactly /tmp/nm-asm-codex-path/.codex/skills.
+
+The current official [OpenAI CLI reference](https://developers.openai.com/api/reference/cli) lists Codex project skills at .agents/skills/ and user skills at ~/.agents/skills/. This candidate's default Codex install path therefore differs from the currently documented discovery path. An explicit --install-root can work around it, but the default adapter needs updating or native discovery evidence before unattended installation. This is a real ResourcePlane compatibility issue, not session migration evidence.
+
+## Source and safety checks
+
+CodeGraph indexed 6 files, 152 nodes, 442 edges. After removing only .codegraph/.gitignore's !.gitignore exception, status was current and the checkout remained clean.
+
+Code inspection found:
+- stable release selection uses GitHub's latest-release endpoint and rejects draft/prerelease;
+- catalog and release manifest IDs/versions must match;
+- package archive SHA-256 must match the declared manifest and, when supplied, GitHub's asset digest;
+- safe_extract rejects absolute/parent-traversal paths and ZIP symlinks before extraction;
+- existing target content is hashed and requires an exact digest-prefix overwrite confirmation if locally changed;
+- install stages to a hidden temp directory, moves the previous tree to a per-agent backup, then atomically replaces the target; rollback validates the backup digest, asks for its own exact confirmation, and preserves the current version as a new backup;
+- release publication is separated from draft creation and requires a different exact token;
+- the package does not run a representative skill task or validate every declared Agent/OS in a native application. The WorkBuddy adapter checks its Windows version, but Codex default path mismatch remains.
+
+No repository license is declared; do not copy source code without permission. Use concepts only.
+
+## Verification performed
+
+- Initial README command using python failed with exit 127 because no python executable exists on PATH. Corrected command: rtk test python3 -m unittest discover -s tests -v; exit 0, 15 tests, OK.
+- rtk proxy python3 skill/scripts/release_tool.py validate --skill-dir skill exited 0; status valid; 8 files inventoried and hashed.
+- Synthetic Codex path command (no filesystem writes): rtk proxy env -u CODEX_HOME HOME=/tmp/nm-asm-codex-path python3 - ... returned /tmp/nm-asm-codex-path/.codex/skills.
+- Live release install test was attempted only in /tmp with isolated HOME, state directory, GH_CONFIG_DIR and no GITHUB_TOKEN/GH_TOKEN. First request failed certificate validation because the selected Python had no configured CA file. Corrected with SSL_CERT_FILE=/etc/ssl/cert.pem; the public GitHub API then returned HTTP 403. The live install did not proceed, no skill was written, and no user GitHub token was used.
+- GitHub metadata checked via gh: v0.3.0 released 2026-09-11 with two ZIP packages; Codex-any and WorkBuddy-Windows-any packages currently share SHA-256 0d021174c2248b0ddc1fb3d98304bf0a707412ee75a1387c20ae4b1335da616f; release-manifest.json and SHA256SUMS are also present. Public repo: https://github.com/suqiangqiang2012-dot/agent-skill-manager ; release: https://github.com/suqiangqiang2012-dot/agent-skill-manager/releases/tag/v0.3.0 .
+- Official Codex current paths were rechecked from the OpenAI CLI reference above on 2026-11-24. The candidate default path mismatch is recorded as a compatibility finding; actual Codex runtime discovery was not launched.
+
+## Disposition
+
+Keep only as a Skill-package lifecycle/reference design: stable releases, integrity manifests, per-agent/OS targets, explicit consent and rollback. It is not a Project/Section/session migrator, MCP/plugin converter or Desktop 3P adapter. Its current Codex default directory requires correction/native discovery validation; source code is unlicensed. Primary inventory advances to 223/303 reviewed, 80 pending; next primary candidate is theonepichael/agent-toolkit.

@@ -1,0 +1,34 @@
+# Candidate review: michaelmjhhhh/agent-skill-manager (2026-11-22)
+
+## Snapshot and disposition
+
+- Pinned source: `michaelmjhhhh/agent-skill-manager` at `0e6cee438629ed55ed4a91573dab2d6df0c29144` (`fix: bound local markdown image decoding`, 2026-09-07). GitHub snapshot: 1 star / 0 forks. There is no top-level LICENSE file and GitHub license metadata is absent, so code reuse is license-unresolved. The latest listed release is v0.0.3 (2026-09-08, tag commit `15858a9`); reviewed main HEAD is newer. The README says macOS 13+ and ad-hoc signed / not Apple-notarized.
+- This native SwiftUI app scans installed Skill directories `~/.agents/skills` and `~/.claude/skills`. Its separate SavedSkill collection stores id, name, URL, install-command string, summary, category, favorite and creation date at `~/Library/Application Support/SkillHub/collection.json`; import/export moves that JSON catalog, not Skill contents or conversations.
+- It has no ChatGPT/Codex reader, Project/Section/Session/transcript/branch/task graph, attachment/media transfer, MCP/plugin/memory/schedule migration, or Claude Desktop 3P app-store adapter. It is not a session migrator. Treat it as a narrow UX/safety/ResourcePlane reference only, not a Nexus importer or destination writer.
+
+## Native behavior and boundaries
+
+- Installed skills are browsed locally; categories/favorites and saved install commands belong to the app's separate bookmark collection. Import merges by UUID, existing local entries win on collisions; records do not represent native Session state. Collection writes use atomic JSON, invalid data is surfaced without overwrite, and export rejects the active collection path and symlink aliases.
+- A saved install command is shown in a confirmation dialog with the selected working directory. The user must choose Run or Copy command & open. The app passes AppleScript values as argv rather than embedding the command in the AppleScript source, but the command itself runs in a new terminal with the user's permissions. The README says the app does not check installation success; no test actually executes a saved command. Treat imported command strings as untrusted and never auto-run them.
+- Removal is an explicitly confirmed move to macOS Trash. The guard requires one top-level entry under the configured root, rejects home/root as source roots, pins root/entry device+inode with `lstat`, and trashes a symlink itself rather than resolving/deleting its target. A selected nested file removes the whole containing skill folder; a standalone Markdown file removes only itself. The source notes a remaining path-based TOCTOU race.
+- The scanner is lazy and bounded (64 KiB metadata read, max depth 12, first 500 entries per directory), tracks symlink cycles, and reports omitted/unreadable data. This is performance and local-files UX evidence only, not migration fidelity.
+- No code recognizes the Claude Desktop 3P `Claude-3p` application data tree; current sources only configure `~/.agents/skills` and `~/.claude/skills`. The target modes Chat/Cowork/Code and local desktop session hierarchy are outside its model.
+
+## Validation at pinned checkout
+
+- `rtk swift test` → exit 0; 55 tests passed, 1 skipped (Ghostty 1.3+ is not installed), 0 failures. Coverage includes collection round-trip/invalid JSON, async collection writes/merge, Skill scanning/frontmatter/size/depth/symlink cycles, safe Trash boundaries, terminal driver argument separation, plus performance fixtures.
+- `rtk swift build -c release` → exit 0. `rtk proxy python3 scripts/test_release_notes.py` → exit 0, 3 tests passed.
+- GitHub Actions lists 30 runs; latest main CI run #21 at commit `0e6cee4` is shown successful, and v0.0.3 release workflow #4 is also shown successful. CI runs Swift tests and builds a universal DMG; these checks do not execute saved install commands.
+- The candidate's source README says the released macOS app is ad-hoc signed, not Apple-notarized. Source license remains unresolved.
+- Review tooling: CodeGraph indexed 34 files / 535 nodes / 1,004 edges and reported up to date. The isolated checkout was clean after removing the review-generated `scripts/__pycache__/`; CodeGraph data remains ignored by the retained `.codegraph/.gitignore` (only the `!.gitignore` exception was removed).
+
+## Primary sources checked (2026-11-22)
+
+- GitHub repo: https://github.com/michaelmjhhhh/agent-skill-manager
+- Latest listed releases: https://github.com/michaelmjhhhh/agent-skill-manager/releases
+- Actions runs: https://github.com/michaelmjhhhh/agent-skill-manager/actions
+- Pinned collection/scanner source: https://github.com/michaelmjhhhh/agent-skill-manager/blob/0e6cee438629ed55ed4a91573dab2d6df0c29144/Sources/SkillHub/Models.swift
+- Pinned terminal command boundary: https://github.com/michaelmjhhhh/agent-skill-manager/blob/0e6cee438629ed55ed4a91573dab2d6df0c29144/Sources/SkillHub/TerminalApplication.swift
+- Pinned Trash safety checks: https://github.com/michaelmjhhhh/agent-skill-manager/blob/0e6cee438629ed55ed4a91573dab2d6df0c29144/Sources/SkillHub/SkillRemoval.swift
+
+Evidence boundary: pinned source, local Swift tests and release build, and GitHub metadata were reviewed. No user-installed Skills, collection JSON, Desktop store, account export, terminal, gateway, or API key was accessed.

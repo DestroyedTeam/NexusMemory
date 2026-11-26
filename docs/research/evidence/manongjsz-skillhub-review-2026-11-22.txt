@@ -1,0 +1,51 @@
+# Candidate review: MaNongJSZ/SkillHub (2026-11-22)
+
+## Snapshot and disposition
+
+- Fixed checkout/HEAD: `MaNongJSZ/SkillHub` / `e44e1cb1832bd953a59fde54168ceb92f6cf8b58` (2026-05-22, `perf: optimize Dashboard loading, reduce N+1 IPC to single batch call`), release `v0.1.12`, MIT, 1 GitHub star / 0 forks at review. The official release page lists v0.1.12 as latest.
+- This is a Tauri 2 + Rust + React/TypeScript local Skills manager, not a cross-harness memory/session importer. It stores Skills in a central local registry (`~/.cc-switch/skills/`) and fans them out by symlink/junction to selected agent directories. Nested registry folders are *Skill groups*, not chat Projects or Section Groups.
+- The code models `Agent`, `Skill`, `SkillLink`, and app config; it has no Conversation/Session/Transcript/Project/Section/branch/task graph or ChatGPT reader/writer. No MCP, plugin-auth, memory, schedule, transcript, attachment or token-accounting migration was found. Best use: a narrow ResourcePlane reference for link fan-out and app UX; exclude from SessionGraph/core migration and do not claim Claude Desktop session support.
+
+## Claude Desktop 3P adapter check
+
+The implementation special-cases `AgentKind::ClaudeDesktop`: it scans Windows `%LOCALAPPDATA%\Claude-3p\local-agent-mode-sessions\skills-plugin\{uuid}\{uuid}\` for `manifest.json` and `skills/`, links directories, and edits the manifest. The source comment explicitly says other platforms are unsupported. Standard/3P desktop installation can be cross-platform, but this adapter only detects the Windows local path; the current user's macOS setup is therefore not covered.
+
+Anthropic's current public 3P docs document the application-data root and the supported plugin/skill features, but do not document the candidate's nested `skills-plugin/{uuid}/{uuid}` path or its manifest as a stable import interface. This is an inference from the published docs, not proof that no such internal path exists. Treat it as private/version-specific and require an exact-version disposable client test before relying on it. Do not write to the user's actual Desktop store. See the primary-source links below.
+
+## Source and test review
+
+- Upstream HEAD matches the v0.1.12 release commit. GitHub shows 32 commits, 1 star, 0 forks, and 14 Actions runs; the checkout's only workflow is `.github/workflows/release.yml`, which builds/packages release artifacts rather than running test suites.
+- `rtk npm ci` → exit 0, added 417 packages. Install scripts for `esbuild` and `fsevents` were withheld by npm's install-script approval policy. `rtk npm test` → exit 0, 3 test files / 4 tests passed. `rtk npm run build` → exit 0 (TypeScript + Vite production build).
+- `rtk cargo check --manifest-path src-tauri/Cargo.toml` and the `--lib` variant → exit 0. `rtk cargo test --manifest-path src-tauri/Cargo.toml` → exit 101 before tests run: `E0063`, the `AppConfig` initializer in `src/core/installer.rs:326` omits new fields `cache_ttl_minutes` and `github_token`; also an unused-variable warning at `src/core/registry.rs:411`. The tests are therefore not green, and their coverage cannot be credited as executed.
+- `rtk cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` → exit 1 with formatting diffs across backend files. `rtk cargo clippy --manifest-path src-tauri/Cargo.toml --lib -- -D warnings` → exit 101 with five diagnostics (unnecessary lazy evaluation, repeated identical URL branches, manual prefix stripping, and manual saturating subtraction).
+- `rtk npm audit --omit=dev` against the configured `registry.npmmirror.com` first exited 1 because its advisory endpoint returns 404/`NOT_IMPLEMENTED`; the corrected `rtk npm audit --registry=https://registry.npmjs.org/ --omit=dev` exited 1 and reported 4 production-tree advisories: one moderate in DOMPurify and three high across nanoid/PostCSS/source-map-js.
+
+## Disposable real-library behavior probes (no user data)
+
+A temporary Rust harness linked the reviewed crate and used only fixture directories under `/tmp/nm-skillhub-path-traversal-probe-20261122`. The repository checkout/source remained unchanged.
+
+1. **Registry path traversal:** a fixture `SKILL.md` frontmatter `name: ../outside` ran through the actual `Installer::install_from_path`. The command exited 0, returned the path `.../registry/../outside`, and created `outside/SKILL.md` outside the configured registry. This follows from unvalidated frontmatter `name` flowing into `registry_path.join(name)` / `create_dir_all`.
+2. **Destructive overwrite on clone failure:** pre-created `overwrite-registry/demo/existing.txt`, called the actual `git_clone_to_registry(..., overwrite=true)` with a fake `git` that emitted `fatal: forced clone failure` and exit 23. The Rust process exited 0 and returned `InstallResult::Failed`, but the prior directory and marker were both absent afterward: the code deletes the old destination before cloning and cannot restore it.
+3. **Malformed Claude Desktop manifest data loss:** seeded invalid `manifest.json` with a `custom` field and called actual `Manifest::add_skill`. It exited 0, added the new skill, and `CORRUPT_MANIFEST_CUSTOM_FIELD_PRESERVED=false`: parse failure is swallowed with `unwrap_or(empty)` and the writer overwrites the original file. The writer also uses direct `fs::write`, not an atomic temp/backup transaction.
+4. The first repeat of the path traversal probe exited 101 because its prior disposable `outside` directory had not been cleared; only those `/tmp` fixtures were reset. The clean rerun above exited 0. This was a probe setup error, not an application test result.
+
+## Target fit and security boundary
+
+- Positive pattern: central skill library plus per-agent symlink/junction projection, a custom `ClaudeDesktop` adapter, and explicit `AgentKind` selection. This is a reusable shape for a separate ResourcePlane once path/version support and rollback are hardened.
+- Not usable for the requested data plane: no source ChatGPT/Codex project/session import/export, no native destination session creation/resume, and no support for preserving Section membership, branches, subagents, message events, media, tools, or schedules.
+- Do not treat Skill-group folders as Projects/Sections. Do not import arbitrary Skill frontmatter names: verified path traversal can write outside the registry. Overwrite and malformed-manifest flows need fail-closed validation, atomic staging, backup/rollback and tests before any deployment or reuse.
+- The app config serializes its GitHub token as part of `AppConfig` JSON; do not copy that configuration into a portable context bundle. Rebind credentials separately.
+
+## Primary sources checked (2026-11-22)
+
+- GitHub repository / MIT license: https://github.com/MaNongJSZ/SkillHub
+- GitHub releases: https://github.com/MaNongJSZ/SkillHub/releases
+- Release workflow at pinned HEAD: https://github.com/MaNongJSZ/SkillHub/blob/e44e1cb1832bd953a59fde54168ceb92f6cf8b58/.github/workflows/release.yml
+- Pinned agent detection source: https://github.com/MaNongJSZ/SkillHub/blob/e44e1cb1832bd953a59fde54168ceb92f6cf8b58/src-tauri/src/core/agent.rs
+- Pinned manifest writer: https://github.com/MaNongJSZ/SkillHub/blob/e44e1cb1832bd953a59fde54168ceb92f6cf8b58/src-tauri/src/core/claude_desktop.rs
+- Pinned installer/path writer: https://github.com/MaNongJSZ/SkillHub/blob/e44e1cb1832bd953a59fde54168ceb92f6cf8b58/src-tauri/src/core/installer.rs
+- [Claude Desktop 3P local data](https://claude.com/docs/third-party/claude-desktop/data-storage)
+- [Claude Desktop 3P skills, plugins, and hooks](https://claude.com/docs/third-party/claude-desktop/extensions)
+- [Claude Desktop 3P import boundary](https://claude.com/docs/third-party/claude-desktop/import)
+
+Evidence boundary: source and tests were reviewed at the pinned commit; frontend tests/build and production Rust checks ran locally; full Rust tests did not compile. The dynamic probes used disposable fixtures only. No live Claude Desktop client, user session store, API key, or gateway was accessed.

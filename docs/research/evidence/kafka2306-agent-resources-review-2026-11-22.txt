@@ -1,0 +1,42 @@
+# KAFKA2306/agent-resources — candidate #127 review
+
+Date: 2026-11-22. Candidate #127 of the primary 303-repository GitHub corpus. Scope: ChatGPT Projects/Sections/Destruction Era sessions and associated context/resources into local or self-hosted Claude Code plus Claude Desktop Chat, Cowork, and Code as distinct logical surfaces. No user application, account, session, credential, key, or global Skills directory was accessed.
+
+## Pinned identity and repository state
+
+- Repository: https://github.com/KAFKA2306/agent-resources ; MIT. Inventory metadata snapshot records 1 star. The review checkout was pinned at HEAD `b461929bd7138afa8211f8492662e972ff0776e1` (commit 2026-11-21 03:28:48Z, `chore: refresh repository recall index (#593)`). `pyproject.toml` packages `agr` version 0.7.8 and requires Python >=3.10. The README identifies the repository as a Software Factory Control Tower and separately documents `agr`/`agrx` for Agent Skills.
+- CodeGraph initialized only in the disposable review clone: 239 files, 3,317 nodes, 8,668 edges, index up to date. The local checkout's `.codegraph/.gitignore` self-preserving exception was removed as required; no source file was edited.
+
+## Actual capability boundary
+
+- `agr` installs, syncs, lists, and removes `SKILL.md` resources. `agr.toml` currently records dependency type `skill`; the code does not implement general MCP, plugin, memory, schedule, Project, Section, or Session import/export.
+- `ToolConfig` has installation path entries for Claude Code (`.claude/skills` / `~/.claude/skills`), Cursor, Codex, OpenCode, GitHub Copilot, and Antigravity. These are Skills-directory mappings, not evidence of end-to-end support for every mode or current runtime version. In particular, `claude` means Claude Code CLI, not Claude Desktop Chat/Cowork/Code. `agrx` has no CLI configured for Antigravity, so it cannot execute a temporary skill through that target.
+- `agrx` downloads one remote Skill into the selected tool's skill directory, invokes the selected CLI, then best-effort removes the temporary directory. Its interactive Claude Code path appends `--dangerously-skip-permissions`; Cursor/Copilot paths append their respective force/allow-all flags. This is a material safety boundary and should not be invoked by Nexus Memory as an implicit migration step.
+- The tool table still points Codex skills at `.codex/skills`, while current OpenAI developer guidance documents `.agents/skills/` and `~/.agents/skills/`; verify exact discovery behavior against a target Codex build before treating the mapping as native. OpenCode V2 prefers `.opencode/skills/` but documents compatibility discovery of the old `.opencode/skill/` path. These differences make its maps useful as hints, not a compatibility certification.
+- No parser/writer for ChatGPT exports, Projects, Section Groups, message trees, forks, attachments, token usage, artifacts, schedules, MCPs, plugins, memory or Claude Desktop 3P session stores was found in the reviewed source. No Claude Desktop mode was declared as a target. Candidate disposition: **narrow Skills ResourcePlane reference only; not a SessionGraph or migration dependency**.
+
+## Build and test evidence (isolated temporary environment)
+
+- Editable install/package build: `rtk proxy python3 -m venv /tmp/nm-review-kafka2306-agent-resources-20261122-venv` followed by `python -m pip install -e . pytest pytest-asyncio pytest-cov respx` exited 0. The venv is disposable and outside the user's project/global Python environment.
+- Targeted library and runner suite (`tests/test_agrx_command_building.py`, `tests/test_tool.py`, `tests/test_handle.py`, `tests/test_skill.py`, `tests/test_fetcher.py`): **136 passed**, exit 0.
+- CLI integration tests (`tests/cli`) with the temp venv added to PATH: **188 passed, 5 skipped**, exit 0.
+- Full offline repository pytest attempt with `jsonschema` installed and the temp venv on PATH: **815 passed, 19 failed, 6 skipped, 11 deselected, 64 subtests passed**, exit 1. The failures concern repository-wide dashboard/workflow and collector contracts, cross-repository audit contract assertions, a repository-operations test, and documentation tests looking for absent `docs/docs/*` files; they are not Skills/session fixtures. This means the repository-wide suite is not fully green even though the focused package/CLI suites pass.
+- `ty 0.0.107 check --python <temp-venv-python> agr agrx`: `All checks passed!`, exit 0. The first `ty check agr agrx` did not select the external venv and exited 1 on unresolved installed dependencies; the corrected explicit `--python` invocation passed.
+- `ruff 0.17.6 check agr agrx`: exit 1, **47 diagnostics** (24 marked fixable, 3 unsafe). No autofixes were applied.
+- Installed `agr --help` and `agrx --help` smoke checks exited 0. They display a Skills package manager and six install target names, with the `agrx` temporary-run interface.
+
+## Corrected tool setup and retained errors
+
+- Initial `rtk pytest ...` exited 1 because no `pytest` executable was on the host PATH. `rtk uv run pytest ...` exited 127 because `uv` is absent. `python3 -m pytest ...` exited 1 because system Python had no `pytest` module. Retried in an isolated `/tmp` virtual environment and completed the tests above.
+- A first full-suite collection attempt exited 2 because the repo's dashboard tests import undeclared `jsonschema`; after installing it only in the disposable venv, the full offline suite ran and produced the 19-failure result above.
+- A first CLI integration run had no temp-venv executables on PATH; after explicitly adding the temp venv to PATH, the corrected CLI suite passed 188/188 executed tests (5 skipped).
+
+## Primary source paths
+
+- Pinned source tree: https://github.com/KAFKA2306/agent-resources/tree/b461929bd7138afa8211f8492662e972ff0776e1
+- `agr/tool.py`: https://github.com/KAFKA2306/agent-resources/blob/b461929bd7138afa8211f8492662e972ff0776e1/agr/tool.py
+- `agrx/main.py`: https://github.com/KAFKA2306/agent-resources/blob/b461929bd7138afa8211f8492662e972ff0776e1/agrx/main.py
+- `agr/config.py`: https://github.com/KAFKA2306/agent-resources/blob/b461929bd7138afa8211f8492662e972ff0776e1/agr/config.py
+- `pyproject.toml`: https://github.com/KAFKA2306/agent-resources/blob/b461929bd7138afa8211f8492662e972ff0776e1/pyproject.toml
+- Current OpenCode Skills paths: https://opencode.ai/docs/skills/
+- Current Codex skill installation paths: https://developers.openai.com/api/reference/cli

@@ -1,0 +1,40 @@
+Nexus Memory GitHub candidate review — pwnera/artbucket (2026-11-20)
+
+DISPOSITION
+Adjacent reference for scoped MCP/API integration, project selection, brand/asset hierarchy, and reversible import UX. It is not a ChatGPT/Codex/Claude/Cursor session migrator, and not a Cloud conversation writer. Keep it in the broad adjacent-project inventory; do not count it as a supported source/target adapter.
+
+PROVENANCE / MATURITY
+- Candidate registry snapshot: 33 stars, 0 forks, TypeScript, AGPL-3.0. Exact current registry audit is 37 non-`unreviewed` / 303 total / 266 `unreviewed` before this update; candidate row was `pwnera/artbucket` at index 18.
+- Source checkout `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-pwnera-artbucket-20261120`: origin `https://github.com/pwnera/artbucket`, local `HEAD` and `git ls-remote origin refs/heads/main` both `84e34122c7eff9d401bef48edd20d21000464087` (2026-10-23, merge “docs: no more pointers to Artbucket Cloud, which has closed”). Git working tree is clean after ignoring the CodeGraph index. Latest published release is v2.8.0 (2026-10-15); package version 2.8.0. Repository advertises API/MCP v1 stability, but that stable service is for the Artbucket DAM domain.
+- The pinned README describes Artbucket as an open-source, self-hosted digital asset/brand management service (Postgres + S3-compatible storage), exposed through web, REST, MCP, CLI and Git. The current source commit removes all pointers to the hosted Artbucket Cloud product because it has closed. Self-hosted code remains. AGPL-3.0 applies; obtain legal review before deriving/distributing a closed or hosted commercial product.
+
+WHAT MAPS — AND WHAT DOES NOT
+- Organizational shape is organization → project (a separate asset library) → collections/assets, brands, portals and project-scoped access grants. MCP `list_projects`, `create_project`, and `rename_project` select/maintain this DAM hierarchy; tools accept a `project` selector. A brand's pages can contain nested content sections (three levels at most), with version/history, comments and publication/release. These are useful as examples of explicit scopes and human-readable containment, but are not ChatGPT Project → Section Group → Session relationships. Collections are asset groupings, not chat folders.
+- MCP is Streamable HTTP at `/api/v1/mcp`; the same application core backs REST and MCP. The documented agent connection uses OAuth 2.1 + PKCE/dynamic client registration and a consent screen for project/scopes; separately minted `ab_...` bearer keys are Artbucket API credentials, not Anthropic/Cloud model API keys. Scopes follow read/propose/write/admin, with proposals/approval gates. The frozen `/api/v1` contract and MCP tool schemas are valuable interface-governance references.
+- It ships an Artbucket-specific Claude Code plugin/Skill about asset/brand workflow (`npx skills add pwnera/artbucket` is also documented). This teaches domain use; it is not a general Skill converter, MCP-server/settings importer, plugin bridge, or session adapter.
+- It has a **brand/asset migration** flow, not AI history migration: docs explicitly state there is no connector for Frontify, Bynder, Brandfolder or Drive; the user uploads/downloads exports. A ZIP's folders can become collections; a brand book/PDF can become brand rules and draft pages. It presents a plan for human review before apply and permits undoing what the import added for 30 days. Its docs state external custom metadata, old links, licenses and people need separate handling. This is a useful migration-safety pattern (preview → review → apply → undo plus omissions report), but its source/target schemas are asset-management specific.
+
+CONVERSATION / SESSION BOUNDARY
+- The open-source app does include an assistant sidebar. Its client consumes a service URL surfaced as `ASSISTANT_URL` in `/api/v1/me`; the server implementation is a separate configured service, not in this checkout. The client stores only the current `chat` ID in browser `sessionStorage` (`assistant:chat`), loads `/chats/{id}`, lists recent chats per Artbucket project, and posts `/ask` requests carrying `{chat, question, asset, embed, where}`. The client models returned turns as question/answer/steps/actions and receives streamed events for chat ID, tools, working text, answer text, approvals/actions and errors.
+- The repository's `src/app/api/v1` contains no chat/session/conversation route; `src/lib/db/schema.ts` has no chat/transcript tables (the only case-insensitive match is “ChatGPT” in an OAuth-client comment). No portable transcript import/export or Cloud session write route was found in the pinned source/API/MCP contract. Do not infer the externally deployed assistant service's internal storage, attachment retention, export, or Cloud capabilities from this UI.
+- MCP itself is documented as stateless Streamable HTTP; a protocol session and an assistant `chat` resource are distinct things. This is an important design caution for Nexus: session identity, transcript graph and project hierarchy need source-specific owners/adapters, rather than equating a client UI's `sessionStorage` pointer with an exportable durable conversation.
+
+LOCAL REVIEW / QUALITY
+- CodeGraph initialized on the pinned source checkout: 1,085 files, 19,946 nodes, 67,659 edges; final CodeGraph status current. Runtime Node v26.7.0 and pnpm 11.25.0.
+- Dependency install `rtk pnpm install --frozen-lockfile --ignore-scripts`: exit 0 (install lifecycle scripts intentionally skipped).
+- `rtk pnpm test`: exit 0, 734 passed / 0 failed / 0 skipped. Node emitted DEP0205 (`module.register()` deprecated) warnings; tests passed.
+- `rtk pnpm typecheck`: exit 0, “TypeScript: No errors found”. `rtk pnpm lint`: exit 0. `rtk pnpm contract:check`: exit 0, “The v1 contract holds”.
+- `pnpm test:db` was not run: its `src/test/db.ts` harness requires `DATABASE_URL` pointing to Postgres and creates/drops an isolated database; `rtk docker ps` could not connect because the Docker daemon socket was absent. No DB integration result, build result, hosted Cloud account test, or third-party session export is claimed. No real API/account/session data or credentials were used.
+
+RECOMMENDATION
+Use Artbucket as a medium-value *adjacent* reference for project-scoped MCP permissions, frozen tool contracts, domain-specific resource catalogs and a safe reversible import workflow. Exclude it from the direct migration capability set. For Nexus, adapt the preview/review/apply/rollback and explicit-loss-report patterns; do not reuse its brand/project/section or assistant-chat objects as ChatGPT/Cloud transcript semantics. Next exact unreviewed candidate in registry order after this one: `yeasy/ask`.
+
+PINNED PRIMARY SOURCES
+- README: https://github.com/pwnera/artbucket/blob/84e34122c7eff9d401bef48edd20d21000464087/README.md
+- MCP contract and project-scoping docs: https://github.com/pwnera/artbucket/blob/84e34122c7eff9d401bef48edd20d21000464087/docs/developers/mcp.mdx
+- Asset-DAM “Move from another tool” guide: https://github.com/pwnera/artbucket/blob/84e34122c7eff9d401bef48edd20d21000464087/docs/use-cases/move-from-another-tool.mdx
+- Assistant client/session pointer: https://github.com/pwnera/artbucket/blob/84e34122c7eff9d401bef48edd20d21000464087/src/components/assistant.tsx
+- Assistant service boundary and project return: https://github.com/pwnera/artbucket/blob/84e34122c7eff9d401bef48edd20d21000464087/src/lib/core/access.ts
+- Project/collection database shape: https://github.com/pwnera/artbucket/blob/84e34122c7eff9d401bef48edd20d21000464087/src/lib/db/schema.ts
+- v2.8.0 release: https://github.com/pwnera/artbucket/releases/tag/v2.8.0
+- Cloud closure source commit: https://github.com/pwnera/artbucket/commit/84e34122c7eff9d401bef48edd20d21000464087

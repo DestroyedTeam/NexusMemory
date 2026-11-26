@@ -1,0 +1,57 @@
+# AJV009/ddev-drupal-devkit — primary candidate review #147 (2026-11-22)
+
+## Verdict
+
+**Do not use this add-on as a migration engine or install it on a user's machine from this snapshot.** It is a very narrow DDEV wrapper around the separate `drupal-devkit` resource installer; it contains no Projects, Sections, session/transcript, branch, memory, MCP, attachment, schedule, usage or native Claude Desktop 3P migration graph. More seriously, static inspection shows manifest paths that do not exist in the repository, script targets not installed by the manifest, unsafe API-key persistence, no tests/README/LICENSE/release, and no runtime integration evidence. No DDEV install was attempted.
+
+The separate upstream `drupal-devkit` is a potentially useful **resource-plane** follow-up, not a session importer: its Drupal.org docs advertise a marketplace/skills/agents installer with per-harness emitters for Claude Code, Copilot CLI, Codex, Cursor, Gemini CLI, Kiro, OpenCode and Hermes. Do not attribute those capabilities to this DDEV wrapper, and do not treat skills portability as Project/Session migration.
+
+## Pin and repository facts
+
+- Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-AJV009-ddev-drupal-devkit-20261122`
+- Default branch `main`, exact HEAD `c9c6ccd0d9d2e17851f5a9e8a695c4a2ea2aa84c`. CodeGraph initialized and up to date, but parsed only `install.yaml` (1 YAML file; no source-code nodes). Shell files were reviewed individually and syntax-checked.
+- Tracked payload is exactly six files: `install.yaml`, three `commands/host/*` shell commands, and two `scripts/*.sh`. There is no README, LICENSE, test suite, CI workflow, or release page/tag. GitHub page snapshot reports 0 stars and 0 forks. The record's SPDX license is null; do not infer the wrapper's licence from its dependency.
+- The `install.yaml` declares DDEV `>= v1.24.10`. The official DDEV docs' stable `.local` secret files require v1.25.4+.
+
+## Static install-contract checks (executed; no system writes)
+
+- PyYAML parsed `install.yaml` successfully. It declares `project_files: []`, and three `global_files` source paths:
+  - `ddev/commands/host/ai` — absent
+  - `ddev/commands/host/ai-devkit` — absent
+  - `ddev/commands/host/claude` — absent
+- `post_install_actions` reference `${DDEV_APPROOT}/.ddev/scripts/prompt-api-keys.sh` and `${DDEV_APPROOT}/.ddev/scripts/bootstrap-container-claude.sh`; both paths are absent. The repository contains only `scripts/prompt-api-keys.sh` and `scripts/bootstrap-container-claude.sh`, and neither is declared in `project_files` or `global_files`.
+- The separate commands themselves are syntactically valid: `rtk proxy bash -n commands/host/ai commands/host/ai-devkit commands/host/claude scripts/bootstrap-container-claude.sh scripts/prompt-api-keys.sh` exit 0. This validates shell syntax only, not DDEV install behavior.
+- Static checker output (literal):
+  ```
+  ddev_version_constraint= >= v1.24.10
+  project_files= []
+  global_file_sources= [('ddev/commands/host/ai', False, 'commands/host/ai'), ('ddev/commands/host/ai-devkit', False, 'commands/host/ai-devkit'), ('ddev/commands/host/claude', False, 'commands/host/claude')]
+  postinstall_script_refs= [('.ddev/scripts/bootstrap-container-claude.sh', False), ('.ddev/scripts/prompt-api-keys.sh', False)]
+  project_scope_secret_command= True
+  generated_markers= {'ai': False, 'ai-devkit': False, 'claude': False}
+  ```
+  This is a source/path audit, not a claim that DDEV itself was run. DDEV's add-on template docs describe `project_files`/`global_files` as files copied from the add-on repository; the referenced sources are absent from the 6-file checkout.
+
+## API-key, lifecycle and supply-chain risks
+
+- `scripts/prompt-api-keys.sh` hides terminal echo while collecting the token, then persists it with `ddev config --web-environment-add="ANTHROPIC_API_KEY=$API_KEY"`. DDEV docs specify `web_environment` lives in project `.ddev/config.yaml` (or global config), and recommend a gitignored `.ddev/.env.web.local` for secrets starting DDEV 1.25.4. Thus the key may end up in a version-controlled config; secret is not protected just because terminal input is hidden. The add-on minimum DDEV version predates DDEV's documented `.local` support.
+- Commands in `global_files` lack `#ddev-generated`; removal actions only call `drupal-devkit remove --yes` and admit container removal is manual. DDEV docs describe the marker as the managed-file mechanism for updates/removal. No explicit cleanup removes the global commands.
+- Both host and container install `drupal-devkit` from a moving Git `main` URL without a tag/SHA. The container installs `@anthropic-ai/claude-code` with unpinned `npm install -g`. No runtime versions/hashes are recorded by this wrapper.
+- `commands/host/claude` concatenates `$*` into a `ddev exec --raw` shell string and checks for `ANTHROPIC_API_KEY`. It only launches container Claude Code; the add-on's interactive setup offers `claude-code` or `none`. Although the key prompt script has dormant `codex` and `copilot` cases, no configured bootstrap flow exposes them.
+
+## What the separate dependency does (do not conflate with this add-on)
+
+Current Drupal.org documentation calls `drupal-devkit` a cross-harness skill registry/installer: it advertises eight harness emitters and per-harness plugin/skill/context-file placement. Its own page also states it is not covered by Drupal's security advisory policy. It is a separate project with a separate GPL-2.0-or-later license and therefore warrants a separate source/test/security audit before borrowing. Even if its skill porting is sound, its documented data plane is skills/plugins/context files, not imported ChatGPT/Codex conversation sessions or Claude Desktop Chat/Cowork/Code state.
+
+## Nexus Memory disposition
+
+Primary candidate: exclude as core engine; retain as a weak infrastructure reference for (a) a DDEV-container deployment adapter and (b) the principle that AI tool API credentials should be isolated inside the target runtime. The concrete wrapper is not presently safe/reproducible enough to reuse as-is. Potential follow-up: separately audit the upstream Drupal Devkit core as a resource-plane candidate, including its marketplace resolution, emitted file trees, pinning, rollback, tests and license; do not call that session migration.
+
+Primary sources:
+- Reviewed GitHub source: <https://github.com/AJV009/ddev-drupal-devkit/tree/main>
+- GitHub repository snapshot (0 stars/forks, 4 commits, only three top-level payload entries): <https://github.com/AJV009/ddev-drupal-devkit>
+- GitHub Releases: <https://github.com/AJV009/ddev-drupal-devkit/releases> (no releases listed)
+- DDEV add-on structure/testing/removal requirements: <https://docs.ddev.com/en/stable/users/extend/creating-add-ons/> and <https://github.com/ddev/ddev-addon-template/blob/main/README.md>
+- DDEV secret-file and `web_environment` locations: <https://docs.ddev.com/en/stable/users/configuration/environment-variables/>
+- Separate Drupal Devkit overview and harness matrix: <https://www.drupal.org/project/drupal_devkit>
+- Separate Drupal Devkit releases: <https://www.drupal.org/project/drupal_devkit/releases>

@@ -1,0 +1,59 @@
+# CTOUT/agentsmith — pinned source, test, and disposable runtime review (2026-11-22)
+
+## Identity and provenance
+
+- Repository: https://github.com/CTOUT/agentsmith
+- Isolated shallow clone: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-CTOUT-agentsmith-20261122`
+- Exact captured `main` HEAD: `fded2989b580230e43467e36369964ef3cbc5e60` (commit date 2026-11-09); GitHub currently shows 13 commits, 0 stars, 0 forks; MIT.
+- The only visible release is v0.1.0 (released 2026-11-02, tag commit prefix `44f3204`), so the reviewed main checkout is newer than the released npm version.
+- GitHub Actions lists 30 workflow runs and several workflows. The latest visible **CI** run is #21 on Dependabot PR #7 (Nov 19, 2026); the rendered page did not establish a CI run tied to captured `fded2989`. Do not imply the latest main HEAD is CI-verified.
+- CodeGraph initialization (candidate-local `.codegraph`): 40 files, 290 nodes, 1,125 edges; status current. Retained `.codegraph/.gitignore` and removed only its `!.gitignore` exception. Candidate `git status --short` was empty after setup and review; all builds/tests/POCs ran on a separate `/tmp` copy.
+- Main implementation: TypeScript, `@ctout-uk/agentsmith` 0.1.0, Node `>=24`; local test runtime Node v26.7.0/npm 11.19.0.
+
+## Implemented scope and fit for Nexus Memory
+
+`agentsmith` is a local asset sync/install manager, not a conversation/session importer. README says it syncs the GitHub `awesome-copilot` catalogue and installs assets to VS Code, Kiro, or Antigravity in repo or user scope. Source code confirms the target union is exactly `vscode | kiro | antigravity`; the current adapters are only VS Code, Kiro, and Antigravity. Roadmap marks Claude Code, Cursor, Warp, and Codex adapters as planned, not implemented.
+
+- Canonical records contain asset id/type/title/description/source/local path/directory flag/content hash/setup metadata/tags; subscriptions add target, repo/user scope, absolute installed path, installed/source hashes and timestamps. No Project, Section, Session, message/event/turn, branch/fork, subagent, attachment graph, token/cost, memory, schedule, or account/cloud entity exists.
+- The only source adapter is `awesome-copilot`; current scan code reads `instructions/`, `agents/`, legacy `chatmodes/`, and `skills/`. `AssetType` also declares `plugin`/`workflow`, but current source scan does not produce them and target adapters return unsupported/no path for those types. No MCP server or credential transfer is implemented.
+- The target adapters use an explicit `native | adapted | unsupported` outcome and report frontmatter changes. They map VS Code `applyTo` to Kiro `inclusion/fileMatchPattern` or Antigravity `trigger/globs`; some target adapters explicitly omit agent fields such as `chat-tools`, `handoffs`, and `target` and list those omissions. This structured degradation is a useful pattern, but only for markdown assets.
+- Positive architecture reference: separate source/target adapters; explicit target+scope identity; per-asset hashes; local-edit detection; dry-run; tracked subscriptions; and reported frontmatter adaptation. Nexus can reuse the pattern for a resource plane only; it cannot replace the canonical session/event/relationship graph or the separate Claude Desktop Chat/Cowork/Code acceptance adapters.
+- All user-confirmed Claude targets remain separate: Desktop third-party-gateway **Chat, Cowork, and Code, all three**, plus local/self-hosted Claude Code. `agentsmith` gives no evidence for any of those modes, an API gateway/session import, or Anthropic-hosted Cloud.
+
+## Test/build results
+
+Dependencies and build were isolated under `/tmp/nm-agentsmith-review-20261122/repo`; no application asset sync, local profile, provider request, or user target was used.
+
+- `npm ci --ignore-scripts --no-audit --no-fund` reported 198 packages added. Install scripts were intentionally disabled; the platform-specific build was still exercised.
+- First `npm test` before building exited 1: 65/72 passed and the 7 CLI tests failed because `bin/agentsmith.js` imports missing generated `dist/cli.cjs`. This is consistent with CI order, which builds before testing; it means the test script is not standalone on a clean checkout.
+- Corrected CI-order run: `npm run build` exit 0; `npm test` exit 0 (9 files, 72 tests); `npm run lint` exit 0; `npm run format:check` exit 0. These are local checks on Node v26.7.0/macOS, not a Windows/Kiro/Antigravity runtime integration test.
+- CI workflow `.github/workflows/ci.yml` runs Node 24, `npm ci`, build, lint, test. Separate format workflow uses Node 22. The single release is v0.1.0 and was published before captured main.
+
+## Source/runtime findings
+
+1. **Mass-removal threshold documentation/code mismatch (dynamically reproduced).** `SECURITY.md` and release notes describe the guard as blocking removal of **at least** 25%; source `validateSyncSafety()` compares `removalRatio > MASS_REMOVAL_THRESHOLD` where the threshold is 0.25. `awesome-copilot.test.ts` covers a 2/3 removal, not exactly 1/4. Calling the actual built export with 1 removal among 4 previous assets produced literal stdout `exactly-25%: allowed`; 2/4 produced `50%: blocked: Safety check failed: mass removal detected (2/4 assets removed). Pass --force to override.`; `threshold=0.25`. Thus precisely 25% is allowed, contrary to the stated ≥25% policy. Synthetic records only; no sync or remote pull was invoked.
+
+2. **Forced directory update is not transactional (dynamically reproduced).** `installAsset()` calls `rmSync(targetPath, {recursive:true, force:true})` before `cpSync(sourceDir, targetPath, ...)`, then updates the subscription record only after the copy and hash succeed. In a disposable Node process, a synthetic Kiro/VS Code Skill had an old target `SKILL.md`, a valid subscription with `installedHash=old-hash`, and a source child deliberately chmod 000. Calling `installAsset(..., force:true)` threw `EACCES` during copy after deleting the old file. Literal post-state: `after_target_entries=[]`, `after_sentinel_exists=false`, `subscription_still_points_to_target=true`, `stored_installedHash=old-hash`. The prior content was lost while metadata still claimed it was installed. The temp directory was removed; no user files were involved.
+
+3. **Upstream version/provenance is not locked.** Sync shallow-clones/pulls `github/awesome-copilot` default branch and stores per-asset hashes/timestamps, not a pinned upstream commit or source tree identity. The hash/status design detects file changes but does not make a reviewable catalogue revision reproducible. This is a source-derived finding; no actual upstream sync was performed.
+
+4. **Path guard and removal boundary.** Target path resolvers call `assertPathWithin`, which resolves candidate/base and walks components to reject escapes/symlinks; install/remove also call it before write/delete. This is a useful default-deny pattern, but the check and subsequent filesystem operation are separate (TOCTOU risk is source-derived, not dynamically exploited). User-scope and repo-scope paths are constructed from only those trusted scopes; `assetId` rejects separators and `..`.
+
+5. **Project/session migration absent.** `Scope` is only `repo | user`; subscription grouping is flat by asset/target/scope/path. No project/container hierarchy or exported graph exists. The product copies Markdown assets and adapts frontmatter; “cross-environment” should not be interpreted as cross-Harness history migration.
+
+## Disposition
+
+Keep as an adjacent ResourcePlane example for explicit adapter outcomes, asset hashes, subscriptions, local-edit protection, and dry-run UX. Do not rank it as a session migration backend or evidence of Claude Desktop 3P compatibility. If borrowing its sync safety concepts, fix the exact-threshold boundary, make forced replacement atomic/rollbackable, and pin catalogue provenance. The repository is early-stage (one published v0.1.0, 0-star snapshot) and the public main branch is ahead of that release.
+
+## Primary source links
+
+- Repository and current README: https://github.com/CTOUT/agentsmith
+- Captured README: https://github.com/CTOUT/agentsmith/blob/fded2989b580230e43467e36369964ef3cbc5e60/README.md
+- Releases: https://github.com/CTOUT/agentsmith/releases
+- Actions: https://github.com/CTOUT/agentsmith/actions
+- CI workflow: https://github.com/CTOUT/agentsmith/blob/fded2989b580230e43467e36369964ef3cbc5e60/.github/workflows/ci.yml
+- Asset target types: https://github.com/CTOUT/agentsmith/blob/fded2989b580230e43467e36369964ef3cbc5e60/src/types.ts
+- Target registry/adapters: https://github.com/CTOUT/agentsmith/blob/fded2989b580230e43467e36369964ef3cbc5e60/src/targets/index.ts
+- Install lifecycle: https://github.com/CTOUT/agentsmith/blob/fded2989b580230e43467e36369964ef3cbc5e60/src/lifecycle/install.ts
+- Mass-removal guard: https://github.com/CTOUT/agentsmith/blob/fded2989b580230e43467e36369964ef3cbc5e60/src/sources/awesome-copilot.ts
+- Directory/file hash: https://github.com/CTOUT/agentsmith/blob/fded2989b580230e43467e36369964ef3cbc5e60/src/lifecycle/hash.ts

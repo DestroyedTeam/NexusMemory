@@ -1,0 +1,81 @@
+# Candidate #267 review — Aixand/manager-suite
+
+Review date: 2026-11-25  
+Candidate: `https://github.com/Aixand/manager-suite`  
+Checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-manager-suite-20261125-followup267`  
+Pinned source: `main` at `7be93efc46eb1068745904b0764ae77c54aaafe4` (2026-11-19; “Prepare Agent Manager 0.1.3 beta.1 after documentation checks”). Root license: Apache-2.0. GitHub snapshot: 20 commits, 0 stars, 0 forks. `git diff --exit-code` and `git status --short` are clean after ignoring the local CodeGraph index; no tracked source was modified. CodeGraph indexed 691 files/11,724 nodes.
+
+## Verdict
+
+**High-quality adjacent architecture, zero ChatGPT-to-Claude migration coverage.** This repository is a five-product suite—Agent, Conversation, MCP, Prompt, and Skill Managers—not a Harness archive converter. Preserve selected design references, but do not count it as a successful import, use it as the Nexus migration backend, or describe its native continuation as cross-provider migration. Its beta release notes explicitly say stateful rollback remains blocked until a migration-aware adapter exists.
+
+## What the code actually does
+
+### Agent Manager: same-provider continuation, not cross-Harness import
+
+- Claude Code and Copilot can continue a retained conversation in another environment of the **same provider**. Claude reuses the original native transcript path under the destination `CLAUDE_CONFIG_DIR`; Copilot links the original session directory. The destination supplies its own provider login/settings. The manager does not copy credentials, transcript bodies, or replace the session; it rejects cross-provider continuation.
+- The published qualified adapters are Linux-only and require exact provider CLI versions (Claude Code 2.1.316; Copilot CLI 1.0.105). This constrains claims to those versions/platforms; it is not a general desktop import protocol.
+- OpenCode has a more migration-like **same-provider copy**: native standalone export/import into a destination OpenCode environment, preserving a Manager-level logical conversation identity and tracking copied revisions/ancestry/branches. It creates fresh native session/message IDs. Native export omits unfinished assistant responses/running work; child-session trees, runtime state, and external artifacts are not cloned. If environments change independently, the Manager keeps branches and requires explicit branch selection. The docs mark full export/import qualification as pending because the host must permit native server listening.
+- This gives useful examples of *reference identity vs native ID*, copy lineage, revision digests, branch heads, explicit destination account selection, and refusing silent fallback. It does not ingest ChatGPT's archive/session graph or translate between providers.
+
+### Conversation Manager: new retained conversations, not native history import
+
+- The public API creates/attaches/listens to conversations recorded by its own store and retained workers. `client.conversations()` does not discover all provider-native history.
+- It models operation receipts, messages/events/turns, approvals, pending input, queues, cancellation, reconnects, and (where supported) provider transcript reconciliation. The provider-backed saved transcript path is implemented for Codex; other adapters can return no transcript.
+- Images/files, history search, message editing, and generalized branching are out of scope in the documented contract. A conversation `reference` preserves manager/native identity, but the suite does not provide a ChatGPT Projects/Section Group hierarchy or a full parent/fork/subtask session graph.
+- This is useful **new-session runtime/event-lifecycle** prior art, not a history importer.
+
+### MCP, Prompt, and Skill Managers: owned resource stores
+
+- The managers import local/GitHub MCP definitions, prompts, and Skills into manager-owned stores and have explicit reconciliation/versioning/export workflows.
+- Importing content is separate from delivery: the integrating application chooses when and where accepted content is installed. Opening a store does not automatically adopt existing Harness data. No project-session dependency graph, secrets/account credential migration, installed-plugin mapping, schedule importer, or target-specific ChatGPT/Codex/Claude Desktop configuration importer was found.
+- These are relevant ResourcePlane ideas (ownership, provenance, immutable snapshots, explicit delivery), not evidence that arbitrary Skills/MCPs/plugins transfer with a session.
+
+## Nexus target matrix
+
+| Requested object | Candidate evidence | Disposition |
+|---|---|---|
+| ChatGPT Projects / Section Groups | No source adapter or corresponding object graph. “Project” in resource managers is a workspace/source connection, not ChatGPT project membership. | No coverage |
+| ChatGPT session/parent/branch/subtask hierarchy | No ChatGPT archive parser. OpenCode's same-provider copy ancestry is the only meaningful branch/reference design. | Partial design reference only |
+| Transcript turns, edits, interruptions, tool events, attachments, usage/tokens, links | Conversation Manager has live events/queues and bounded provider history, but not a lossless cross-provider archive format; assets/complete tool state are not migrated. | No source-to-target fidelity claim |
+| Skills, MCPs, plugins, project memory, schedules | Owned-resource import for Skills/MCPs/Prompts; no broad per-Harness dependency extraction, plugins, memory stores, or schedule adapters. | Narrow resource-management reference |
+| Claude Desktop third-party-gateway Chat/Cowork/Code | No Desktop-specific reader/writer or mode-specific schema. | No coverage for any of the three confirmed modes |
+| Local/self-hosted Claude Code with API key/gateway | Native CLI profile/session continuation exists for a constrained Linux+version path. Credential homes stay provider-owned; no gateway-mode migration test or ChatGPT import/export. | Not qualified for requested import path |
+| Hosted Claude Cloud / Claude Code Cloud | No hosted-cloud session API or transfer adapter. | No coverage; do not conflate with local API-key operation |
+
+## Quality and execution evidence
+
+All five component `dev.sh check` commands completed successfully after installing the repository's declared toolchain (`uv 0.12.7`) in a disposable environment. Component tests were run from the pinned checkout; no authenticated model turn, user profile, user session, or credential was accessed.
+
+| Component | Observed test result | Notes |
+|---|---|---|
+| Conversation Manager | `Ran 278 tests in 36.349s`; `OK (skipped=59)` with `TMPDIR=/private/tmp`. | A first run under the default macOS temp path failed 7 assertions because `/var/...` and `/private/var/...` differ lexically; setting the temp root to `/private/tmp` made the same suite pass. |
+| Agent Manager | `Ran 862 tests in 48.945s`; `FAILED (failures=1, errors=44, skipped=80)`. | The 44 errors report `Could not read OpenCode V2 session metadata` while fixture setup reads a synthetic SQLite session store; one separate policy test expected an error containing `changed` but none was raised. Do not treat this local run as a green qualification. |
+| MCP Manager | `Ran 84 tests in 10.494s`; `FAILED (failures=1, skipped=1)`. | The single failure expected a captured-wheel install to complete; its temporary Python 3.11 `-m ensurepip --upgrade --default-pip` subprocess terminated with `SIGABRT`. |
+| Prompt Manager | `Ran 215 tests in 5.654s`; `OK`. | No provider runtime exercised. |
+| Skill Manager | `Ran 134 tests in 5.179s`; `FAILED (errors=2, skipped=1)`. | Both errors are in `test_sources.py`; mocked `subprocess.Popen` is a `SimpleNamespace` and does not implement the context manager expected by `subprocess.run`. |
+
+The Conversation Manager's first test attempt and the MCP/Agent/Skill failures are recorded rather than hidden. These are local suite outcomes, not claims that the package is secure, production-ready, or qualified for the target integrations. No full five-manager suite pass was observed.
+
+## Reuse decision
+
+Keep only these implementation concepts for future Nexus design comparison:
+
+1. Separate stable logical-conversation references from provider-native session IDs.
+2. Record explicit source/destination identity, immutable transfer requests, operation receipts, idempotency and recovery states.
+3. Model copy revision ancestry and multiple heads as explicit branches rather than silently merging/overwriting.
+4. Separate ResourcePlane acquisition/review from application-specific delivery; retain provenance and hashes.
+5. Treat native continuation as a constrained adapter with exact platform/version checks and provider-owned credentials.
+
+Do not copy code wholesale or claim coverage until tests validate source archive parsing, destination-specific writes, project/section membership, attachment/tool-event fidelity, resource dependency detection, error recovery, and per-mode post-import reopen behavior. Candidate is **adjacent prior art, not a migration-engine finalist**.
+
+## Sources
+
+- Repository/license/scope: https://github.com/Aixand/manager-suite
+- Conversation Manager: https://github.com/Aixand/manager-suite/tree/main/conversation-manager
+- Claude/Copilot continuation: https://github.com/Aixand/manager-suite/blob/main/agent-manager/docs/file-session-continuation.md
+- OpenCode copy/branch continuation: https://github.com/Aixand/manager-suite/blob/main/agent-manager/docs/opencode-continuation.md
+- Conversation API/history limits: https://github.com/Aixand/manager-suite/blob/main/conversation-manager/docs/frontend-api.md
+- Resource imports and delivery separation: https://github.com/Aixand/manager-suite/blob/main/docs/resource-imports.md
+- Beta support and rollback limit: https://github.com/Aixand/manager-suite/blob/main/docs/beta-support.md
+- Beta release notes: https://github.com/Aixand/manager-suite/blob/main/docs/beta-release-notes.md

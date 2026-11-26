@@ -1,0 +1,43 @@
+# Review: madshn/ai-playbooks — one credential-management Skill, not session migration
+
+Review date: 2026-11-23. Shallow clone of the default branch is pinned at b8f5897764f7c7c82dad47303972aeaf84c503f2 (main; 2026-04-24T20:46:24+02:00). The repo is MIT. GitHub lists five commits and no Releases; the repository has a version tag 1p-creds-v0.1.0 (peeled commit ccc722766fea9f62136a9066534ae51b8f148f76). skills/1p-creds/CHANGELOG.md is a skill changelog, not a GitHub Release. The source tree has no .github workflow, executable, package manifest, or test suite. GitHub Actions shows no run history for this repository. Source: https://github.com/madshn/ai-playbooks ; Releases: https://github.com/madshn/ai-playbooks/releases ; Actions: https://github.com/madshn/ai-playbooks/actions .
+
+## Scope and implementation
+
+The repository currently publishes one Skill: 1p-creds, a prompt/playbook for detecting repository credentials and moving environment-variable values to 1Password Environments, with a local .env mount and direnv. Its README describes a general environment-variable flow for Claude/Codex/Gemini but explicitly says Claude Code is implemented and Codex/Gemini are not ported. The only implemented variant is Claude Code-specific: .claude/creds-manifest.yaml, .claude/settings.local.json, .mcp.json, /mcp, etc. This is credential configuration/hygiene, not Skills/MCP/plugin/session content transfer.
+
+No source objects or readers/writers exist for Projects, sidebar Sections, conversations, messages, branches, subagents, attachments, workspaces, memory, scheduled tasks or artifacts. It neither reads ChatGPT exports nor writes any Claude Desktop 3P (Chat/Cowork/Code) or Claude Code session. “Cross-harness” describes environment-variable inheritance, not a harness history adapter or SessionGraph.
+
+The SKILL.md is 824 lines of natural-language workflow instructions. Phases include repo scans, a temporary plaintext /tmp/{env}-import.env, user GUI import, .envrc/.gitignore edits, FIFO/value checks, settings cleanup, file deletions, code rewrites, staging and committing. The real vault deletion path requires an explicit user yes, but its stated safety gate only blocks when the source field length differs from the Environment value; equal length is not evidence that contents match. A rotation flow also tells the user to paste the newly generated secret into the assistant conversation before entering it in 1Password. These are static workflow observations, not executed behaviors.
+
+## Security and fidelity review
+
+Positive design notes: explicit preamble/cancel gates, a user-operated 1Password import, separate legacy_source versus vault_reference metadata, a file-level rather than folder-level cleanup rule, and a do-not-migrate guard for SSH keys/certificates/kubeconfigs. The changelog says the folder-level cleanup rule followed an SSH key collateral-deletion incident; we did not independently verify that incident.
+
+Material concerns:
+- Frontmatter allowed-tools pre-approves Read, Edit, Write, Bash, WebSearch, and WebFetch; there is no disable-model-invocation field. Current Claude Code docs say listed tools are granted without per-use approval for the turn and that a skill can grant itself broad access; default model invocation is on unless disabled. This deserves explicit review before use, especially because the procedure edits, deletes and commits files.
+- The Layer 5 command uses rg -Fn to collect full matching source lines, then prints those lines. A line containing a resolved token therefore can be emitted verbatim to the tool transcript/assistant context, contradicting the stated “never logged/displayed” invariant. No secret was emitted during this review.
+- The procedure explicitly writes resolved secrets to a mode-0600 plaintext file under /tmp before importing it into 1Password. That may be a deliberate short-lived bridge, but it contradicts any literal claim that secrets never touch disk. cat .env.local, env | grep, and the rotation/paste step can also expose values in terminal or model output if not carefully redacted.
+- The vault deletion check compares only lengths. Two different values of equal length pass its stated blocker; explicit confirmation is present, but the check is not a content-identity check.
+- Phase H stages and commits changes automatically when the workflow declares itself green. A prompt does not provide a transaction log, backup/rollback engine, deterministic parser or repeatable tests.
+
+## Current upstream documentation cross-check
+
+Checked official 1Password docs on 2026-11-23:
+- Environments can hold per-project variables; the local .env mount is documented for Mac and Linux, requires the desktop app, and returns values on an authorized terminal read: https://developer.1password.com/docs/environments/ and https://developer.1password.com/docs/environments/local-env-file/ .
+- The local .env page describes a mounted .env file and not a FIFO contract; the Skill’s FIFO implementation claim was not independently confirmed by current official docs or a runtime test.
+- The programmatic-read page lists a change dated Nov 17, 2026: op environment read is to be deprecated and removed Jan 20, 2027, with op environment secret list / op run --environment as replacements. The page still calls the date “upcoming” although it is past as of this review; treat current CLI behavior/version as unresolved, not as validated. The playbook README still advertises op environment read plus SDK access. The SKILL does not execute that command in its documented local-mount flow.
+- The SKILL's duplicated Phase-D explanation says Environments are still in beta. Current official docs reviewed describe the feature and do not carry that beta label; do not propagate the old status claim without a fresh account/version check.
+
+Current Claude Code docs confirm that skills are prompt files and that the allowed-tools frontmatter is a per-invocation approval grant; automatic invocation is on by default unless disabled: https://code.claude.com/docs/en/skills .
+
+## Static checks / limits
+
+- CodeGraph was initialized and status-checked: 0 code files, 0 nodes, 0 edges; its index is up to date. The repository contains seven Markdown files plus the MIT license, and no executable source/test harness or .github directory.
+- Markdown-local-link scan found one broken relative link: skills/1p-creds/README.md points to ../LICENSE (which resolves to missing skills/LICENSE; the repo license is at ../../LICENSE). The Skill also refers to missing references/harness-claude-code.md, harness-codex.md, harness-gemini-cli.md, and a not-yet-landed cloud-provisioning.md.
+- A pattern-only static scan over seven Markdown files found zero strings matching the selected high-confidence token shapes; this is not proof that no secret-like or sensitive content exists.
+- No Skill was invoked and no 1Password account, environment, credential, repository with user secrets, or Claude Code session was accessed. We did not create plaintext test material, edit a user's project, use op, or delete any vault item. No functional claim or security guarantee is implied.
+
+## Disposition
+
+Classify as a narrow credential-hygiene ResourcePlane Skill with some useful manifest and credential-scope concepts, not as a cross-Harness migration product. Reject it as a SessionGraph/project/section migration adapter and as proof of universal Skills portability. Its model-assisted, human-GUI workflow does not meet the requested no-AI, deterministic, versioned universal migration goal. Any future credential-adapter reference should preserve the separation of secret identifiers from secret values and fix the secret-output, equality-check, disclosure, and explicit-review risks before reuse.

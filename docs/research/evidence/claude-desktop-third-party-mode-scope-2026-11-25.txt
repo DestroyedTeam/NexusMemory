@@ -1,0 +1,20 @@
+Claude Desktop third-party inference scope check — 2026-11-25
+
+User confirmation
+- The requested destination covers Claude Desktop Chat, Cowork, and Code as three separate acceptance lanes, plus local/self-hosted Claude Code as a fourth lane. The user clarified that “Cloud” refers to the Claude client and its session management, with an API-key/third-party-gateway route, not only Anthropic-hosted cloud sessions.
+- This records scope, not a successful migration or a live gateway test. No account, API key, real user session, or local Claude history was accessed.
+
+Official documentation reviewed
+1. Claude Code Docs, “Connect Claude Code to an LLM gateway” (https://code.claude.com/docs/en/llm-gateway-connect): the Desktop app reads third-party-inference routing from the app’s third-party inference configuration, not ANTHROPIC_BASE_URL or settings.json. Local configuration path is Help > Troubleshooting > Enable Developer Mode, then Developer > Configure Third-Party Inference. It documents gateway credentials and static API-key auth. It says Anthropic-hosted cloud sessions are not part of a gateway deployment.
+2. Claude Desktop 3P docs, “Deploy Claude Desktop on 3P with an LLM gateway” (https://claude.com/docs/third-party/claude-desktop/gateway): a self-hosted gateway must implement Anthropic Messages API POST /v1/messages with streaming and tool use; GET /v1/models is optional. The docs explicitly say Chat, Cowork, and Code sessions send requests to the configured gateway. It also says the gateway should preserve prompt-caching/tool/system fields; stripped cache_control can increase reprocessing cost and latency.
+3. Same official page: static API key, interactive IdP sign-in, or credential helper are documented. In-app developer configuration can set Gateway provider, static API key, base URL, and Bearer or x-api-key auth. Admin-managed config can take precedence. A configured gateway removes Anthropic-hosted cloud environments from the environment selector and disables Remote Control.
+
+Observed scope result
+- Chat (Claude Desktop 3P): gateway inference is officially documented; cross-Harness conversation/session import remains unverified/not implemented.
+- Cowork (Claude Desktop 3P): gateway inference is officially documented in the same 3P deployment docs; preserve as its own acceptance lane because its project/task/plan/files/scheduled-work behavior differs from ordinary Chat. Anthropic-hosted Cowork/cloud session behavior is a distinct non-gateway lane.
+- Code (Claude Desktop 3P): gateway inference is officially documented; preserve its Code-tab/Claude Code repository/session/runtime behaviors separately from Chat and Cowork.
+- Local/self-hosted Claude Code: separately documented gateway route via ANTHROPIC_BASE_URL plus ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY (and settings or environment); do not equate CLI storage with Claude Desktop session storage.
+- No external third-party gateway was configured or called, so routing is documentation-verified only. Do not claim end-to-end acceptance or session migration accuracy.
+
+Architecture/plan consequence
+- Keep four distinct destination adapters and acceptance matrices. The Desktop modes can share transport primitives only after capability negotiation; share no assumed project/session schema. Mark hosted cloud session as a separate target whose gateway/API-key path is not supported by these third-party-inference docs.

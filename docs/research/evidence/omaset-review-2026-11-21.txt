@@ -1,0 +1,36 @@
+NEXUS MEMORY CANDIDATE REVIEW — b2amedina/omaset
+Review date: 2026-11-21 (Asia/Shanghai)
+Disposition: adjacent local desktop-settings manager and MCP control plane; not a Harness/session migration system. No upstream source changes were made.
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/b2amedina/omaset
+- Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-b2amedina-omaset-20261121
+- Default branch master; exact checkout/origin HEAD: 5548b2789706a950f3d954fd234190ee4d9d367d. Git status was clean.
+- Repository metadata snapshot: MIT, 2 stars, 0 forks, 0 open issues, created 2026-10-18, latest push 2026-11-16, updated 2026-11-11; manifest version 0.3.0. Root LICENSE is present. No .github/workflows directory was present.
+- CodeGraph was already initialized for this checkout: 41 indexed files, 680 nodes, 1,989 edges; status up to date. Source footprint is Lua plus a small JS/Python surface.
+
+WHAT IT ACTUALLY DOES
+- Omaset is an Omarchy/Linux settings manager: a Quickshell UI, CLI, and stdio MCP server share a typed settings schema and backend registry. The MCP tools expose settings search/schema/get/set/reset/undo/history; the UI and CLI operate on local Omarchy/Hyprland settings. It targets Omarchy, not arbitrary Harness runtime state.
+- The setting called “schedule” is a display/night-light schedule, not an AI session or agent automation scheduler.
+- It is not a transcript/event store, project hierarchy importer, memory vault, or multi-provider adapter. No ChatGPT/Codex Project or Section Group, conversation Session/message/branch/subtask tree, attachment, tool-call ledger, usage/token/cost record, schedule migration, or ChatGPT-to-Claude writer was found.
+- Claude Desktop Chat, Cowork, and Code are all unsupported as session sources or targets. A helper returns a Claude Desktop config filename, but CodeGraph/source caller review found it referenced only by tests; runtime discovery/injection works against Claude Code settings and Codex config, not Desktop’s Chat/Cowork/Code stores or a third-party API-key gateway session format.
+- Positive design ideas only: a shared schema/control plane used by UI/CLI/MCP, value-by-value edits rather than full-file rewrites, explicit history/undo, validation before apply, and process/output bounds. These patterns do not provide conversation fidelity or cross-Harness restore.
+
+TEST / PLATFORM EVIDENCE
+- The host lacked lua5.1. Lua 5.1.5 was built in a temporary location and tests ran on a disposable copy; no source changes were made to the upstream checkout. Compatibility-only test harness adjustments were made in that temporary copy (including a Lua PATH shim for the MCP install test and a GNU-style stat wrapper on macOS).
+- Result: 23 of 29 shell tests reported passing; 6 failed. Failures observed: test_custom_values, test_shell_json, and test_workspace_layout expected wc output “0” but got BSD/macOS’s whitespace-padded “       0”; test_i18n could not find the Omarchy locale registry at /usr/share/omarchy/default/i18n/locales.json; test_rpc_reap could not start setsid because it is absent on macOS; test_util included the same BSD wc formatting mismatch after its missing-parent temp-file case. The temporary fixture also lacked the Omarchy i18n registry. Do not claim a full passing suite; the outcome is a macOS/fixture compatibility result, not a Linux upstream CI result.
+- No CI workflow directory was found. No live Omarchy compositor/system settings were touched; test fixtures and scratch roots were disposable.
+
+SOURCE / SAFETY NOTES
+- The documented writer creates a sibling mktemp file (0600), preserves an existing mode, writes then renames atomically; it does not create the missing parent directory. The command runner wraps subprocesses in GNU timeout and caps captured output. The tests assert these properties, but test suite macOS assumptions above limit confidence in this host run.
+- The backend scope is local desktop configuration. MCP installation/runtime config handling is not a credential-transfer design for Nexus; no secrets or user agent profiles were imported during review.
+- No destructive/path-escape behavior was confirmed in this candidate. Do not infer that the absence of a reproduced issue is a complete security audit.
+
+SOURCES
+- GitHub repository and MIT license: https://github.com/b2amedina/omaset
+- Pinned source tree: https://github.com/b2amedina/omaset/tree/5548b2789706a950f3d954fd234190ee4d9d367d
+- Pinned settings writer: https://github.com/b2amedina/omaset/blob/5548b2789706a950f3d954fd234190ee4d9d367d/lib/omaset/util.lua
+- Pinned test runner and tests: https://github.com/b2amedina/omaset/tree/5548b2789706a950f3d954fd234190ee4d9d367d/tests
+
+CORPUS STATE
+- Original GitHub corpus: 88/303 reviewed, 215 pending after this review; next candidate: dougrn/MCP-MegaBrain. This single-candidate increment is not proof of broad-market coverage or universal compatibility.

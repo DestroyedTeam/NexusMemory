@@ -1,0 +1,39 @@
+# Candidate #261 review — Rylaispirit/grok-build-manager (2026-11-24)
+
+## Decision
+**Adjacent local UI/management tooling for Grok Build CLI; not a cross-Harness importer/exporter or session portability engine.** It demonstrates a project/session/run dashboard and manages Git/worktrees/MCP/plugins/permission settings for one native CLI. It does not import ChatGPT Destruction Era Projects/Sections/Chats or create Claude Desktop Chat, Cowork, Code or Claude Code API-key/gateway sessions. Its local server security boundary is not safe to adopt as-is.
+
+## Provenance and license
+- Public repository: https://github.com/Rylaispirit/grok-build-manager. GitHub's current repository page showed 1 star, 0 forks and one commit; its releases page says there are no releases.
+- Checkout is `main` at `59359831ddf6c687d8b0abf48e2bcbcde0c42f80`, commit date 2026-07-12, message `feat: initial Grok Build Manager release`. `git ls-remote origin refs/heads/main` matched the shallow-clone HEAD. No tag refs were returned. Remote: https://github.com/Rylaispirit/grok-build-manager.
+- `LICENSE` and `package.json` declare MIT; package is `private: true`, version 0.1.0, requires Node >=20, and has one production dependency (`lucide`). `NOTICE.md` says the independent project is not endorsed or maintained by xAI and that MIT does not grant third-party trademarks/assets.
+- Primary sources: local pinned source (`README.md`, `SECURITY.md`, `NOTICE.md`, `server.mjs`, `public/app.js`, `test/server.test.mjs`), remote `main` ref, and official GitHub repo/release pages. No user Grok account, API key, actual CLI, or session store was accessed.
+
+## What the implementation actually does
+- A local web UI that requires the Grok Build CLI and a Grok account. `server.mjs` runs fixed `grok`/`git` executable names using `spawn(..., shell:false)`; bootstrap calls `grok version`, `models`, `inspect`, `sessions list -n 50`, `worktree list`, `mcp list`, `plugin list`, `update --check`, plus Git inspection.
+- Projects are user-selected filesystem directories. Native session summaries are parsed as ID, created/updated dates, status and summary. The UI can resume/fork via native Grok CLI flags, export a session to Markdown (`grok export <id>`) or delete it. There is no conversation importer, full-fidelity portable export schema, or cross-provider restore API.
+- MCP/plugin operations are Grok CLI management actions (list/add/remove/doctor, install/enable/disable); Skills/hooks are displayed as Grok-local extensions. These are not generic resource records and are not transported to another Harness.
+- No ChatGPT source adapter, Project/Section Group model, ChatGPT branch graph, Claude Desktop Chat/Cowork/Code adapter, Anthropic API key integration, or Claude Code API-gateway session writer was found. The product is a one-Harness manager, not a cross-Harness session/data format.
+
+## Security and synthetic runtime probe
+**Positive controls:** the server binds to `127.0.0.1`; child processes are spawned without a shell; actions are enumerated in handlers; Git file commands use `--`; the security policy explicitly warns not to expose/reverse-proxy the service without authentication, CSRF protection and HTTPS.
+
+**Security gap:** source review found no authentication, Host/Origin allowlist, CSRF token or Origin validation in the HTTP handler. `body()` parses JSON regardless of `Content-Type`; `/api/runs` accepts `permissionMode: bypassPermissions`. UI confirmation is not an endpoint authorization boundary (the session-delete UI confirms, while the server route just dispatches).
+
+A synthetic isolated runtime probe started the server on an ephemeral loopback port, set an isolated HOME/GROK_HOME/PATH and installed a temporary fake `grok` executable; no actual Grok CLI ran. It sent `POST /api/runs` with `Origin: https://attacker.example`, `Content-Type: text/plain`, and JSON containing a synthetic prompt + `permissionMode: bypassPermissions`. Observed: HTTP 200; no `Access-Control-Allow-Origin` response header; NDJSON `meta`, fake JSON message and `process_end` code 0; fake argv included `--permission-mode
+bypassPermissions`. This proves the local server accepted the cross-origin header and invoked its configured executable without server-side CSRF/authentication. This was a direct Node HTTP-client probe, **not** a real-browser test; current browser Local Network Access behavior was not evaluated. No files were changed by the fake executable.
+
+## Verification
+- Pinned source: `npm ci --ignore-scripts --no-audit --registry=https://registry.npmjs.org` succeeded (`added 1 package`); tracked `package-lock.json` remained byte-identical (SHA-256 `20af2fc06b94b7b651ae6b0e53c1a2536f42cf6fac0e10b5eb1f6dcabcbe6a67`).
+- `npm test`: exit 0, 2 passed, 0 failed. The only tests are CLI-output parsers and serving the app shell; no `/api/*`, Origin, auth, CSRF, file-boundary, session, plugin or MCP security route test exists.
+- `npm audit --omit=dev` using the environment's default `registry.npmmirror.com` failed because its audit endpoint is not implemented; retry `npm audit --registry=https://registry.npmjs.org --omit=dev` exited 0 and reported `found 0 vulnerabilities` for the locked dependency set. This does not assess the Grok CLI, plugins/MCP servers or application logic.
+- Node v26.7.0/npm 11.19.0. No UI/browser end-to-end, real Grok login, migration accuracy or target restore was tested.
+
+## Nexus Memory disposition
+Keep only as a **single-Harness manager UI and permission/worktree/MCP control-plane reference**. Its native session summary/export is provider-bound; `grok export` produces Markdown, not a canonical graph with source events/assets. Never reuse its unauthenticated local API unchanged: add per-launch random CSRF/access token, exact Host/Origin validation, appropriate loopback/browser protections, and explicit authorization for runs/destructive/resource operations, with route-level regression tests. The probe's specific path used `bypassPermissions`; retain it as evidence, but don't claim a browser exploit was reproduced.
+
+## Primary sources
+- https://github.com/Rylaispirit/grok-build-manager
+- https://github.com/Rylaispirit/grok-build-manager/releases
+- https://github.com/Rylaispirit/grok-build-manager/blob/main/SECURITY.md
+- https://github.com/Rylaispirit/grok-build-manager/blob/main/server.mjs

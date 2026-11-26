@@ -1,0 +1,35 @@
+CANDIDATE #300 — Shivala-08/contex-landing-page; manual addition #22 — linked Shivala-08/context-shifter
+Review date: 2026-11-25
+
+Scope and provenance
+- Primary catalog candidate is a MIT static landing-page repository, pinned locally at 1153db84921a420acf61512b0079a613b4ad4cfc (2026-09-15). Root LICENSE was read and verified. Its PRD/TRD describe a one-page static site, not a transfer engine or app source tree. Website source links to the separate `Shivala-08/context-shifter` project.
+- Followed that explicit link as companion-product evidence (not a replacement for catalog identity). Companion app checkout pinned at cc78f2bfaeb84732cc9932fb176785d29651180b (2026-09-20); MIT LICENSE verified. The companion has a SwiftUI/AppKit macOS app and a Node CLI.
+- CodeGraph initialization was attempted on the companion clone using the mandated `rtk codegraph init --yes <path>` form but returned `error: unknown option '--yes'`; indexing is not claimed. Targeted source inspection and project tests were used instead.
+
+What it actually does
+- The macOS app captures selected text from an app using Accessibility/clipboard fallback or accepts pasted text, calls a selected extraction model, renders one structured card and lets the user copy it into a new session. This is generic text handoff, not a native destination adapter or archive import.
+- The CLI accepts plain text and official ChatGPT / Claude `conversations.json` exports (`--from chatgpt-export|claude-export`), converts the selected conversation to speaker-labeled text and asks a model to create one compact context card. The fixed v1 card contract is a local Captured-on date plus Goal, Key Decisions, Constraints & Preferences, Current State, Resources & Links and Open Questions.
+
+Observed fidelity boundary from source
+- ChatGPT export conversion walks only `current_node` → parents and outputs a linear `Role: text` transcript. Non-string content parts become `[non-text part]`; branch alternatives and graph edges are not emitted. The conversion omits stable message IDs, timestamps, title/update metadata and other raw event fields. It therefore selects the visible path, not a faithful graph archive.
+- Claude export conversion walks chronological `chat_messages`, emits sender and text, and retains only textual content blocks. Message/conversation IDs and timestamps present in its input type are not included in the output; non-text blocks are filtered.
+- Both flows then summarize into the same six-section Markdown card (or a JSON wrapper of that card). The schema has no source session ID, project/section path, parent-child/fork/subtask links, message/tool event graph, source token/usage records, attachment bytes, Skills/MCP/plugins, memory, schedule or target-native continuation metadata. URLs are guarded against fabrication, but that is not round-trip fidelity.
+- The product requires an extraction model call; Ollama is the local default and cloud backends are opt-in. The Swift app hardcodes Anthropic `api.anthropic.com`. The CLI's normal Anthropic backend factory does not expose a custom third-party gateway URL; other API-compatible providers are summarization backends, not Claude Desktop Chat/Cowork/Code session adapters. Generic capture from text selected in one of those apps does not mean native import/resume for any of the three modes or local Claude Code.
+- App Releases page lists source releases; the README says the release is currently source-only and a signed DMG is planned.
+
+Verification
+- In the linked app repository, `rtk npm ci --prefix cli --ignore-scripts` installed 3 dev packages. `rtk npm test --prefix cli` exited 0: 142 tests passed, 0 failed. The test command syncs the generated CLI prompt; subsequent `rtk git status --short` was clean. Parser tests use synthetic shapes/fixtures and mocked backends; no real transcript, account, API key or model request was used. npm package retrieval was the only network activity from this test step. No round-trip fidelity or cross-Harness accuracy benchmark was found in the reviewed repositories/docs.
+
+Disposition
+- Valuable adjacent prior art for local-first capture, provider-pluggable summarization, official ChatGPT/Claude export parsing, fixed card contracts and schema validation. It is not a migration engine and does not preserve the data model the user asked to move. Do not use the context card as Nexus Memory's canonical archive. Nexus should retain a loss-aware immutable source graph/archive and treat the card as an explicitly lossy, optional, reviewable projection. Native target adapters, hierarchy mapping, assets, Skills/MCP/plugins, memory, schedules, secrets policy and mode-specific verification remain separate work.
+
+Sources inspected
+- https://github.com/Shivala-08/contex-landing-page/tree/1153db84921a420acf61512b0079a613b4ad4cfc
+- https://github.com/Shivala-08/contex-landing-page/blob/1153db84921a420acf61512b0079a613b4ad4cfc/PRD_landing.md
+- https://github.com/Shivala-08/contex-landing-page/blob/1153db84921a420acf61512b0079a613b4ad4cfc/TRD_landing.md
+- https://github.com/Shivala-08/context-shifter/blob/cc78f2bfaeb84732cc9932fb176785d29651180b/README.md
+- https://github.com/Shivala-08/context-shifter/blob/cc78f2bfaeb84732cc9932fb176785d29651180b/cli/README.md
+- https://raw.githubusercontent.com/Shivala-08/context-shifter/cc78f2bfaeb84732cc9932fb176785d29651180b/cli/src/parsers/chatgpt-export.ts
+- https://raw.githubusercontent.com/Shivala-08/context-shifter/cc78f2bfaeb84732cc9932fb176785d29651180b/cli/src/parsers/claude-export.ts
+- https://raw.githubusercontent.com/Shivala-08/context-shifter/cc78f2bfaeb84732cc9932fb176785d29651180b/shared/card-spec.md
+- https://github.com/Shivala-08/context-shifter/releases

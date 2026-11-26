@@ -1,0 +1,45 @@
+# keynv-labs/keynv source review — 2026-11-21
+
+## Identity, provenance, and disposition
+
+- Repository: https://github.com/keynv-labs/keynv
+- Checked-out TARGET: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-keynv-labs-keynv-20261121
+- Exact HEAD: d179d30e4131b2198f272d5b3712d8aaa9582927; MIT; TypeScript; 3 stars / 2 forks in repository metadata.
+- GitHub lists v0.1.0-rc.25 as latest release, marked prerelease and dated 2026-07-13; main last push observed 2026-07-15. The local CLI manifest/build reports 0.1.0-rc.21. Treat GitHub release and package tag separately from local source version.
+- Classification: adjacent secrets/privacy and text-redaction layer; NOT a cross-Harness migration utility. Do not put it on the Nexus Memory migration-engine shortlist. It has no ChatGPT/Codex Projects, Section Groups, Session/message/branch/subtask graph, native import/export, attachment/event/token ledger, MCP/plugin converter, persistent agent memory converter, schedule converter, or Claude Desktop Chat/Cowork/Code destination adapter.
+- The user confirmed that all three Claude Desktop modes—Chat, Cowork, Code—are in scope. Keynv documents Claude Code transcript and Cursor log surfaces only; no evidence of support for any of the three Claude Desktop session stores or the Desktop third-party-inference gateway was found.
+
+## Implementation observations
+
+- The README identifies keynv as a self-hosted secrets vault with aliases instead of exposing secret values to agents. Its MCP tools are for vault identity/list/use/redact/test-connection workflows. Its Project term means vault project/environment scope; Session is web authentication/session state, not a conversation transcript.
+- The text-surface abstraction scans raw text in supported surfaces including Claude Code JSONL and Cursor logs; it can report match previews and redact text. It is not a semantic event importer/serializer: preserving valid JSONL syntax does not preserve or transform a provider session graph.
+- packages/text-surfaces/src/rewrite.ts reads the entire file, redacts the in-memory string, optionally copies a backup, writes a temp file, fsyncs it and renames it over the source. A backup retains the original plaintext secret. The active-file guard can be overridden.
+- apps/cli/src/watcher/watcher.ts calls rewriteFile with includeActive true and backup false. The watcher uses a 1-second default debounce. The checked-in source comment explicitly warns that a concurrent append between read and rename can be lost; source/docs also describe no cross-process file lock. Watch tests cover watcher lifecycle and ordinary synthetic fixtures, not a concurrent append race. This is a source-documented data-integrity risk, not a claim that a production user's transcript was damaged. A supplementary probe result was not retained as reproducible evidence, so no runtime reproduction is claimed.
+- Do not run scrub/watch against real or user-owned transcripts as part of this research. Any future privacy/redaction use would require opt-in, a concurrency-safe writer/lock or immutable copy, backup handling that does not silently retain secrets, and restore tests.
+
+## Local source/build/test review (all in disposable checkout)
+
+- CodeGraph was initialized and verified for the candidate checkout. An initial query run from the unrelated NexusMemory root returned unrelated symbols; it was corrected by running from the candidate checkout and following runWatcher -> rewriteFile. No candidate-source mutation was made.
+- Node 26.7.0 with pinned pnpm 9.12.0 install/build initially exited 1: no better-sqlite3 prebuild was available and local node-gyp compilation failed. After switching to local Node 22.23.5, pnpm install --frozen-lockfile --force exited 0; an optional Linux-musl registry lookup warning retried and did not stop installation.
+- The repo's CI-ordered prerequisite build, pnpm -r --filter '!@keynv/cli' --filter '!@keynv/web' build, exited 0.
+- Full root pnpm test exited 0: 824 passed, 1 skipped, and 10 TODO; two security test files were skipped as files. Tests prove keynv's own features, not cross-Harness fidelity.
+- pnpm typecheck exited 0. pnpm --filter @keynv/cli build exited 0. CLI --version, --help and doctor --help smoke commands exited 0; the local source build prints 0.1.0-rc.21.
+- pnpm lint exited 1 with two Biome formatting findings in apps/web/app/(authed)/projects/[id]/secrets/_components/reveal-secret.tsx and secret-dialogs.tsx. No source files were changed to fix them.
+- Latest upstream main push workflow for this SHA, Actions run 29399636088, failed the Biome lint job; recorded test jobs, gitleaks, web build, bundle smoke, typecheck and Ubuntu/Windows E2E jobs passed. This is older July evidence, not a current maintenance guarantee: https://github.com/keynv-labs/keynv/actions/runs/29399636088
+- An initial local install attempt used Node 26; a test attempt before workspace builds also failed to resolve generated @keynv packages. Both were corrected by using Node 22 and running the repository build prerequisite before the complete test suite. These were environment/setup errors, not reported as passing tests.
+
+## Dependency audit and risk boundaries
+
+- The default configured registry (npmmirror) returned ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS (exit 1). The audit was rerun against https://registry.npmjs.org and completed with findings (pnpm audit exit 1): 88 vulnerable dependency occurrences across 661 reported dependencies—6 low, 50 moderate, 28 high, 4 critical; 87 distinct advisory objects. Treat these as dependency-tree findings, not proof every code path is reachable.
+- Critical paths include next@15.5.18 in apps/web, reported for Windows-hosted RCE (GHSA-p293-qw3h-jr36), AVIF image-optimizer RCE (GHSA-2xp9-vwfh-vxw4), and SVG image-optimizer RCE (GHSA-2464-fhr4-w9xw; advisory says affected through 15.5.27, patched 15.5.28). proxy-addr@2.0.7 appears transitively beneath @modelcontextprotocol/sdk's Express/rate-limit dependencies and is covered by GHSA-jqcg-44mw-7w3h, patched in 2.0.8.
+- The current audit establishes vulnerable lockfile versions, not exploitability of the hosted deployment. The repository's MCP server uses stdio; no live service, endpoint, Windows deployment, or image optimizer exploitability was tested. Remediation and route reachability need owner review before deployment.
+
+## Source references
+
+- Pinned repository: https://github.com/keynv-labs/keynv/tree/d179d30e4131b2198f272d5b3712d8aaa9582927
+- Text surfaces: https://github.com/keynv-labs/keynv/blob/d179d30e4131b2198f272d5b3712d8aaa9582927/docs/03-text-surfaces.md
+- Threat model: https://github.com/keynv-labs/keynv/blob/d179d30e4131b2198f272d5b3712d8aaa9582927/docs/02-threat-model.md
+- GitHub releases: https://github.com/keynv-labs/keynv/releases
+- Advisories: https://github.com/advisories/GHSA-p293-qw3h-jr36 ; https://github.com/advisories/GHSA-2xp9-vwfh-vxw4 ; https://github.com/advisories/GHSA-2464-fhr4-w9xw ; https://github.com/advisories/GHSA-jqcg-44mw-7w3h
+
+Evidence boundary: source, documentation, build/test outputs, CI summaries and dependency audit only; no ChatGPT export, Claude Desktop store, user secret, API key, gateway, external account or provider request was accessed. No migration accuracy score applies because no migration/importer exists.

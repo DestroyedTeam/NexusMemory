@@ -1,0 +1,35 @@
+# Candidate review: ngmkhoi/tavily-mcp-manager (2026-11-22)
+
+## Snapshot and disposition
+
+- Pinned checkout: `ngmkhoi/tavily-mcp-manager` at `5a4fb410288422f73d186dd11faae6b7bd4a782f`, merge commit `Merge branch 'feat/mcp-install'`, dated 2026-07-30. MIT, 1 star / 0 forks in the primary index. `package.json` is 0.4.0 and `rtk npm view tavily-mcp-manager version dist-tags.latest` returned 0.4.0; GitHub exposes tag `v0.1.2` but no Releases entry. CI run 30530997658 for the pinned commit and run 30530559772 for its parent feature commit both show Success; CI matrix covers macOS/Ubuntu and Node 20/22/24 plus ShellCheck.
+- This is a shell/Node CLI for storing and rotating **Tavily search-service keys**, then launching one local stdio `tavily-mcp` server. Its MCP config adapters are Codex, Claude Code CLI, Gemini CLI, and OpenCode. “claude” means Claude Code user scope (`claude mcp add ... -s user` or `~/.claude.json` fallback), not Claude Desktop Chat/Cowork/Code or Desktop third-party inference. The key is `TAVILY_API_KEY`, not an Anthropic/provider gateway key.
+- It has no ChatGPT/Codex Project, Section/Session/transcript/subtask/branch/attachment/token graph; no generic MCP catalog/credential/OAuth transfer; no general plugin, memory, schedule or Claude Desktop adapter. Not a Nexus migrator. Keep selected secret-storage and config-preview patterns as adjacent ResourcePlane references only.
+
+## Implementation and test findings
+
+- Good patterns: separate secret values (`keys.env`) from active-key metadata (`config.json`), single-quote key values to prevent shell expansion, Node storage operations with a lock and atomic rename, `0600` writes for the key/config store, masked key output, backup-before-patch intent, JSON parse refusal, dry-run support, and using each agent's CLI where available.
+- Dynamic disposable fallback probe: with no `claude` binary on a controlled PATH, seeded only a temporary `HOME/.claude.json` with an existing `mcpServers.tavily` entry (`old-server`, custom args and placeholder token) and an unrelated server; ran `bash src/cli/tavily-manager mcp install claude` **without `--force`**, under umask `022`. The command exited 0, printed `fallback claude CLI not found, patching ~/.claude.json` and `installed Claude Code`; the old Tavily entry was silently replaced by the wrapper entry, while the unrelated server remained. It changed the fixture's pre-existing mode `0600` to `0644`; the new `.claude.json.bak` also had mode `0644` and retained the old placeholder token. This is a reproducible overwrite/permission regression in the fallback writer, not a test against user data.
+- A second disposable `mcp install all` probe deliberately provided no agent CLIs. Codex returned a manual-setup/attention condition, Gemini/Claude/OpenCode file installs were written to temporary HOME paths, the summary said `ok 3`, `attention 1`, yet the whole command exited 0. Automation cannot rely on its exit status to detect partial installation.
+- `json_patch_file` does not lock or preserve file modes when patching config; backup and temp files use the process umask. The `--force` CLI branches remove an existing server before attempting add and suppress removal errors, so failure after removal can lose the prior entry. The tests cover config content/idempotency/dry-run/invalid JSON, but do not cover file modes, backup confidentiality, fallback replacement without `--force`, concurrent config writers, or `install all` nonzero failure propagation.
+- Candidate key storage is substantially more careful than its general MCP-config writer; treat these as separate components. The manager's MCP path is one Tavily stdio service, not an adapter that imports arbitrary remote/local MCP servers, auth modes, resources, prompts, or plugin bundles.
+- Current official Claude Code docs define Local/Project/User MCP scopes: local and user settings use `~/.claude.json`, project config uses `.mcp.json`, and project-scoped MCP use can have trust/approval behavior. This confirms the repo's Claude target is Claude Code CLI config, not Claude Desktop's 3P gateway store.
+
+## Validation at pinned checkout
+
+- `rtk npm test` → exit 0, `64 passed`; tests use temporary homes and mocked Tavily `/usage`, no real API key/credits/network request.
+- `rtk npm run check` → exit 0; Bash syntax plus Node syntax checks.
+- Local runtime: Node.js v26.7.0, npm 11.19.0. No install step was needed; package has no dependency tree.
+- GitHub Actions: run 30530997658 succeeded on pinned `5a4fb41`; run 30530559772 succeeded on `a35f6e0`. The checked-in workflow runs six macOS/Linux × Node 20/22/24 test jobs plus ShellCheck; run pages include Node 20 deprecation warnings for checkout/setup-node actions.
+- CodeGraph initialized/up to date: 1 YAML file / 0 symbols; it did not index the shell sources. `.codegraph/.gitignore` retained, only its `!.gitignore` self-preserving exception removed; candidate `git status --short` was clean after tests/indexing.
+- No live Tavily key, account, agent config, Claude Desktop app, session store or user file was used. The fallback and partial-install probes deleted only their synthetic temporary HOME directories.
+
+## Primary sources checked (2026-11-22)
+
+- Repository and pinned source: https://github.com/ngmkhoi/tavily-mcp-manager ; https://github.com/ngmkhoi/tavily-mcp-manager/commit/5a4fb410288422f73d186dd11faae6b7bd4a782f
+- Pinned CI workflow: https://github.com/ngmkhoi/tavily-mcp-manager/blob/5a4fb410288422f73d186dd11faae6b7bd4a782f/.github/workflows/ci.yml
+- Pinned commit CI success: https://github.com/ngmkhoi/tavily-mcp-manager/actions/runs/30530997658
+- GitHub Releases (none): https://github.com/ngmkhoi/tavily-mcp-manager/releases
+- Official Claude Code MCP scopes and locations: https://code.claude.com/docs/en/mcp
+
+Evidence boundary: fixed checkout source/tests, isolated fixture probes, current registry query, GitHub run pages, and current official Claude Code docs. No user key, agent config, app, export or session was modified/read.

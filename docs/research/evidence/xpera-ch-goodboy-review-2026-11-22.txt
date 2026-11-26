@@ -1,0 +1,53 @@
+# Candidate #142 review evidence — xpera-ch/goodboy
+
+Review date: 2026-11-22  
+Repository: https://github.com/xpera-ch/goodboy  
+Pinned HEAD: 5e3620c87eb80fc32ff0176caa85f556615a097d  
+Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-xpera-ch-goodboy-20261122
+
+## Repository state and test evidence
+
+- GitHub metadata: 1 star / 0 forks, MIT detected, not archived, last pushed 2026-10-27T17:41:10Z. Latest release is v0.3.0 (2026-08-20); the source workspace package is @goodboyjs/cli 0.3.0.
+- Current CodeGraph index/status: 87 files / 1,247 nodes / 3,627 edges; up-to-date. .codegraph/.gitignore was kept with only the !.gitignore exception removed. Candidate checkout status is clean after the tests; generated dist/coverage/node_modules are ignored.
+- CI run 40552913237 completed successfully at pinned HEAD 5e3620c87eb80fc32ff0176caa85f556615a097d. Workflow matrix is Node 24 and 26; it runs npm ci, generated-types verification, CLI build, end-to-end tests, registry-client build, coverage thresholds, and a forbidden-shell/eval pattern gate.
+- Local runtime was Node v26.7.0. Dependency installation used rtk npm ci --ignore-scripts --no-audit → exit 0 (156 packages); package lifecycle scripts were intentionally not run. Then verify:types → exit 0; CLI build → exit 0; CLI E2E → exit 0 (5 tests); registry-client build → exit 0; forbidden pattern gate → “No forbidden patterns found.”
+- First local coverage attempt exited 1 because the repo-wide domain-name scan read the generated CodeGraph database .codegraph/codegraph.db, which contained the prohibited domain text. The DB was moved to /tmp for the test only, then restored with identical SHA-256. Rerun coverage → exit 0: 36 files, 776 passed, 3 skipped; 100% statements/functions/lines and 99.83% branches. This was test-environment contamination, not a source test failure.
+- Synthetic probes used a temporary HOME under the OS temp directory and removed all fixtures afterward. No user home, credentials, model/API, remote registry, Claude Desktop store, or production target was accessed.
+
+## Product/data scope
+
+GoodBoy is a local-first personal Skill registry and installer, not an agent conversation/session migration product. Its current Phase 1 registry is a local directory; the @goodboyjs/registry-client package explicitly throws “not implemented — Phase 3 only” for search/get/publish. Adding/adopting a skill accepts local directories only; URLs must be cloned/downloaded separately.
+
+Project installs are copies into current-project .claude/skills/<name>; they do not use project-local target adapters for Codex/Gemini/Desktop. Global installs copy to ~/.goodboy/skills and can symlink to these declared destinations: Claude Code ~/.claude/skills; Codex both ~/.codex/skills and shared ~/.agents/skills; Gemini both ~/.gemini/skills and shared ~/.agents/skills. The default is Claude Code. There is no Claude Desktop 3P Chat/Cowork/Code adapter; no ChatGPT Project/Section/session/event/fork graph; and no MCP, plugin, memory, permission-policy, attachment, artifact, or schedule migration.
+
+GoodBoy separates:
+- goodboy.json: project/global skill names and semver-style ranges;
+- goodboy.lock: exact version and integrity hash;
+- local registry: versioned copies under ~/.goodboy/registry;
+- install directories: per-project copy or global store + symlinks.
+
+It computes a deterministic SHA-256 integrity hash of files and symlink targets, and verify/status can detect post-install drift. Versions are immutable by default but add --force can overwrite one.
+
+## Confirmed behavior and caveats
+
+1. Restore does not honor the existing lock/range. installFromManifest reads the skill names from goodboy.json, then calls installNamed; LocalRegistryAdapter.resolveSkill resolves the latest registry version. It never reads goodboy.lock to choose the pinned version or compare integrity, and the successful install rewrites goodboy.json to ^<installed version>. A synthetic, isolated end-to-end probe seeded project range ^1.0.0 and lock version 1.0.0 with registry versions 1.0.0 and 2.0.0. Running the actual installFromManifest installed VERSION_2.0.0, changed the manifest range to ^2.0.0, and changed lock version to 2.0.0. Exit 0, fixture removed. This proves a clean-machine restore can silently drift to latest rather than reproduce the lock.
+2. Global target ownership is not fully checked. createAgentSymlinks unlinks any existing symlink at the same agent/skill path if it points somewhere other than GoodBoy's store; removeAgentSymlinks likewise removes matching symlinks without verifying the link target against a GoodBoy ownership record. Shared ~/.agents paths receive a confirmation, but exclusive Claude/Codex/Gemini symlinks do not. A temporary-HOME source probe observed an unrelated Claude symlink being replaced by a GoodBoy symlink; its old target data survived but the user pointer was removed. A second probe observed uninstall removing an unrelated symlink at the same skill name.
+3. Global linking is not an all-or-nothing transaction. createAgentSymlinks loops through target directories and throws on a real directory conflict, but does not remove links created earlier in the loop. A temporary-HOME probe for Codex created the shared ~/.agents symlink, then hit a pre-existing real directory at ~/.codex; the function threw and left the earlier symlink behind. installNamed writes goodboy.json/lock only after createAgentSymlinks succeeds, so such a failure can leave an unrecorded dangling/partial installation.
+4. install/upgrade copy into an existing destination with cpSync({recursive:true, force:true}); upgrade does not re-prompt if a newer manifest adds permission claims. The project's SECURITY.md explicitly says permission declarations are advisory and skill content is not sandboxed/enforced. No bundled script is executed automatically by install.
+5. fs-security rejects external symlinks, but compares the resolved target against the current recursion directory rather than the skill root. A committed characterization test demonstrates it rejects a nested relative symlink to a sibling still inside the skill. This is a false-positive/compatibility issue, not an escape bypass.
+6. The registry-client is a stub and no remote registry or cross-device registry sync exists in Phase 1. The personal registry under ~/.goodboy is not in goodboy.json/lock, so project files alone cannot restore the skill bytes on a fresh machine unless the local registry is copied separately.
+
+## Disposition
+
+GoodBoy is a comparatively high-quality adjacent Skill ResourcePlane and integrity-check reference, not a Nexus SessionGraph or Claude Desktop adapter. Retain the local immutable-version store, content-hash drift check, explicit project/global scopes, manifest/lock separation, and declared-permission consent UX as design ideas. For Nexus, do not copy the latest-only lock restore, unowned-link replacement/removal, non-atomic multi-target symlink sequence, or assume the local registry transfers with project manifests. Project/Section/Session graph and each Desktop mode remain separate adapters.
+
+## Primary source links
+
+- [Pinned repository](https://github.com/xpera-ch/goodboy/tree/5e3620c87eb80fc32ff0176caa85f556615a097d)
+- [README and supported scope](https://github.com/xpera-ch/goodboy/blob/5e3620c87eb80fc32ff0176caa85f556615a097d/README.md)
+- [Install and restore flow](https://github.com/xpera-ch/goodboy/blob/5e3620c87eb80fc32ff0176caa85f556615a097d/packages/cli/src/commands/install.ts)
+- [Registry resolver and version entry](https://github.com/xpera-ch/goodboy/blob/5e3620c87eb80fc32ff0176caa85f556615a097d/packages/cli/src/lib/registry.ts)
+- [Agent paths and symlink operations](https://github.com/xpera-ch/goodboy/blob/5e3620c87eb80fc32ff0176caa85f556615a097d/packages/cli/src/lib/agents.ts)
+- [Security model](https://github.com/xpera-ch/goodboy/blob/5e3620c87eb80fc32ff0176caa85f556615a097d/SECURITY.md)
+- [CI workflow](https://github.com/xpera-ch/goodboy/blob/5e3620c87eb80fc32ff0176caa85f556615a097d/.github/workflows/ci.yml)
+- [CI run at pinned HEAD](https://github.com/xpera-ch/goodboy/actions/runs/40552913237)

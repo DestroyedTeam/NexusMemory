@@ -1,0 +1,30 @@
+NEXUS MEMORY CANDIDATE REVIEW #285 — JaekunE2/agent-cli-hub
+Date: 2026-11-25 (Asia/Shanghai)
+Pinned checkout: 427656e329133ba600e1991b2b6d60971e0ae950 (main; 2026-10-29 commit, “Move the Telegram relay to its own repository”). Repository: https://github.com/JaekunE2/agent-cli-hub
+
+SUMMARY / DISPOSITION
+This is a Windows-local web dashboard and operations/control plane for CLI terminals (Claude Code, Codex CLI, Cursor agent and shells), not a cross-Harness project/session importer. It searches and resumes histories in their original workspace; it has no target-native writer or ChatGPT Projects/Section Groups, Destruction Era hierarchy, Claude Desktop third-party Chat/Cowork/Code session adapter, or cross-Harness archive/restore path. Keep as an adjacent UX/reference for local session search, outputs and source-native resume; do not reuse as the migration engine.
+
+SCOPE AND MODEL
+- README describes live terminal screens, creating terminals in a folder, full-history search, continuing hits via `claude --resume` / `codex resume` in the original folder, outputs, GPU queue, operator sessions and Tailscale phone access. Requirements state Windows 10/11 and Node.js 20+.
+- `hub/searchindex.js` incrementally indexes only Claude Code local transcript JSONL beneath `~/.claude/projects` and Codex CLI rollout JSONL under `~/.codex/sessions`. The indexed session record is flat (source session ID, file, offset, mtime, cwd, title, first prompt and message list); it has no source project/section/branch/parent-child graph or target-native serialization.
+- Parsing retains selected user/assistant text and short tool-call hints, filters metadata/sidechains/noise and large tool outputs/attachments, and truncates each indexed message to 6,000 characters. It is a search index, not a lossless archive. No ChatGPT, Claude Desktop app Chat, Cowork or Desktop Code-mode store is parsed.
+- The index persists compressed JSON documents in `hub/.search-cache.json.gz`. The source uses gzip, not encryption; the root `.gitignore` excludes it from version control, which does not protect local contents from filesystem access. Cache did not exist in the clean cloned checkout.
+- Access is sensitive: README warns that anyone holding the hub token can drive terminals on the PC; the app limits listening to loopback/Tailscale and has an origin guard. This privileged terminal access is unrelated to migration and should not be treated as a safe public session bridge.
+
+REPOSITORY / VALIDATION
+- GitHub REST metadata observed during review: public, MIT, 0 stars, 0 forks, not archived, one open issue; `pushed_at=2026-11-25T02:14:19Z`, while the shallow default-branch checkout remained pinned at 427656e329133ba600e1991b2b6d60971e0ae950. GitHub page reports four commits. No release output and no workflow-run output were returned.
+- `hub/package.json` declares only `start` (`node ccd.js up`) and Node >=20. There are no test/spec-named files or `.github/workflows` files in the checkout. `npm --prefix hub test` exited 1 with literal stderr `npm error Missing script: "test"` (npm's remaining two generic help lines omitted here). No build/test suite was therefore run; this does not prove runtime correctness.
+- Static source review used the indexed `hub/searchindex.js` source and README. No user session files, account credentials, gateway keys, or real provider were accessed; no application server or terminal was started.
+
+OFFICIAL TARGET-SCOPE RECHECK (2026-11-25)
+The user explicitly confirmed Chat, Cowork and Code are all in scope for Claude Desktop through third-party inference/gateway, kept as three separate acceptance tracks, plus local/self-hosted Claude Code. Anthropic's current configuration reference lists `inferenceProvider: gateway` and gateway URL/key/auth settings, and separately documents Chat, Cowork and Code capabilities. Its current migration guide for Claude Enterprise -> Claude Desktop on a third-party provider is a *Claude-origin* local import, not a ChatGPT/Codex importer: it copies each user's own chats/projects and local Cowork/Code sessions; excludes project/file contents, cloud Cowork/Code sessions and connectors; memory, personal instructions and Skills require manual transfer; Desktop session ZIP is unencrypted and does not include Claude Code CLI sessions. The separate CLI migration guide confirms CLI provider configuration/session storage is distinct from Desktop app configuration. Unified Claude may combine the Chat and Cowork UI, but migration acceptance must still test Chat, Cowork and Code data independently.
+
+Primary sources checked live on 2026-11-25:
+- https://claude.com/docs/third-party/claude-desktop/configuration
+- https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider
+- https://support.claude.com/en/articles/18466061-move-claude-code-cli-users
+- https://github.com/JaekunE2/agent-cli-hub
+- Pinned source: https://github.com/JaekunE2/agent-cli-hub/blob/427656e329133ba600e1991b2b6d60971e0ae950/hub/searchindex.js
+
+Next primary-corpus candidate after #285: `joesnason/Zeppeli`. Primary corpus remains a finite sampling frame of 303 GitHub search results and is not evidence that hundreds of quality migrators exist; evaluate all remaining relevant candidates at source/test level and continue beyond this discovery frame as needed.

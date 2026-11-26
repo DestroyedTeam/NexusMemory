@@ -1,0 +1,44 @@
+# travelhawk/agentpm — source review (2026-11-21)
+
+## Identity and reproducibility
+
+- Repository: https://github.com/travelhawk/agentpm
+- Bound source: default branch `master`; local checkout `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-travelhawk-agentpm-20261121`.
+- Pinned HEAD and `origin/HEAD`: `8738e024df1356c802b50440ebe4820a986bf2ab` (same commit).
+- TypeScript, MIT; CLI package `@travelhawk/agentpm` version 0.11.0; declares Node `>=24`; workspace pins pnpm 10.32.1.
+- CodeGraph index: 74 files, 1,388 nodes, 6,531 edges; index status current. Review conclusions below are from source/config/docs and tests, not README-only.
+- Exact upstream CI observation: `gh run list --limit 5` returned latest `[ok] ci [44410640984]`; `gh run view 44410640984 --json name,displayTitle,headSha,status,conclusion,url,createdAt` reported completed/success on this exact SHA at 2026-11-18T22:20:34Z, URL https://github.com/travelhawk/agentpm/actions/runs/44410640984. Workflow source `.github/workflows/ci.yml` tests on Ubuntu and Windows with Node 24. A first lookup `gh run view 126 --log` returned HTTP 404 because `126` was a run number, not its API run ID; corrected by listing and viewing the numeric run ID above.
+
+## What is actually modeled
+
+AgentPM is a Git-native resource manager for agent Skills/agent definitions and provider plugin packages. `agentpm.yaml` declares resource sources, skills, targets, scope, source refs/revisions, and install intent. The internal `RuntimeContextGraph` is `{cwd, configPath, sources, layers, warnings}` where layers are global/project/temporary and entries describe resource provenance and target paths. The `InstallRecord`/registry/cache records track resource identity, adapter, install scope, source, content revision/signature, and link target. This is valuable resource-plane provenance/reconciliation, not a native conversational Project model.
+
+The current adapter union is `generic | codex | claude`; target paths include `.agents/skills`, `.codex/skills`, and `.claude/skills`. Plugin marketplace integration is for Claude Code and Codex. The docs explicitly exclude MCP config installation from the current plan. The project contract/manifests are not ChatGPT Project import, Claude Project import, or session hierarchy.
+
+## Migration-fit result
+
+- No transcript/session/message/turn/fork/subtask graph, chat attachment/blob, token/cost ledger, Section membership, scheduled-task run, or import/export model was found in the reviewed types, CLI, tests, plan, or architecture docs.
+- No ChatGPT Project/Section importer; no Claude Desktop Chat, Cowork, or Code conversation/session adapter; and no Claude Code native transcript importer/exporter was found. User-confirmed Desktop target scope is all three modes, and each must be investigated/implemented separately. Third-party inference/gateway configuration is not evidence of a session persistence/import API.
+- No MCP config installation adapter is in scope in the reviewed plan; plugin packages are not equivalent to MCP servers or full session dependencies.
+- Disposition: **exclude as a session/project migration engine; retain as an adjacent Skills/resource-plane design reference** for canonical resource provenance, project-vs-global scope, pinned revisions, provider adapters, local/private static registry and Git-based source of truth. Never interpret `agentpm.yaml` “project” as a ChatGPT/Claude conversational Project.
+
+## Checks and result ledger
+
+The local checkout runs on Node `v26.7.0` and pnpm `11.25.0`, which differ from the repo's CI Node 24 / declared pnpm 10.32.1. The discrepancy is recorded; local failures are not claimed as remote CI failures.
+
+| Command / observation | Status | Observed result |
+|---|---:|---|
+| `rtk pnpm install --frozen-lockfile` | 0 | dependency installation completed |
+| `rtk pnpm lint` | 0 | pass (prior local run) |
+| `rtk pnpm typecheck` | 0 | pass (prior local run) |
+| `rtk pnpm build` | 0 | Turbo build completed for 11 packages (prior local run) |
+| `rtk pnpm smoke` | 0 | `Smoke test passed.` (prior local run) |
+| `rtk pnpm test` after build | 1 | `Test Files 2 failed | 15 passed (17)`; `Tests 273 passed (273)`. Failures happen before test collection in `tests/guided-errors.test.ts` and `tests/target-add-cli.test.ts`: Vite cannot resolve `@agentpm/shared` from `apps/cli/src/guided-confirm.js` and `apps/cli/src/target-add.js`; these direct imports are not linked under `apps/cli/node_modules/@agentpm`, though `packages/core/node_modules/@agentpm/shared` is linked. Local package/test-resolution or environment issue needs Node-24 reproduction before attributing it to source or CI.
+| `rtk pnpm exec vitest run tests/guided-errors.test.ts tests/target-add-cli.test.ts` | 1 | `Test Files 2 failed (2)`; `Tests no tests`; same package-resolution errors reproduced. |
+| Latest upstream CI run `44410640984` | success | completed on the exact pinned SHA; Ubuntu/Windows Node 24 per workflow. |
+
+The root test output additionally emitted repeated Vite warnings (`filtering not recognized by server`) and test-fixture warnings (`You appear to have cloned an empty repository.`); these were not the failing assertion cause. No live user data, actual harness session, or external provider was touched.
+
+## Remaining verification
+
+Reproduce the full suite with the exact CI Node 24 / pnpm 10.32.1 pair and inspect whether the direct `@agentpm/shared` dependency/path alias difference is platform-specific. This uncertainty does not change the scope disposition: AgentPM does not supply the requested conversation/session migration plane.

@@ -1,0 +1,40 @@
+# Hayatelin/skillhub — zero-dependency Skill CLI review
+
+Date: 2026-11-22. Candidate #124 of the 303-name primary GitHub corpus. Scope remains ChatGPT Projects/Section Groups/Destruction Era Session hierarchy plus Skills/MCP/plugins/memory/context/schedules to local/self-hosted Claude Code and Claude Desktop Chat, Cowork, and Code as separate modes. This candidate only manages `SKILL.md` files; it is not a session migrator. Only public source and disposable tests were used; no user app, session, account, key, or global agent directory was opened or changed.
+
+## Pinned source and maturity
+
+- Repository: https://github.com/Hayatelin/skillhub, MIT. Dispatcher clone: `rtk git clone https://github.com/Hayatelin/skillhub.git /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-hayatelin-skillhub-20261122` → exit 0.
+- Pinned HEAD `945a938bcf74a2c53a1444973eaa5aef6f0dbc68`, initial commit (2026-06-27); GitHub displayed one commit, one star, zero forks and latest release v1.0.0. Python 3.8+, MIT, standard-library-only; about 1,870 lines in the initial commit. The CI file runs unittest on Python 3.8 and 3.11.
+- CodeGraph init on this checkout succeeded with 18 files, 198 nodes and 394 edges; index status is up to date. `rtk codegraph status` immediately after initialization reported the index current. Git working tree was clean after the tests and tar extraction probe.
+
+## Scope, adapters and packaging
+
+- Strongly scoped ResourcePlane CLI: `lint`, `new` scaffold, `search` an offline bundled registry, `list`, `info`, and install every `SKILL.md` directory from a public GitHub repository tarball. It claims Claude Code, Cursor, Codex and Gemini CLI.
+- No Project, Section/Group, Session/Conversation/event tree, branches/subtasks, media/tool-call/token log, MCP, plugins, long-term memory, schedule or source/target session converter exists. It is not a Nexus Memory project/session transfer tool.
+- Tool paths are convention-based: `.claude/skills`, `.cursor/skills`, `.codex/skills`, `.gemini/skills`; a separate `~/.skillhub/skills` is only searched into a synthetic `global` list bucket. CLI `install` always writes `<--dir>/<tool-path>` and has no `--global` option; no target agent loads `~/.skillhub/skills` as its native skills directory. Current Codex official install guidance uses `.agents/skills/` and `~/.agents/skills/`; current Gemini guidance recognizes `.gemini/skills/`/`.agents/skills/` and user `~/.gemini/skills/`/`~/.agents/skills/`. Thus Codex and the advertised “global” bucket require correction/validation; Claude Desktop's three modes are not represented.
+- Project-level versioning/pinning is explicitly out of scope: install downloads the moving `main` branch, falling back to `master`; no resolved commit hash or lockfile records the content. The offline registry is intentionally small and curated.
+
+## Security result — path escape reproduced safely
+
+- The README claims tar traversal is guarded. `safe_extract_tar` checks each member's lexical `abspath/commonpath`, then calls `tar.extractall(dest)` without validating link targets or specifying an extraction filter. A tar member path itself can be inside `dest` while being reached through a previously extracted symlink to outside `dest`.
+- I created a disposable local tar with a symlink `repo-main/payload/link -> ../../../outside` followed by a file `repo-main/payload/link/pwned.txt`, and called the exact `safe_extract_tar` function on a fresh `/tmp` extraction directory. On CPython 3.12.10, the function returned normally and wrote the exact text `proof-in-disposable-temp-only` into the sibling temporary `outside/pwned.txt`. The entire temporary root was removed afterward; no user path was used. Existing `test_safe_extract_blocks_traversal` checks only a direct `../escapee.txt` member and passes, so it misses this symlink/hardlink chain. This is an arbitrary file-write outside the staging directory when installing a malicious skill repository.
+- Python's official docs say `tarfile` default extraction changed to `filter='data'` only in Python 3.14; previously extraction behavior was fully trusted. This project explicitly supports Python 3.8+ and CI 3.8/3.11, and its code omits a filter, so the code-level gap is material to supported versions. Do not consider the lexical `commonpath` test sufficient; reject links/special members or use a safe filter/backport and keep extraction dirfd-contained.
+- A separate code-level reliability issue: with `--force`, the installer deletes an existing Skill directory before copying its replacement and has no rollback if `shutil.copytree` fails; no failure-injection test covers this path.
+
+## Tests and observed results
+
+- `rtk proxy env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v` → exit 0, **40 tests passed** in 0.012s. Stdout ended `Ran 40 tests in 0.012s` / `OK`; stderr included one `DeprecationWarning` from `tarfile.extractall()` that Python 3.14 will default-filter archives. The tests cover standard parser/linter/scaffold/search behavior and direct `../` tar path; they do not cover symlink/hardlink traversal, real network downloads, version pinning, installed agent live discovery, or transactional overwrite failure.
+- `rtk codegraph explore ...` source review confirmed `download_tarball` takes only `main`/`master`, `install` extracts and writes skill copies, and `discover` uses the above path table. No `requirements.txt` or third-party runtime dependency exists.
+- Safe local proof stdout: `{"status": "returned", "outside_file_exists": true, "outside_file_contents": "proof-in-disposable-temp-only"}`; command exit 0. The temp parent was removed in `finally`.
+
+## Disposition
+
+Keep as a useful low-cost ResourcePlane reference for offline skill metadata linting, scaffolding and deterministic registry search. Do not reuse its remote tarball installer in production until link-target escape is closed and regression-tested on the oldest supported Python, and make replacement transactional. It has no Project/Session semantics, no current three-mode Claude Desktop target, no actual vendor session import, no MCP/plugin/memory/schedule migration, and no branch pinning. Status: adjacent Skill CLI, not the requested Nexus Memory migrator.
+
+## Primary sources
+
+- Repository/README and v1.0.0 release: https://github.com/Hayatelin/skillhub ; https://github.com/Hayatelin/skillhub/releases
+- Pinned implementation and test: https://github.com/Hayatelin/skillhub/blob/945a938bcf74a2c53a1444973eaa5aef6f0dbc68/skillhub/installer.py ; https://github.com/Hayatelin/skillhub/blob/945a938bcf74a2c53a1444973eaa5aef6f0dbc68/skillhub/discover.py ; https://github.com/Hayatelin/skillhub/blob/945a938bcf74a2c53a1444973eaa5aef6f0dbc68/tests/test_install.py
+- Python tarfile extraction filters/default behavior: https://docs.python.org/3/library/tarfile.html
+- Current vendor skill locations: https://developers.openai.com/api/reference/cli ; https://geminicli.com/docs/cli/skills/ ; https://code.claude.com/docs/en/skills

@@ -1,0 +1,96 @@
+# Nwflower/dsh-chat-import — source review #146 (manual supplemental)
+
+Review date: 2026-11-22 (Asia/Shanghai)
+Pinned checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-Nwflower-dsh-chat-import-v0.26.2-20261122`
+Pinned tag `v0.26.2`; checked-out HEAD: `1e3e63e533abd709e646f49eca08e8a5c6de9176`.
+Current release checked at review time: `v0.26.8` (released 2026-11-18); source: <https://github.com/Nwflower/dsh-chat-import/releases/tag/v0.26.8>.
+License: MIT. GitHub page snapshot: 325 stars / 49 forks. Package declares Node >=22.13 and DSH host peer dependencies.
+
+## Verdict
+
+This is a strong, actively maintained **DSH-native session importer/exporter** and a useful adapter/IR reference. It is not a complete Nexus Memory solution and is not a Claude Desktop 3P Chat/Cowork/Code importer. The ChatGPT path materially restores text history and each root-to-leaf branch as a separate DSH session, with structured tool calls/results when recognizable. However, it does not import ChatGPT Project/Section membership or project assets/instructions/memory, loses non-text attachment content, has no ChatGPT usage/model accounting, and does not retain graph edges between the separately materialized branch sessions. It is therefore a possible temporary bridge to Claude Code only, not a lossless Project/session graph migration backend.
+
+## Pinned implementation facts
+
+`lib/convert/chatgpt.mjs` reads a parsed `conversations.json` array and consults `conv.id`, `conv.title`, `conv.create_time`, `conv.mapping`, node parent/children, message role/time and `content.parts`. It does not read a ChatGPT Project/Section id, project instructions, project files, project memory, `current_node`, model metadata, or token usage. Text extraction accepts strings and objects with a `.text` field; other parts are ignored. The importer returns DSH session IR with provider/model fixed to `chatgpt`, no cwd, and no image conversion.
+
+Branch behavior is explicit: default `branch:"main"` walks the last child until a leaf; `branch:"all"` performs root→leaf DFS and creates one independent DSH session per leaf. Additional paths get a suffixed `sourceId` and branch-marked title, but no stored parent/child edge to the main session. The default main leaf is determined by child order, not a parsed active-node field. The tool-call decoder recognizes JSON-string/object carriers with `tool_name`/`tool_call_id`/`args` (or `name`/`id`) and pairs subsequent `role:"tool"` results FIFO because the export lacks a result-side call id; it marks results `isError:false`. `toolCallCarrier`, `chatgptMessageText`, and `chatgptMessageParts` have no direct unit-test caller according to the pinned CodeGraph index.
+
+The ChatGPT source schema has no cwd, so `finishConversion` cannot recover a workspace from the source. The pinned import guide documents that `workspaceMode:auto` sends missing/unavailable cwd sessions to `$DSH_HOME/dsh-chat-import-workspace`; `workspaceMode:per-project` leaves them ungrouped. This is one shared landing workspace, not ChatGPT Project grouping.
+
+Pinned `docs/INTERCHANGE.md` defines a useful normalized DSH IR with turns/steps, text/reasoning/tool calls/results, optional image bytes, timestamps, provider-reported usage, and compaction. `lib/attachments.mjs` materializes supported image bytes through the host attachment service, with explicit `imagesDegraded` counts and storage limits. The ChatGPT parser does not currently populate the image/usage/model fields, so generic IR capabilities must not be mistaken for ChatGPT-source support.
+
+The plugin can serialize DSH sessions to Claude Code JSONL via `export_chat({format:"claude"})` under `~/.claude/projects/<slug>/<uuid>.jsonl` (or `outputDir`), with fresh UUID and create-if-absent semantics. The exporter requires a cwd from session metadata or explicit args. The ChatGPT importer itself gives no source cwd, and a DSH ChatGPT session defaults to the dedicated import workspace. A caller may specify a target project cwd when exporting, but that is manual mapping, not carried ChatGPT project membership. This route creates a **Claude Code transcript**, not a native Claude Desktop Chat/Cowork session; Desktop 3P stores Chat/Cowork state separately and local Code records separately from the transcript.
+
+There is a pinned-document/runtime mismatch: the `v0.26.2` Usage Guide says that file import can be transferred to another tool through `import_chat`'s `target` parameter. The actual pinned `makeImportChatTool` schema has no `target` property (`COMMON_PARAMS`/`EXTRA_PARAMS` omit it), and `runImportSpec` always runs the DSH importer. A synthetic fake-host call with `target:"claude"`, `cwd`, and `outputDir` still returned `mode:"batch"`, imported one session into fake DSH persistence, and produced no Claude output path. The UI has a separate `transferDiscoveryItem` pipeline; the tool schema claim must not be used as proof of a callable tool-level transfer.
+
+## Synthetic probe (no user export or host data)
+
+Ran `convertChatgptJson` on a synthetic conversation with a placeholder root, one tool call/result, a non-text image-only user turn, two leaf branches, and synthetic `project_id`, `section_id`, and `current_node` fields. Observed two DSH sessions. Both retained the structured tool call/result, but `isError` was false; `cwd` and group metadata were absent; the synthetic project/section fields were absent from results. With `current_node:"a_branch"` but last child `a_main`, the parser treated `a_main` as the unsuffixed/main session and `a_branch` as a suffix branch. The image-only user node was skipped and its following assistant reply was attached as another step to the previous text prompt. This is direct behavior of the synthetic probe, not a claim that every ChatGPT export encodes image-only turns identically.
+
+The separate fake-host import probe called `import_chat` with `target:"claude"`; it observed `declaredTarget:false`, `resultMode:"batch"`, `imported:1`, `persistedSessions:1`, and no transfer result. A separate `export_chat` dry-run on that fake session with an explicit synthetic cwd produced a path under a synthetic Claude projects folder, but wrote nothing. No API key, real ChatGPT file, DSH profile, Claude Desktop store, real `~/.claude` path, or inference endpoint was used.
+
+## Test/build/release evidence
+
+- `rtk git clone --depth 1 --branch v0.26.2 ...` — exit 0; Git emitted an annotated-tag warning, then detached checkout resolved to the exact release commit above. `git describe --tags --exact-match` returned `v0.26.2`.
+- CodeGraph init: `rtk codegraph init --yes .` returned `unknown option '--yes'`; corrected command `rtk codegraph init .` succeeded. CodeGraph indexed 321 files / 4,409 nodes / 19,074 edges; `rtk codegraph status .` said up-to-date. `.codegraph/.gitignore` was retained with only `*` (removed the `!.gitignore` self-exception); final Git status is clean.
+- `rtk npm ci --ignore-scripts --no-audit --no-fund` — exit 0, 804 packages added; lifecycle scripts skipped. npm printed a deprecated `node-domexception@1.0.0` warning.
+- `rtk proxy node --test test/chatgpt-shape.test.mjs` — exit 0, 9/9 tests passed. Pinned tests cover slim exports without `children`, placeholder roots, branch-all outputs, decimal timestamps, preview schema and fake-host import; they do not cover project metadata, image blocks, active-node selection, usage, or tool-call carrier/result-error semantics.
+- Full `rtk npm test` — exit 1, 1,490/1,491 tests passed. The sole failure is unrelated to ChatGPT: `test/goose.test.mjs:259` calls a platform-default path helper with `process.platform` while asserting the Linux root; on the observed macOS/Darwin environment it returns `Library/Application Support/Block/goose` instead of `.local/share/goose`.
+- `rtk npm run lint`, `check:linux`, `check:leaks`, `check:links`, `check:tests`, and `build` all exited 0. `check:linux`: 141 test files; `check:leaks`: 350 files (project-specific blacklist not loaded); `check:links`: 17 Markdown files / 118 relative links; `check:tests`: all 30 sources anchored, 141 test files; build: 19 package file entries, 138 JS files, 136 reachable, 0 unshipped, 0 syntax errors, lockfile version matched.
+- `rtk npm run coverage` and `rtk npm run check:coverage` exit 1 only because the same one Goose path assertion fails on macOS. The emitted coverage summary reports 95.58% lines, 82.68% branches, 92.16% functions. Do not claim the local full release gate is green.
+- Upstream GitHub release workflow for exact v0.26.2 commit `1e3e63e` completed successfully (release run #2, 2026-10-20). Its pinned `release.yml` runs on Ubuntu and executes `npm run check:coverage`, lint, cross-platform guard, leak/link/test-discipline checks and build before publication. No real data was used there by this review.
+
+## Assessment for Nexus Memory
+
+Borrow: adapter separation, the interchange turn/step representation, per-source loss counters, preview-before-write, source fingerprints/idempotent reimport, explicit branch-all support, checksum-verified portable DSH bundle, and a DSH→Claude Code JSONL route.
+
+Do not claim: preservation of ChatGPT Project/Section/group graph, image/file uploads, project memory/instructions, shared-project permissions, active branch identity, model/token usage, schedule state, MCP credentials, or native Claude Desktop Chat/Cowork history. The DSH route has an additional manual-cwd/landing-workspace issue and its pinned `target` docs drift from the actual tool schema.
+
+## Primary sources
+
+- Pinned source: <https://github.com/Nwflower/dsh-chat-import/tree/v0.26.2>
+- Pinned Usage Guide: <https://github.com/Nwflower/dsh-chat-import/blob/v0.26.2/docs/USAGE.md>
+- Pinned Interchange spec: <https://github.com/Nwflower/dsh-chat-import/blob/v0.26.2/docs/INTERCHANGE.md>
+- ChatGPT shape issue and release fix history: <https://github.com/Nwflower/dsh-chat-import/issues/62>
+- Successful exact-tag release workflow: <https://github.com/Nwflower/dsh-chat-import/actions/runs/39357923742>
+- Current upstream release: <https://github.com/Nwflower/dsh-chat-import/releases/tag/v0.26.8>
+- OpenAI export docs: <https://help.openai.com/en/articles/7260999-exporting-your-chatgpt-history-and-data>
+- OpenAI Projects docs: <https://help.openai.com/en/articles/10169521-projects-in-chatgpt>
+- Claude Desktop 3P storage: <https://claude.com/docs/third-party/claude-desktop/data-storage>
+- Claude Desktop 3P import: <https://claude.com/docs/third-party/claude-desktop/import>
+- Claude Code CLI user move/gateway behavior: <https://support.claude.com/en/articles/18466061-move-claude-code-cli-users>
+
+## Current-release follow-up: v0.26.8 (2026-11-22)
+
+Pinned candidate checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-Nwflower-dsh-chat-import-v0.26.8-20261122`, tag `v0.26.8`, HEAD `4b946717d67ee8f41919913f50f7571a4bd44945`; prior comparison tag `v0.26.2`, HEAD `1e3e63e533abd709e646f49eca08e8a5c6de9176`. The release diff spans 167 files (+16,782 / -1,312). `rtk git diff --quiet v0.26.2..v0.26.8 -- lib/convert/chatgpt.mjs` exited 0: the ChatGPT parser itself did not change in this release. v0.26.8 adds jcode and Cherry Studio importers and further source/test/repair improvements, but does not add ChatGPT Project/Section graph semantics.
+
+### Import/export target boundary (current release)
+
+- `makeImportChatTool` in `lib/toolkit.mjs` still declares `format`, common/extra import arguments, `sessionIds`, and `fullHistory`, but no `target` property. `runImportSpec` always imports into DSH. Current `docs/USAGE.md` still says the file-import route can transfer via `import_chat`'s `target`; that statement does not match the current tool schema/implementation.
+- The sidebar discovery panel has a *separate* `transferDiscoveryItem` pipeline with target set `claude`, `codex`, `kimi`, `opencode`. That UI route imports to a temporary DSH session, runs the existing target serializer, then retracts a newly created intermediate session after successful export. For Claude it writes Claude Code JSONL under `~/.claude/projects/<slug>/<uuid>.jsonl`; the source hint says to use `claude --resume`. This is not a native writer for Claude Desktop Chat/Cowork `local-agent-mode-sessions/` or Code app metadata in `claude-code-sessions/`.
+- Current-release synthetic fake-host call (no DSH profile, personal transcript, filesystem session, API key, or model call): `import_chat({format:'chatgpt', path:<synthetic conversations.json>, target:'claude', cwd:'/tmp/demo', outputDir:'/tmp/nm-no-write'})` yielded exactly `{"declaredTarget":false,"mode":"batch","imported":1,"persistedSessions":1,"writePaths":[],"transferStatus":null}`. Exit 0. This reproduces that an extra `target` argument is ignored by this tool surface; it does not trigger the discovery-panel transfer route.
+- Focused v0.26.8 tests: `rtk proxy node --test test/chatgpt*.test.mjs test/transfer.test.mjs test/index.test.mjs` exited 0, 16/16 pass (ChatGPT-shape + transfer and index coverage). The actual `test/transfer.test.mjs` exercises Claude Code output, image round-tripping/attachment retention, purge failures, and batch handling, but does not constitute Desktop 3P Chat/Cowork/Code native-session registration coverage.
+
+### v0.26.8 quality evidence
+
+- `rtk npm ci --ignore-scripts --no-audit --no-fund`: exit 0; 804 packages installed. Deprecated `node-domexception@1.0.0` warning.
+- `rtk npm test`: exit 1, 1,861/1,862 pass. Sole failure is still `test/goose.test.mjs:259`: the test expects the Linux `.local/share/goose` default while running on macOS, and current implementation returns `Library/Application Support/Block/goose`. It is not a ChatGPT/import-target test.
+- `rtk npm run check:coverage`: exit 1 because it explicitly rejects the same one failed test.
+- `rtk npm run lint`, `check:linux`, `check:leaks`, `check:links`, `check:tests`, and `build`: all exit 0. Linux guard: 163 test files; leak scan: 402 files; link guard: 17 Markdown files / 140 relative links; discipline guard: 38 formats, 163 test files; build: 19 package entries, 163 JS files, 161 reachable, 0 unshipped, 0 syntax errors, lockfile matched.
+- Exact upstream v0.26.8 release workflow `release#9` on commit `4b94671` completed successfully on 2026-11-18 (1m33s), per <https://github.com/Nwflower/dsh-chat-import/actions/workflows/release.yml?query=branch%3Av0.26.8>. This does not erase the observed local macOS-only failing assertion; local and upstream CI results are reported separately.
+
+## Official Claude Desktop 3P/API-key boundary rechecked after user clarification
+
+The current first-party documentation confirms the requested target is specifically *Claude Desktop on third-party inference* when using the local app's Developer Mode/configuration window—not Anthropic-hosted Claude Code Cloud. `Help → Troubleshooting → Enable Developer Mode → Developer → Configure Third-Party Inference…` configures the local app. Gateway static API-key auth uses `inferenceProvider: "gateway"` and `inferenceGatewayApiKey`; the gateway must implement Anthropic Messages API `POST /v1/messages` with streaming and tool use (optional `GET /v1/models`). A generic OpenAI-compatible endpoint needs a translation gateway unless it already exposes that contract. Direct Anthropic API auth is a separate provider using `inferenceAnthropicApiKey`.
+
+The 3P Desktop target does include Chat, Cowork, and Code, but the native objects differ: Chat/Cowork share per-session state/transcript/uploads/outputs/audit under `local-agent-mode-sessions/`; Code metadata is in `claude-code-sessions/`, while the transcript is still under `~/.claude/projects/`. The 3P import wizard imports Claude.ai histories/projects plus local earlier Claude Desktop Cowork/Code sessions; it does not document ChatGPT/Codex exports as input. Claude Code Cloud sessions are a separate claude.ai account/hosted surface and are not available through a third-party gateway/API-key deployment.
+
+Official sources:
+- 3P overview and all modes: <https://claude.com/docs/third-party/claude-desktop/overview>
+- Developer Mode/setup: <https://claude.com/docs/third-party/claude-desktop/installation> and <https://claude.com/docs/third-party/claude-desktop/in-app-configuration>
+- Gateway requirements/authentication: <https://claude.com/docs/third-party/claude-desktop/gateway>
+- Direct Claude API/static key: <https://claude.com/docs/third-party/claude-desktop/claude-api>
+- Local stores and credential handling: <https://claude.com/docs/third-party/claude-desktop/data-storage>
+- Import wizard scope: <https://claude.com/docs/third-party/claude-desktop/import>
+- Third-party vs hosted Code cloud: <https://code.claude.com/docs/en/claude-code-on-the-web>

@@ -1,0 +1,32 @@
+# Candidate #249 — chazhyseni/ai-skillweave (2026-11-24)
+
+## Gate result: README/metadata screen only; provenance unresolved
+
+The shallow checkout contains no LICENSE/COPYING file or explicit grant; the GitHub repository page has no license entry, its `license_spdx` inventory value is null, and `https://github.com/chazhyseni/ai-skillweave/blob/main/LICENSE` returned 404. Following the project's provenance/license gate, I did **not** inspect source files, tests, installer/scripts, hooks, or runtime, and did not reuse code or code-derived architecture. This is documentation/metadata screening only—not a source review, safety review, test result, or quality certification.
+
+## Identity and public metadata
+
+- Repository: https://github.com/chazhyseni/ai-skillweave
+- Dispatcher shallow clone observed exit 0. Branch `main`; HEAD `6738896e4e2e6665aa31ce3111a171cd3304cf3c`, matching `git ls-remote refs/heads/main`; HEAD date 2026-09-25, message `fix(installer): include research complements by default`. Checkout `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ai-skillweave-20261124-followup249` remained clean.
+- GitHub snapshot: 1 star, 0 forks, 92 commits, no open issues or PRs, no release; the local tag list is empty. Low stars are not a quality verdict; the missing license is the hard gate.
+- The root contains `tests/` and README documents a Python `unittest` command, but test files were not opened or executed. No `.github` workflow directory appeared in the top-level clone; the Actions page showed a generic landing, so CI status is unverified.
+
+## README claims relevant to Nexus Memory (not independently verified)
+
+The README advertises portable Agent Skills across Claude Code, Codex, OpenClaw, Pi, Copilot CLI, Hermes and oh-my-pi; local Claude correction capture; extracting Skills from session history; optional local models, MCP and Ruflo; and ownership-aware/reversible Skill delivery. It presents history extraction as an explicit learning step, with an optional no-LLM mode, not an autonomous skill-refinement loop. These statements are documentation claims only—the implementation, privacy behavior, reversibility, tests and extraction quality were not examined.
+
+For this user's goal, README mentions Claude Desktop exports as separate snapshots that must be rebuilt and re-imported after source changes. It does **not** define a ChatGPT Project/Section/session importer, Session event or fork graph, media/attachment transport, or native resume contract. Its central advertised portability is Skill/file delivery and correction-derived knowledge, not preserving/translating conversations. README also says model setup targets Pi/OMP/OpenClaw/current Codex and does not configure Claude/Copilot provider APIs; that leaves the requested API-key/gateway behavior unproven and apparently outside its stated setup scope.
+
+The README names upstream Skill collections with distinct license terms (including a CC BY-NC-SA source). Since the project's own license is unresolved and bundled content was not audited, none of these sources or files should be redistributed/reused without separate grant and license review.
+
+## Scope disposition
+
+The user-confirmed target remains ChatGPT **Destruction Era** Projects, Section Groups, and full Session/resources to Claude Desktop third-party-inference **Chat, Cowork, and Code separately**, plus local/self-hosted Claude Code via API key/gateway. The README suggests a high-relevance discovery lead for the Skills/correction-learning plane, but provides no evidence that it transfers Project/Section/session lineage, turns, follow-ups, images/files, tool events, token/cost records, schedules, or provider memory. Do not equate “extract skills from session history” with migrating the Session itself.
+
+**Disposition: screened—no-license/provenance stop; README claims only.** Do not promote as a proven migrator, run its installer/tests, or borrow code/design. If a clear compatible grant appears later, resume with pinned source review, tests, hook/privacy review, and proof of immutable reversible delivery before considering reuse. The broader Nexus research continues; one license gate does not shrink or complete the survey.
+
+## Sources
+
+- Repository/README: https://github.com/chazhyseni/ai-skillweave
+- Expected root license path (404): https://github.com/chazhyseni/ai-skillweave/blob/main/LICENSE
+- GitHub Issues/PRs/releases: https://github.com/chazhyseni/ai-skillweave/issues, https://github.com/chazhyseni/ai-skillweave/pulls, https://github.com/chazhyseni/ai-skillweave/releases

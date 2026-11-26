@@ -1,0 +1,42 @@
+# GitHub candidate #139: SebghatYusuf/skills-manager
+
+Review date: 2026-11-22. Pinned HEAD `980da978cc7d7ff27cd7cca74eb328baf95a738e`. No user IDE settings, userData directory, API key, installed skills, or session store were accessed.
+
+## Scope and quality snapshot
+
+- Repository: https://github.com/SebghatYusuf/skills-manager
+- GitHub API: 1 star / 0 forks; created 2026-02-06; last pushed 2026-02-12; package version 0.1.0, default branch master.
+- Package scripts include Electron/Vite build and TypeScript typecheck, but no test script. The tracked tree contains no test files or `.github/workflows`; `rtk gh run list --repo SebghatYusuf/skills-manager --limit 10` returned `[]`.
+- `rtk gh release list` reported v0.1.0; `rtk git tag --list` returned `0.1.0`.
+- Package says `license: MIT`, but pinned tree has no LICENSE file and GitHub license metadata is null. Treat reuse rights as unresolved until clarified.
+- CodeGraph: 20 files, 240 nodes, 629 edges, up-to-date. The checkout had no `node_modules`; local Yarn 4.11.0 was unavailable. Because there is no test suite and dependencies were not installed, build/typecheck were not run; no runtime install/target write was performed.
+
+## Product boundary
+
+This Electron app catalogs/installs skill directories and toggles enablement across VS Code, OpenCode, Codex, Antigravity, Cursor, and Claude Code. Its Claude adapter uses `~/.claude/skills` plus workspace `.claude/skills`; it is not a Claude Desktop third-party-inference Chat/Cowork/Code adapter. It has no ChatGPT Project/Section/Session hierarchy, transcript/branch import, attachments, MCP/plugin/memory/schedule migration, or Cloud session writer. This can serve only as an adjacent ResourcePlane UI example.
+
+## Pinned-source findings
+
+- `SkillsService.buildTargets` registers six local directory adapters; the Claude path is specifically `.claude/skills`.
+- `installSkillWithProgress` filters requested `skillName`, but `const toInstall = filtered.length > 0 ? filtered : skillDirs`; if the requested name is absent it installs every discovered skill rather than erroring. It copies candidates sequentially and exits on a later target collision without removing earlier copies (partial install/no transaction rollback).
+- README describes the optional VS Code Copilot root as symlinked, but install/enablement code uses recursive `copyDir`; the destination is a copy. This creates untracked divergence and can leave old content after updates.
+- `deleteSkillAll` takes `path.basename(skill.path)` and deletes that basename from every IDE root's active and `.disabled` folders plus the Copilot root. It does not compare content/source identity before removal; destructive behavior is intentional by label but broader than the selected entry's provenance.
+- SkillsMP key is accepted from env or settings. `SettingsStore` persists the `AppSettings` object to `app.getPath("userData")/settings.json` using `JSON.stringify` with no application-level encryption. This is a marketplace-search API key, not a model/provider API key. Skill discovery and settings do not contain user conversation state.
+- `SkillRegistry` collapses entries by `record.name.toLowerCase()`, which can merge same-name skills from distinct sources; it retains multiple paths internally for targets but the visible item identity is name-based. Include this as a UX/data-model caveat, not as proof of a vulnerability.
+
+## Local checks and evidence limits
+
+- CodeGraph source inspection covered `skillsService.ts`, `settingsStore.ts`, `registry.ts`, `parser.ts`, and target adapters (VS Code/OpenCode/Codex/Claude/Antigravity/Cursor).
+- Static target/path review is source-level only; no actual install, deletion, toggle, remote Git clone, SkillsMP request, or settings write was run. No unit tests exist; no assertions were inferred from README screenshots.
+- `.codegraph/.gitignore` was kept and only its `!.gitignore` exception removed after initialization; `rtk git status --short` was empty and CodeGraph status was up-to-date.
+
+## Primary sources
+
+- Pinned repository and tree: https://github.com/SebghatYusuf/skills-manager/tree/980da978cc7d7ff27cd7cca74eb328baf95a738e
+- Pinned README: https://github.com/SebghatYusuf/skills-manager/blob/980da978cc7d7ff27cd7cca74eb328baf95a738e/README.md
+- Pinned install/target source: https://github.com/SebghatYusuf/skills-manager/blob/980da978cc7d7ff27cd7cca74eb328baf95a738e/src/main/skillsService.ts
+- Pinned local settings persistence: https://github.com/SebghatYusuf/skills-manager/blob/980da978cc7d7ff27cd7cca74eb328baf95a738e/src/main/settingsStore.ts
+- Pinned Claude Code target: https://github.com/SebghatYusuf/skills-manager/blob/980da978cc7d7ff27cd7cca74eb328baf95a738e/src/skills/targets/claude.ts
+- Pinned package manifest: https://github.com/SebghatYusuf/skills-manager/blob/980da978cc7d7ff27cd7cca74eb328baf95a738e/package.json
+- Actions: https://github.com/SebghatYusuf/skills-manager/actions
+- Releases: https://github.com/SebghatYusuf/skills-manager/releases

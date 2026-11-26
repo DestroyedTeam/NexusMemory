@@ -1,0 +1,38 @@
+# Candidate #180 — jondwillis/privacy-rights-plugin
+
+Review date: 2026-11-23. Isolated checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-jondwillis-privacy-rights-plugin-20261123-followup179. Local HEAD and origin refs/heads/main both equal 131e1c6cc9d499b0f3a63682f02feaa2c126ae11; commit timestamp 2026-04-22T14:33:32-07:00. GitHub page at review time showed one commit, 0 stars and 0 forks. CodeGraph indexed only plugin.yaml: 1 file, 0 nodes. No tests directory, build script, source implementation or pinned Jacq dependency is present.
+
+## Disposition
+
+**Not a session/project migrator. Retain only as a possible multi-Harness ResourcePlane packaging pattern, but do not adopt the committed package without fixing build/dependency gaps and legal/privacy review.** Its plugin.yaml declares one source bundle targeting Claude Code, OpenCode, Codex, Cursor and OpenClaw; some targets fall back to a shared AGENTS.md section or instructions. This is a Skills/agents/instructions content distribution example, not a data transfer engine. No ChatGPT Projects, Section Groups, Session graph, parent/fork links, transcript, images, attachments, tool events, token accounting, schedules, or Harness-specific memory are modeled. It does not target Claude Desktop third-party-gateway Chat, Cowork or Code modes, nor local/self-hosted Claude Code session history.
+
+## Cross-Harness packaging evidence and gaps
+
+- Canonical source folders are agents/, instructions/, shared/email-templates/ and three skills (delete-my-data, do-not-sell, export-my-data). plugin.yaml maps the same source to five target distributions and declares skills/agents/instructions plus network/subprocess permissions. Committed dist includes target-specific layouts: Claude Code commands/agent/plugin.json, Codex and OpenCode AGENTS.md plus Skills, Cursor plugin/rules/commands, and OpenClaw plugin/package/Skills. This is a useful asset-plane seam, not session conversion.
+- README advertises two more features, Discover and Dashboard, but neither has a source Skill or built dist artifact. The committed source and every target contain only the three privacy-rights Skills.
+- Packaging defect: all three canonical Skills reference shared/email-templates/*.md. Search across each committed dist target found these references in Claude Code, Codex, OpenCode and OpenClaw output, but none of the five dist targets contains a shared/ directory or email-template file. README's install instructions copy dist/<target> as the plugin, so the rendered email workflow points to absent files unless the build tool performs an undocumented runtime fallback. This is a verified artifact-tree inconsistency; no actual legal request was executed.
+- The repository states outputs are compiled with Jacq, but Jacq is external and not pinned in the repo. `rtk proxy jacq --version` exited 1: `jacq: No such file or directory`; therefore I did not rebuild dist. Treat the checked-in dist as the observed artifact; reproducibility/version compatibility is unverified.
+
+## Privacy, safety, and legal-content caveats
+
+- The instructions ask the user to provide full legal name, consumer email(s), and state/country, stored in `~/.privacy-rights/profile.yaml`; they say not to commit it. Request metadata is stored in `~/.privacy-rights/requests.json`. The source is text-only and does not establish encryption, restrictive file permissions, backup exclusion, or retention enforcement.
+- Positive guardrails include requiring explicit approval of the rendered message before sending, pausing for CAPTCHA/identity verification, not acting as an authorized-agent service, and warning about irreversible deletion/export sensitivity. These are prompt instructions, not enforced product controls.
+- The package includes statute citations, deadline claims and privacy-request advice. Those legal assertions were not independently verified against current primary legal sources in this software review; do not treat this candidate as a legal authority.
+- Discover is described as scanning email metadata, but it is not included in source/dist. No email account, Gmail MCP, browser session, external privacy-registry, or recipient was accessed.
+
+## Verification
+
+- Automated tests: not available; repository has no tests directory or test workflow. This is not recorded as a passing test suite.
+- Python CLI was run only in disposable `/tmp/nm-skillshub-venv-20261123` dependencies and a temporary HOME. `python -m skillshub.cli list` exited 0, stdout `No skills installed yet.
+Run skillshub search <query> to find skills.
+`, stderr empty. The CLI callback created `.claude/skills`, `.codex/skills`, `.cursor/rules`, `.agents/skills`, `.skills-hub/skills` under the temporary HOME; no user home was touched.
+- `python -m compileall -q skillshub` with PYTHONPYCACHEPREFIX redirected to `/tmp` exited 0, stdout/stderr empty.
+- A local-only metadata regression probe built a disposable bare Git remote, source commit, and clone entirely under temp HOME. All local Git setup/push/clone and update calls exited 0. Installed record platform before `update_skill()` was `codex`; afterward it was `unknown` because `_git_pull()` records with platform=None. No network or GitHub API was contacted.
+- `publish_skill()` source calls `gh repo create ... --public` unconditionally; not invoked. No consumer data, personal name/email, provider credential, legal request, session, or user configuration was used.
+
+## Sources
+
+- Repository overview: https://github.com/jondwillis/privacy-rights-plugin
+- Pinned README: https://github.com/jondwillis/privacy-rights-plugin/blob/131e1c6cc9d499b0f3a63682f02feaa2c126ae11/README.md
+- Pinned target/fallback manifest: https://github.com/jondwillis/privacy-rights-plugin/blob/131e1c6cc9d499b0f3a63682f02feaa2c126ae11/plugin.yaml
+- Pinned deletion workflow: https://github.com/jondwillis/privacy-rights-plugin/blob/131e1c6cc9d499b0f3a63682f02feaa2c126ae11/skills/delete-my-data.md

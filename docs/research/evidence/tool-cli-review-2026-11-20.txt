@@ -1,0 +1,46 @@
+NEXUS MEMORY — CANDIDATE REVIEW (2026-11-20)
+
+Candidate: superradcompany/tool-cli
+Repository: https://github.com/superradcompany/tool-cli
+Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-superradcompany-tool-cli-20261120
+Reviewed HEAD: bdae5eef9866ce2b49c74b16d64918edde5da48a (2026-02-21)
+License/package: Apache-2.0; Cargo package `tool-cli` 0.2.0. Current GitHub API snapshot: 18 stars / 2 forks; pushed_at 2026-02-20T23:23:33Z; updated_at 2026-10-26T22:04:09Z. Latest GitHub release `Tool v0.2.0` (2026-02-13). GitHub compare `v0.2.0...main` reports one commit ahead, no commits behind.
+
+Classification / scope
+- Rust command-line manager for installable MCP tool packages, MCPB manifest authoring/validation/packing/publishing, invocation/config, OAuth, and registration into supported MCP hosts.
+- It is a useful adjacent **MCP configuration/host adapter** reference. It is not a ChatGPT/Codex Project/Section/Session importer/exporter, not a transcript archive, and not an Agent Skills/plugin/session-tree migrator.
+- Eleven host variants are declared: Claude Desktop, Cursor, Claude Code, VS Code, Codex, Windsurf, Zed, Gemini CLI, Kiro, Roo Code, OpenCode. Their host schemas differ (`mcpServers`, `servers`, `mcp_servers`, `context_servers`, `mcp`); host config generation has format-specific branches.
+- A scoped search found no core conversation/transcript/chat-history store. The only matches in the searched README/lib/cookbook tree are in a separate LangChain example agent: it keeps `messages` and `TokenTracker` in memory, appends turns while the process runs, and `clear` resets them. It has no session-id archive/import/export or persistence path. This cookbook is not tool-cli's product session model.
+
+Host adapter behavior
+- `tool host add` supports selecting tools, `--dry-run`, `--overwrite` and an interactive confirmation. Source flow generates host-specific MCP entries, previews before any fetch, then installs missing tool packages after confirmation; before applying config/metadata it creates a backup of the host config. Backup retention is capped at five. `host remove` restricts deletion to entries tracked in tool-cli metadata. Host config and metadata are saved sequentially; there is no cross-file transaction test in the reviewed path.
+- An isolated runtime probe used a temporary HOME and the real CLI: `rtk proxy env HOME=/tmp/nm-tool-cli-preview-home CARGO_HOME=/Users/vincentadamnemessis/.cargo RUSTUP_HOME=/Users/vincentadamnemessis/.rustup cargo run --quiet -- host add claude-code sample-org/sample-server --dry-run`. Exit 0, stdout:
+```
+  → Would fetch from registry:
+
+  ↓ sample-org/sample-server
+
+  → Would modify: /tmp/nm-tool-cli-preview-home/.claude.json
+
+  + sample-org/sample-server    (new)
+
+  · Run without --dry-run to apply changes.
+```
+The temporary HOME remained free of host config writes (only rustup settings were present). This validates the dry-run path for one Claude Code MCP config on this machine; it is not evidence of session import or a live Claude Desktop restore.
+
+Credential boundary
+- HTTP-tool OAuth credentials are stored separately beneath `~/.tool/credentials/` as AES-256-GCM ciphertext. The key is at `~/.tool/secrets/encryption.key`; the code generates a random 32-byte key and applies Unix mode `0600`. Windows ACL handling is not demonstrated in the reviewed code. Do not migrate the encrypted file or key as session payload; destination should re-authenticate or use an explicitly supported secret manager.
+- `CREDENTIALS_SECRET_KEY` is declared as an environment variable for encryption-key configuration. The candidate's `--config` and OAuth work is MCP tool setup, not API-key conversation/session transfer.
+- Optional cookbook `bash_mcp` runs caller-supplied scripts with `bash -c`; this is an example server with arbitrary command execution, not the default tool-cli manager. Do not enable it without explicit user trust and permission review.
+
+Observed quality results
+- `rtk cargo test` exit 0: **148 passed (3 suites)**. `rtk cargo fmt --all -- --check` exit 0.
+- Current repository workflow files define a cross-platform Rust test/build matrix (Ubuntu/macOS/Windows), cargo checks/fmt/clippy/doc, and an audit workflow. GitHub Actions API for exact HEAD `bdae5eef9866ce2b49c74b16d64918edde5da48a` shows latest Rust Tests run #22245113653 succeeded on 2026-02-20; earlier workflow audits also show success. CI evidence is historical to that commit.
+- `Cargo.toml` uses `rmcp` from the mutable `develop` branch, while `Cargo.lock` pins git revision `25f1bb700ef9ae2d15c8580acbcbca8ad7e99cf9` for the tested resolution. Preserve lockfile/revision in any reproducible build.
+- CodeGraph was initialized for this checkout, not borrowed: 80 files / 2,031 nodes / 6,148 edges; status current. Source checkout HEAD is clean after ignoring the local CodeGraph index via `.codegraph/.gitignore` as directed.
+- CodeGraph found no direct tests covering `host_add`, `host_remove`, `host_preview`, or MCPB tool parsing despite the broad 148-test suite; most tests cover host schema/path, manifest parsing, validators and helper functions. The synthetic host dry-run covered one `claude-code` add-preview case only.
+
+Disposition
+- `ADJACENT_MCP_PACKAGE_AND_HOST_CONFIG_MANAGER_NOT_SESSION_MIGRATOR`.
+- Reuse as an architecture/test reference for explicit per-host MCP config adapters, dry-run/confirmation, backups, MCPB validation and separately encrypted OAuth credentials. Keep the portable session graph, Skills/Agent Plugins, memory, attachments, token history, schedules, and account auth as independent objects with separate adapters.
+- Review inventory after this row: 44/303 reviewed / 259 unreviewed. Next exact unreviewed registry row is stored in `docs/research/github-candidates.json`.

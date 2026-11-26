@@ -1,0 +1,50 @@
+Candidate review: seed-forge/harness-ai-kit
+Date: 2026-11-20
+Bound target: disposable candidate project copy at /private/tmp/nm-next-agent-sessions-review-20261120/candidate/project
+Source checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-seed-forge-harness-ai-kit-20261120
+Origin: https://github.com/seed-forge/harness-ai-kit.git
+Exact source HEAD / remote main: 43d6a659cb0d1b3409f8b0a98166f964bc067e7a (2026-08-28)
+Repository capture: 26 stars / 2 forks; Apache-2.0; Python.
+
+Selection + clone/index
+- Candidate index was 39/303 reviewed; this repository was the first exact `review_status == unreviewed` row.
+- A corrected dispatcher cloned into the cache checkout above. CodeGraph initialized 274 files / 4,548 nodes / 12,169 edges; only `.codegraph/.gitignore`'s `!.gitignore` exception was removed. `rtk codegraph status` was current.
+- Source checkout origin and HEAD were re-read; `rtk git status --short` exited 0 with empty stdout. GitHub remote `main` matched HEAD at review time.
+
+Source model and boundaries
+- Current main README describes `harness-ai-kit.yml -> resolve -> harness-ai-kit.lock -> runtime materialization` for typed asset types Skills, CLIs, MCPs, plugins, hooks, subagents, loops; safe stage, checksums, rollback-aware install, project/global scope.
+- `ProjectManifestAssets` source has list fields `skills`, `clis`, `plugins`, `hooks`, `subagents`, `mcps`, `loops`. This is an asset dependency model, not the ChatGPT project/session/conversation containment graph.
+- Main runtime source exposes Codex, dsh, Pi, Claude Code, Kiro, Cursor, OpenCode and Qoder. Skill install mode supports directory, Kiro steering Markdown and Cursor `.mdc` rule rendering. Managed non-skill assets land in generic `.agents/<type>` directories; that alone does not configure or register each native runtime. Plugin install has a distinct DSH-only `dsh plugin ...` route.
+- Loop state tracks workflow iterations, lifecycle status, metrics, error log, and iteration details. It is not chat history/session/turn/token state.
+- Targeted CodeGraph exploration and source scan found no conversation/transcript/chat-history importer/exporter or Cloud session writer in the core package/CLI. Broader grep had Dify CLI conversation APIs; these manage Dify app conversations and are not cross-harness session migration. No sources were imported or run against a user's account.
+
+Published artifact and release gate (distinguish source main from installable package)
+- GitHub release page and official PyPI page list 0.2.0 dated 2026-08-12 as latest; release note says 34 Skills and 50 commits to main since the release. Main README/pyproject say 0.18.18. Direct official `https://pypi.org/pypi/harness-ai-kit/0.18.18/json` returned HTTP 404.
+- Official PyPI 0.2.0 wheel: `harness_ai_kit-0.2.0-py3-none-any.whl`, 279,148 bytes. Downloaded through HTTPS `curl`; SHA-256 computed as `1fd3289fec8b2cff3af7d6185fd883adb76cb53c02476f741af1f3a761df765f`, exact match to PyPI JSON and page. 127 archive members; static scan of bundled Python source found LoopState/runtime/manifest code and no `conversation`, `transcript`, `chat_history` or session-export symbols. Wheel was not installed or imported.
+- PyPI page also gives the sdist SHA-256 `fc33960d7bf2464eff8fe3595bca4eab923e2f88949c2d53d1f3b95e9d08981f`; both public files have provenance metadata from GitHub Actions.
+- Exact-HEAD CI public-release gate run #33100658273 (2026-08-27) completed success. Subsequent release run #33101008389 (v0.18.18, 2026-08-27) failed on PyPI upload; downloaded GitHub Actions log showed `403 Invalid API Token: OIDC scoped token is not valid for project 'harness-ai-kit'`. It produced a release-build artifact but not a published 0.18.18 PyPI package. Do not conflate successful TestPyPI hash verification/build with successful PyPI publication.
+- Upstream release manifest at current main has publication allowlists and `publish:false` hold entries for two candidate CLI packages pending promotion; repo also has a tested surface scanner and public-only staging policy. This process is useful as a software supply-chain pattern, but does not fill the session-migration gap.
+
+Local check
+- `rtk pytest tools/test_public_release_gate.py` exited 0: 30 passed. No full test suite, live Cloud write, or account-level test was run.
+- First exploratory `rtk ls tests` exited 1 because this repository has no root `tests/` directory; its checked-in gate tests live under `tools/`. Corrected with `rtk ls tools` and ran the targeted gate tests above.
+- Initial Python `urllib` fetch of PyPI JSON/wheel exited 1 due local Python certificate verification (`SSLCertVerificationError`, missing trusted CA); no TLS bypass was used. Retried with system `curl` HTTPS verification, then matched the fetched wheel's SHA-256 against PyPI's official metadata.
+- `rtk grep -R -i "conversation|transcript|chat history|session export|session importer" harness_ai_kit cli` returned no core package matches (grep exit 1/no matches); broader tree grep surfaced Dify API's own conversations only, excluded as unrelated.
+
+Quality documentation drift
+- Current main includes a live release workflow and detailed public release gate, but docs/concepts and docs/asset-map text include stale/older supported-runtime and skill counts. The README headline says 42 skills / 5 CLIs / 1 plugin; public v0.2.0 release note says 34 skills, while source catalog/docs have other counts. Pin artifact+date when comparing.
+- Apache-2.0. No local full test, security audit, Cloud session write, or migration accuracy rate claimed.
+
+Primary source URLs checked
+- Repository source / README: https://github.com/seed-forge/harness-ai-kit
+- GitHub release list and v0.2.0 notes: https://github.com/seed-forge/harness-ai-kit/releases and https://github.com/seed-forge/harness-ai-kit/releases/tag/v0.2.0
+- PyPI package/release files/provenance: https://pypi.org/project/harness-ai-kit/ and https://pypi.org/project/harness-ai-kit/0.2.0/
+- PyPI JSON: https://pypi.org/pypi/harness-ai-kit/0.2.0/json; checked 0.18.18 at https://pypi.org/pypi/harness-ai-kit/0.18.18/json (HTTP 404).
+- Exact-main public-release CI success: https://github.com/seed-forge/harness-ai-kit/actions/runs/33100658273
+- Exact-main v0.18.18 release failure: https://github.com/seed-forge/harness-ai-kit/actions/runs/33101008389 (run log inspected with `gh run view --log-failed`).
+- Release manifest and methodology: https://github.com/seed-forge/harness-ai-kit/blob/main/docs/oss-public-release.yaml and https://github.com/seed-forge/harness-ai-kit/blob/main/docs/oss-release.md.
+
+Verdict
+- Keep as high-value adjacent implementation reference for declarative assets, version/checksum lockfiles, runtime capability profiles and safe staged materialization.
+- Exclude from direct cross-harness conversation/project/session migration feature count. It does not preserve Project/Section Group hierarchy, child/branch links, ordered user/assistant/tool turn graph, prompt supplements/interruptions, image/file attachments, linked URLs, token usage, schedule tasks, tool call/result traces, assistant-owned memory, or Cloud API-key conversation targets.
+- After registry update: 40 reviewed / 303 total / 263 unreviewed. Next exact unreviewed record must be obtained by filtering the updated registry, not a guessed candidate.

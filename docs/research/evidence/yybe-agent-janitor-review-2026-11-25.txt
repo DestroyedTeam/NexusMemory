@@ -1,0 +1,28 @@
+NEXUS MEMORY — CANDIDATE #303 REVIEW
+Yybe/Agent-Janitor — 2026-11-25
+
+Disposition
+- Adjacent reference: cross-Harness storage inventory and reversible-cleanup/safety patterns. Not a ChatGPT/Claude/Harness migration engine; no conversation export/import, Project/Section transfer, session graph, parent-child/subagent mapping, resume-ID remapping, or source/target conversion was found.
+- Source reuse is MIT-licensed; useful design ideas only. Do not treat its path inventory or cleanup actions as migration semantics.
+
+Identity / reproducibility
+- Repository: https://github.com/Yybe/Agent-Janitor
+- Review commit: 9de00a63e42fdf6eef0620189ec178869af4e5ed (HEAD; package version 0.3.1).
+- Repository is small (9 commits; 0 stars/0 forks observed at review), Node >=22.5, zero runtime dependencies, 20 shipped adapters; MIT LICENSE reopened locally. CodeGraph current: 25 files, 325 nodes, 1,229 edges. Checkout stayed clean after tests.
+- `rtk proxy env -u JANITOR_REAL_DB npm test`: exit 0; 34 tests, 33 passed, 0 failed, 1 skipped (opt-in real-machine DB integration). The skipped path was not enabled; no real OpenCode DB was opened. Tests use synthetic fixtures.
+
+Implementation signals
+- `scan` is documented read-only (quick OpenCode scan reads stats only; full vacuum analysis reads the local DB for planning/proof). Cleanup is opt-in (`--apply`), moves eligible files to trash with a manifest, and restore refuses collisions. OpenCode vacuum uses schema checks, reconstruction proof, backup by default, transactions, and integrity checks.
+- `codex-gc` filters old refs under `refs/codex/turn-diffs/`, deletes them, then calls `git gc --prune=now`. The test checks deletion of old Codex refs and preservation of fresh refs/user branch; it does not test unrelated unreachable objects.
+
+Synthetic GC scope probe (disposable repository only; no user repo/data touched)
+- Fixture repo: `/private/var/tmp/nm-agent-janitor-303-synthetic/repo`. A synthetic 2000-01-01 commit was reachable from `main` and pointed to by `refs/codex/turn-diffs/checkpoints/old-session`; a separate pre-existing unreachable blob was created with `git hash-object -w`.
+- Before apply, `git cat-file -e e595d9cdf0c7d8e2a26b7852c59c312f96da143f^{blob}` exited 0.
+- Command: `node dist/cli.js codex-gc --repo /private/var/tmp/nm-agent-janitor-303-synthetic/repo --retention 30d --apply`; exit 0, stderr empty. Literal output is in `.verified303/logs/codex-gc-synthetic-probe.json`.
+- After apply, old Codex ref was absent (probe exit 1); `main` still resolved to `6997fca851f773c0599385aeb5fef26cdf8b69ab` (exit 0); unrelated dangling blob was no longer addressable (`git cat-file -e ...^{blob}` exit 128, stderr `fatal: Not a valid object name e595d9cdf0c7d8e2a26b7852c59c312f96da143f^{blob}`).
+- Interpretation is limited to the synthetic run: `git gc --prune=now` collected a pre-existing unreachable object in addition to the now-unreferenced Codex checkpoint graph. The source limits which refs it deletes, but Git GC can prune any unreachable objects in that repository. The README/safety wording should warn this is whole-repository reachability GC and that other dangling/unreachable user objects may be permanently removed; do not recommend apply without repo backup/preview and explicit acceptance.
+
+Reuse boundary
+- Good adjacent material for Nexus Memory: stat/read-only inventory, per-path provenance, dry-run defaults, explicit apply gates, trash manifests, restore collision checks, DB reconstruction proof/backup, and synthetic safety tests.
+- Reject as a session mover: no project/section tree or session DAG, no Chat/Cowork/Code modality adapters, no image/link/attachment payload migration, no continuation/interrupt history or tool/subagent fidelity, no scheduled-task migration, no tokens/usage transfer, and no destination resume validation.
+- User-data and credential boundary upheld: no actual API key, personal session store, live Harness DB, or real repository inspected.

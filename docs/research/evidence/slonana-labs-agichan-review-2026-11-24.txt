@@ -1,0 +1,32 @@
+# Documentation screen — slonana-labs/agichan (#242; 2026-11-24)
+
+## Bound user scope
+
+User target remains ChatGPT Project Destruction Era with Project/Section Group and complete Session/subtask/fork/resources, moving toward Claude Desktop through third-party inference in Chat, Cowork and Code, plus local/self-hosted Claude Code API-key/gateway. This candidate is about live multi-agent task coordination; the screen does not treat swarm messages as a migration archive.
+
+## Candidate identity and provenance gate
+
+- Repository: https://github.com/slonana-labs/agichan
+- Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-slonana-labs-agichan-20261124-followup242
+- Branch main; HEAD 3ac4ecd80704cac104ece99c608ea72c6029cdbd; commit 2026-10-27T15:55:49-04:00; subject “agichan 0.5.4: merge the public repo's 2026-10-24 commits back into the source”. Clone clean and tracking origin/main.
+- The repository snapshot has no LICENSE, COPYING, copyright notice or SPDX grant at the root; filename search found no license files anywhere. README/docs search found no grant. The GitHub repository page does not display a license entry and the primary-corpus GitHub metadata has license_spdx=null. GitHub at review showed 4 stars, 2 forks, 43 commits, 0 open issues and 0 open pull requests.
+- This is an unresolved-license/provenance boundary, so source review stops here. This is a documentation-only screen, not a code review or security audit. Do not use or adapt its implementation or code-derived architecture unless a compatible license/provenance statement is supplied and independently verified.
+
+## README-only product claims; not verified
+
+The README describes a live swarm protocol: a manager assigns TASK messages to workers across machines, each worker operates in its own repository clone and pushes a branch, then posts DONE/BLOCKED updates. It advertises a common encrypted channel, one-time join codes, a manager/worker roster and optional task escrow. The README lists an MCP server, Skill, CLI and Claude Code hooks; documented harness names are Claude Code, Codex, OpenCode and Pi. It says remote/cloud machines can join but currently supports Linux x86-64 only, with macOS described as planned.
+
+This is live coordination, not a source export/import converter. The documentation does not specify ChatGPT Projects, Section Groups, archived Session transfer, branch/fork reconstruction, conversation attachments, token usage, or Claude Desktop third-party-inference Chat/Cowork/Code data stores. A worker clone/task branch and channel digest are not equivalent to a migrated conversation Session graph. The README's end-to-end-encryption and test claims are not validated here.
+
+## Safety and scope boundary
+
+No install script, package, build, self-test, harness, relay, wallet, join code, cloud VM, blockchain payment or user data was touched. The README says install/setup can download a signed CLI, create a sponsor wallet/private channel and wire hooks/MCP settings; because the license gate failed and those operations cause external or persistent side effects, none was run. No CodeGraph index was initialized for this checkout and no source implementation/test files were opened.
+
+Disposition: mark the row documentation_screened_no_license_provenance_stop, not code-reviewed; count it as screened for breadth accounting but not as a supported, tested or reusable migration solution. Keep only the high-level observation that live task orchestration is a separate plane. No code or code-derived design is reused.
+
+## References
+
+- Repository/README and GitHub metadata: https://github.com/slonana-labs/agichan
+- Issues: https://github.com/slonana-labs/agichan/issues
+- Pull requests: https://github.com/slonana-labs/agichan/pulls
+- The README states version 0.5.4; no local package/build file was inspected after the license stop.

@@ -1,0 +1,28 @@
+Nexus Memory candidate #184 source/security review — KingImperio/ctx
+Review date: 2026-11-23
+Pinned repository state: https://github.com/KingImperio/ctx/tree/16ad7a730d57bb3a78e5531d3a6bcc3aeece365e
+HEAD and refs/heads/main: 16ad7a730d57bb3a78e5531d3a6bcc3aeece365e. CodeGraph indexed 13 JS files, 226 nodes, 639 edges. All 13 `src/*.js` files pass `node --check` (exit 0). After CodeGraph init, only `.codegraph/` became untracked; removed only the `.codegraph/.gitignore` self-preserving `!.gitignore` exception, leaving transient index ignored.
+
+Decision
+--------
+A meaningful adjacent resource-plane project: dual CLI/MCP interface for a local shared registry of Skills, MCP definitions and CLIs; on-demand keyword suggestion; discovery from several specific agent settings directories. Not the requested cross-Harness project/session transfer engine. No Projects, Sections, SessionGraph, coordinator/worker conversations, transcripts, forks, media, token/cost history, long-term project memory or scheduled-task importer exists. Only a few Harness-specific resource sources are scanned.
+
+Implementation findings
+-----------------------
+* README calls it a universal agent resource manager and documents CLI + MCP interfaces, Skills/MCP/CLI registries, source discovery and git-based registry sync. Actual source paths cover Claude Code, OpenClaude, OpenCode, Hermes and OpenCode package caches; no ChatGPT/Codex/Cursor/Claude Desktop Chat/Cowork/Code session adapters.
+* Standard nested `~/.claude/skills/<name>/SKILL.md` was not found by `discoverSkills`: source calls `scanDir(..., recursive=false)` for Claude/OpenClaude/OpenCode, so it skips directories; Hermes/package caches are scanned recursively. This was confirmed in a synthetic fixture where the normal nested Claude skill was absent from the report, while a nested Hermes skill was discovered.
+* Auto-import builds `join(SKILLS_DIR, skill.name)` without path containment validation. A synthetic Hermes `SKILL.md` frontmatter name `../../../escaped-discovery` was imported to a sibling path outside `~/.ctx/skills`; the test file landed only inside a disposable directory. This was reproduced in a corrected run with `~/.ctx/mcps/` precreated.
+* The first path-traversal probe also exposed a partial-import bug: after it had copied the skill outside the registry, `discover(auto=true)` exited 1 with ENOENT trying to write `~/.ctx/mcps/registry.json` because the directory did not exist. No rollback removed the copied file. A controlled retry with the expected MCP directory pre-created exited 0 and reproduced the path escape.
+* `MCPManager.add` writes MCP `env` values verbatim into `~/.ctx/mcps/registry.json`; a synthetic `API_TOKEN=CTX_SYNTHETIC_SECRET` was observable in plaintext in the temp registry. The sync module's ignore list skips `.env`/secret-named files but not `mcps/registry.json`; because sync intends `git add -A`, remote credential leakage is a code-based risk inference. No remote was configured and nothing was pushed.
+* `syncInit()` failed in a temporary HOME before creating `.git`: `execFileSync('git', args, ...)` receives `args` as a string (`'init'`) instead of an argv array, producing `The "args" argument must be of type object. Received type string ('init')`, exit 1. No network was used.
+* `package.json` is v0.1.0, depends on `@modelcontextprotocol/sdk: "latest"`, has no lockfile/scripts/tests in this checkout. No npm install was run. All 13 JS files passed syntax-only `node --check`; that does not establish runtime or MCP SDK compatibility.
+* `setup` patches/generates OpenCode, OpenClaude and Hermes configuration and edits Hermes prompt-builder. It was inspected but not run. No user settings, API credentials, external services, package install, CLI execution, MCP process or agent sessions were touched.
+
+Observed isolated probe results
+-------------------------------
+Corrected synthetic discovery probe exited 0 and reported one discovered source `hermes`, imported name `../../../escaped-discovery`, `normalClaudeSkillDiscovered=false`, `escapedSkillExists=true` at `<temp-root>/escaped-discovery/SKILL.md`, and plaintext synthetic secret persistence. `syncInit()` returned exit 1 with the `execFileSync` args-type error and `.git` remained absent.
+An earlier uncorrected probe exited 1 after performing the outside-root copy because the MCP registry directory was absent; stderr was ENOENT at `<temp-home>/.ctx/mcps/registry.json`. That partial state and the corrected rerun were kept inside separate disposable roots.
+
+Code-quality / release posture
+------------------------------
+The package exposes capability claims for Skills, MCPs, CLIs, discovery and remote sync. There is no automated test suite in this source snapshot and the SDK dependency is floating `latest` without a lockfile. Source inspection and temp probes are not a release-quality test suite. Do not invoke global `install.sh`, `ctx setup`, `ctx discover --auto`, or `ctx sync` on user state. Retain only the idea of a separate ResourcePlane registry and on-demand MCP interface; redesign path containment, secret handling, transaction rollback, per-Harness source adapters, and pinned dependencies before considering code reuse.

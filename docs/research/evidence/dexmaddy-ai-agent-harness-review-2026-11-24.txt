@@ -1,0 +1,38 @@
+# Candidate #251 — dexmaddy/ai-agent-harness (2026-11-24)
+
+## Scope, provenance, and pinned source
+
+This review followed the user's latest confirmation that Claude Desktop third-party-inference Chat, Cowork, and Code are all in scope, alongside local/self-hosted Claude Code via API key or gateway. This candidate is not evidence of compatibility with any of those migration targets.
+
+- Repository: https://github.com/dexmaddy/ai-agent-harness
+- Pinned `main` checkout: `75ddb762e1392b448a2bf41d3c865e745fc243fd` (commit date 2026-07-04); the observed `git ls-remote origin HEAD` hash matched. Local status after the ignored CodeGraph index was corrected was clean.
+- A full root `LICENSE` grants MIT. The search corpus metadata snapshot retrieved 2026-11-23 reports 1 star / 1 fork and last push 2026-07-04; these are snapshot adoption/activity signals, not a quality verdict.
+- CodeGraph initialized successfully: 17 files, 242 nodes, 568 edges. `.codegraph/.gitignore` was retained and only its `!.gitignore` exception removed, leaving transient index files ignored.
+
+## What is implemented
+
+This is a hook-oriented coding-agent workflow harness. `SessionStart` reads YAML or SQLite-backed rules/checks, creates tiered Markdown context files plus a manifest and sentinel, and `PreToolUse` / `UserPromptSubmit` gates enforce context loading and optional keyword-triggered Tier 2 rules. `PostToolUse` tracks file edits, applies a simple Rule Zero similarity warning, logs edit metadata in SQLite, and emits periodic save reminders. Stop hooks can check repositories, a configured transcript filename, audit steps, and a session handoff summary.
+
+The continuity examples persist an active task backlog and a manually written `last_session` summary (topic, completed items, next items). SQLite `session_summaries` stores only `topic`, `completed_items`, `next_items`, `session_date`, `duration_minutes`, and `prompt_count`; it has no session ID, parent/fork relation, ordered message/event rows, project/section membership, or attachment/tool-call records. `require_transcript` only searches for a `chat-YYYY-MM-DD*.md` filename; this is not a parser or importer. The edit log stores file-edit metadata, not conversation turns.
+
+The setup wizard targets Claude Code, Cursor, Windsurf, Aider, and a generic custom agent. The README describes Claude Code hook events; other listed platforms have limited or custom-middleware support. It does not configure Claude Desktop Chat/Cowork/Code, a third-party inference gateway, or a target-side Desktop/local session store. “Claude Code” here must not be conflated with Claude Desktop's Code mode.
+
+No ChatGPT/Codex Project, Section Group, conversation, branch, image, URL, token-usage, Skills/MCP/plugin, schedule, or memory importer/writer was found in the reviewed docs and code paths. This is session continuity for new coding work, not cross-Harness migration.
+
+## Verification and observed limitation
+
+- README-documented command `rtk proxy python3 tests/smoke_test.py --verbose`: exit 0; **37 passed, 0 failed** (validator, startup manifest/sentinel, PreToolUse gate, prompt gate, stop hook, audit runner). No install, model call, API key, Desktop client, or user data was used.
+- Synthetic isolated SQLite probe: `on_session_start_db.py --init-db` exited 0. With a new synthetic `CLAUDE_SESSION_ID` and no summary, `on_stop.py` exited 2 with `No session summary saved`. After inserting an unrelated same-day summary row, the same session's `on_stop.py` exited 0 and printed `All shutdown checks passed.` The schema has no session ID on the summary row and the stop query checks only `session_date >= today`, so this is not a per-session handoff gate. The probe used only a disposable fake DB and no user's data.
+- This is a targeted smoke test, not a full platform or database compatibility matrix. PostgreSQL/runtime behavior, setup-wizard installation, all hook combinations, and a real Claude Desktop target were not tested.
+
+## Disposition
+
+**ADJACENT_SESSION_CONTINUITY_REFERENCE_ONLY — NOT A MIGRATOR.** The useful design distinction is a lightweight `AgentMemory/Backlog` handoff plane, separate from a lossless canonical SessionGraph. The startup gates are a possible pattern for a destination-side bootstrap, but the SQLite summary identity weakness must not be copied. No source reuse or dependency recommendation; no compatibility score is claimed.
+
+Pinned-source references:
+- README: https://github.com/dexmaddy/ai-agent-harness/blob/75ddb762e1392b448a2bf41d3c865e745fc243fd/README.md
+- Session continuity guide: https://github.com/dexmaddy/ai-agent-harness/blob/75ddb762e1392b448a2bf41d3c865e745fc243fd/docs/reference/session-continuity.md
+- DB schema/startup: https://github.com/dexmaddy/ai-agent-harness/blob/75ddb762e1392b448a2bf41d3c865e745fc243fd/hooks/on_session_start_db.py
+- Stop hook: https://github.com/dexmaddy/ai-agent-harness/blob/75ddb762e1392b448a2bf41d3c865e745fc243fd/hooks/on_stop.py
+- Wizard targets: https://github.com/dexmaddy/ai-agent-harness/blob/75ddb762e1392b448a2bf41d3c865e745fc243fd/setup.py
+- Smoke test: https://github.com/dexmaddy/ai-agent-harness/blob/75ddb762e1392b448a2bf41d3c865e745fc243fd/tests/smoke_test.py

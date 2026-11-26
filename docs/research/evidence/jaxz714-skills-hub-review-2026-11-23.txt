@@ -1,0 +1,43 @@
+# Candidate #179 — Jaxz714/skills-hub
+
+Review date: 2026-11-23. Isolated checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-Jaxz714-skills-hub-20261123-followup178. Local HEAD and origin refs/heads/main both equal 2670bbb911b0182ba42cd243eed113fda1c5210e; commit timestamp 2026-05-31T01:10:28+08:00. GitHub page at review time showed 2 commits, 0 stars and 0 forks. pyproject version 0.1.0, Alpha classifier, MIT license. CodeGraph current: 9 files, 90 nodes, 171 edges. No tests directory or automated test suite is present.
+
+## Disposition
+
+**Reject as a Nexus Memory migrator; keep only as a small Skill-discovery/installation reference.** The README describes a GitHub search/clone/update/scaffold tool for Claude Code, Codex, Cursor and generic skill folders. The actual models are SkillInfo and SkillManifest metadata, with one platform string. Install clones a GitHub repository into a platform-specific Skills directory; it does not parse and transform harness semantics. It has no ChatGPT/Codex Project or Section hierarchy, Session/parent/fork graph, transcript, media/link/token data, scheduled tasks, persistent memory, or archive import/export. It does not target Claude Desktop third-party-gateway Chat, Cowork, or Code modes.
+
+## Actual capabilities and limits
+
+- CLI commands: search GitHub repositories, install, list, update, scaffold, publish, info and uninstall Skills. Targets are Claude Code (~/.claude/skills), Codex (~/.codex/skills), Cursor (~/.cursor/rules), .agents/skills and a generic Skills Hub directory. These are Skills folders only, not session stores.
+- Registry search calls the GitHub API, sorts by stars and guesses one target from repository topics/description. It is heuristic classification, not compatibility testing. Install clones the full GitHub repo without a commit pin/content digest or target-specific transformation. An existing install is updated via git pull --ff-only.
+- `main()` calls ensure_dirs before commands. A `list` invocation with HOME redirected to a temp directory returned “No skills installed yet” (exit 0), while creating all five target directory trees (Claude, Codex, Cursor, .agents and generic) and .skills-hub state there. No actual user home was used.
+- The model has no canonical project/session, source lineage or dependency graph. `SkillManifest.dependencies` is metadata; install does not resolve dependencies. No tests directory, CI/test config or round-trip fidelity test exists in this 9-source-file checkout.
+
+## Reproduced local update metadata bug
+
+A disposable local bare Git remote and clone were created entirely inside the temporary HOME; no GitHub or other network was contacted. The synthetic installed.yaml record started with platform `codex`. Calling `update_skill()` succeeded against the local remote, but `_git_pull()` then called `_record_install(..., platform=None, ...)`, which stores `platform or "unknown"`. Observed state transition: platform codex → unknown after update, exit 0. This can make `list` lose the target platform label after routine updates.
+
+## Additional source-level operational risks (not dynamically exercised)
+
+- publish_skill runs `gh repo create ... --public` unconditionally; it exposes the current Skill repository publicly if the user invokes publish and does not provide a private-mode option. The publish workflow was not run.
+- uninstall_skill trusts the path in installed.yaml and calls shutil.rmtree(path) without checking it is within one of the configured Skills roots. This is a local-registry integrity risk; no deletion POC was run.
+- Installed records are keyed only by repo name, not owner/repo, so same-named repositories can overwrite registry entries. Platform inference prioritizes “claude” over “cursor” and “codex” if those words occur in text; it is not a compatibility proof.
+- Dependency installation and full CLI smoke were done only in an isolated venv/temp HOME. No user Skill folder, credentials, GitHub API, `gh` authentication, published repo, provider, MCP server, or conversation/session data was accessed.
+
+## Verification
+
+- The source tree contains no tests/ directory. Automated unit/integration coverage: unavailable (not silently counted as 0 failures).
+- Compile check: rtk proxy env PYTHONPYCACHEPREFIX=/tmp/nm-skillshub-pycache-20261123 /tmp/nm-skillshub-venv-20261123/bin/python -m compileall -q skillshub — exit 0; pycache redirected to /tmp.
+- CLI smoke using the source tree and dependencies installed only in `/tmp/nm-skillshub-venv-20261123`: `python -m skillshub.cli list` with HOME set to `/var/folders/62/8__6fhqd5dq7bh2cgp2_75lh0000gn/T/nm-skillshub-cli-home-20261123-s1g2ags3` — exit 0, stdout `No skills installed yet.
+Run skillshub search <query> to find skills.
+`, stderr empty. Observed only temporary HOME directories created.
+- Local update POC — remote initialization, source commit/push, local clone and update all returned exit 0; before platform=`codex`, after platform=`unknown`; no network.
+- Global Python lacked Click initially (`ModuleNotFoundError: No module named 'click'`), so dependencies specified by pyproject were installed only into a disposable venv: click 8.5.1, httpx 0.28.1, PyYAML 6.0.4, Rich 15.0.0 plus transitives. No repo files or user environment were modified.
+
+## Sources
+
+- Repository: https://github.com/Jaxz714/skills-hub
+- Pinned README: https://github.com/Jaxz714/skills-hub/blob/2670bbb911b0182ba42cd243eed113fda1c5210e/README.md
+- Pinned installer/update code: https://github.com/Jaxz714/skills-hub/blob/2670bbb911b0182ba42cd243eed113fda1c5210e/skillshub/installer.py
+- Pinned config/target directories: https://github.com/Jaxz714/skills-hub/blob/2670bbb911b0182ba42cd243eed113fda1c5210e/skillshub/config.py
+- Pinned public-publish code: https://github.com/Jaxz714/skills-hub/blob/2670bbb911b0182ba42cd243eed113fda1c5210e/skillshub/scaffold.py

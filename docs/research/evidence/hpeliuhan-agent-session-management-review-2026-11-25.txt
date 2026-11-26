@@ -1,0 +1,11 @@
+# Candidate #283 screening: hpeliuhan/agent-session-management
+
+- Review date: 2026-11-25 (Asia/Shanghai).
+- Inventory description: `Manage Session migration from host to cloud` (search-result metadata only; not a functional claim).
+- Repository: https://github.com/hpeliuhan/agent-session-management; public, default branch absent, empty repository, zero stars/forks, no license metadata, no release, not archived. GitHub API reports last pushed/updated 2026-10-22.
+- `rtk git clone --depth 1 https://github.com/hpeliuhan/agent-session-management` exited 0 but emitted `warning: You appear to have cloned an empty repository.` The checkout has `.git` only, no branch commit, source files, tags, or `git ls-remote` refs. `gh run list --limit 5` returned `[]` (exit 0). The GitHub web page also displays “This repository is empty.”
+- No CodeGraph index, build, test, feature, security, or license review was possible because no source tree exists; no claim about intended functionality is made.
+
+## Disposition
+
+**EMPTY_REPOSITORY_SCREENED_OUT; NOT EVIDENCE OF A SESSION MIGRATOR.** The description is highly relevant to the research query but the public repository is currently empty, so it contributes no implementation, schema, test, or reuse value. Exclude it from the quality shortlist until code and an explicit license become available. No account, target session, or user data was accessed.

@@ -1,0 +1,44 @@
+# Candidate #229 — xdlkc/SkillHub review (2026-11-24)
+
+## Identity and public status
+
+Pinned `main` and `origin/main`: `a5e955012307b59ba47a49f6366d45c662b04f77` (commit date 2026-11-17; clean shallow checkout). GitHub snapshot opened 2026-11-24: 44 commits, 0 stars, 0 forks, no Releases, no license file/SPDX declaration, and no workflow configuration (Actions page is the generic empty onboarding screen). Stack: Node 26-compatible local web app, React/TypeScript/Vite, native `node:http`/`node:sqlite`, and Git/gh subprocesses. `package.json` is private and README requires Node 22.13+ plus `gh auth login` for GitHub metadata requests.
+
+## What it does / data model
+
+SkillHub is a **local Skill repository catalog and installer**, not a Harness migration app. SQLite tables model skill-repository catalog rows, installed-item source provenance, per-agent enable preferences, and one metadata-sync setting. A bundled version-1 `data/skills.json` contains 115 public repository metadata rows plus a cloned flag; the local database and clones live outside the Git sync document. A second machine can upsert that metadata and shallow-clone whichever repositories are flagged, but the sync file does not pin immutable commit contents, local paths, installed copies, or Skill dependency closure. `import --prune` deliberately removes local catalog rows absent from the shared list.
+
+The UI/backend offers catalog search/tags, one-click `owner/repo` metadata fetch and shallow clone, local README/SKILL preview, SKILL.md scanning, global copy-install/update/uninstall and file diff, repo metadata sync, and 73 statically declared agent IDs. The registry observed 73 unique IDs mapped to 66 unique directory paths; several IDs share `.agents/skills`, `.config/agents/skills`, or `.zencoder/skills`. `getAgents()` detects directory existence, not runtime version or actual skill discovery. Directories are global paths; no project-root or Desktop-mode adapter is modeled. The Claude entry targets `~/.claude/skills` (overridable CLI config dir), and the Codex entry targets `$CODEX_HOME/skills`/`~/.codex/skills`; this does not verify current Codex discovery paths and is not Claude Desktop 3P Chat/Cowork/Code support.
+
+## Fit against Nexus Memory
+
+The app has no ChatGPT/Codex Project or Section Group importer, session store reader, transcript/event export, parent/fork/subagent lineage, edits/continuations, media/attachment archive, token/cost telemetry, MCP/server/plugin configuration, scheduled-task conversion, target session writer, identity mapping, or native resume. SkillHub's “project” is a local filesystem/project root used in the app itself, not source conversation hierarchy. Its sync is catalog metadata plus `cloned` booleans, not copy fidelity for installed Skill bodies or sessions. It is adjacent ResourcePlane inventory/provenance UX only; no migration accuracy denominator exists.
+
+## Source review and synthetic runtime findings
+
+Repository source was inspected at the pinned commit (`server/agents.mjs`, `server/index.mjs`, sync/auto-sync helpers, routes, and tests). Positive: metadata auto-sync is disabled by default; its Git helper stages/commits only `data/skills.json`, checks upstream movement and unrelated commits, and has substantial isolated tests. GitHub `gh api` and `git clone` arguments use `execFile`, not shell interpolation. The bulk catalog is kept separate from local paths.
+
+Risks reproduced only in isolated `/tmp` fixtures:
+
+1. **Unauthenticated wildcard-bound API.** The backend calls `server.listen(PORT)` without a host. Running it with `PORT=18787` produced `lsof` listener `TCP *:18787 (LISTEN)` (IPv6 wildcard). Responses set `Access-Control-Allow-Origin: *`, methods include mutation verbs, and there is no auth check. With synthetic `Origin: http://attacker.example`, `GET /api/agents` returned 200 + `*`, `OPTIONS /api/skills` returned 204 + `*`, and a JSON `POST /api/skills` created a fixture row (201). This proves the HTTP surface is open and cross-origin-readable at the API layer; it is a network/browser exposure risk, not a claim of a remote exploit on the user's machine. Bind loopback explicitly and add auth/CSRF/origin restrictions before real use.
+2. **Symlink escapes lexical path guard.** `GET /api/skill-items/content` rejects direct `../../` (400) but performs only lexical `path.resolve`/`startsWith` containment. A synthetic cloned `skill/SKILL.md` symlink to a sentinel *outside* the clone root returned that sentinel in a 200 response. This is a reproducible file-read boundary failure for repositories containing symlinked Skill files. The test read only `SYNTHETIC_SENTINEL_ONLY`, never host user data.
+3. **Clone-directory collision.** `cloneDirFor(fullName)` maps a repo to `${owner}-${repo}`; valid pairs `a-b/c` and `a/b-c` both become `a-b-c`. In an isolated registry, the two separate catalog rows both returned 200 `status: already` and the same local clone path, despite different GitHub origins. The clone-state check relies on `.git` existence; it did not verify repository origin in that synthetic case.
+4. **Update is merge-copy, not mirror/transaction.** `installSkill` calls recursive `fs.cpSync(..., force:true)` into the existing directory and does not remove absent source files or stage/rollback the destination. API fixture update reported source `old.txt` as `deleted`, copied `new.txt`, but left stale `old.txt` installed. Interrupted copy can also leave a partial target; no atomic receipt/restore was observed.
+
+## Tests/build/dependencies
+
+On Node `v26.7.0`, npm `11.19.0`, isolated cache, and `npm ci --ignore-scripts`: 155 packages installed. `npm test` exit 0: Vitest 5 files/27 tests plus Node native test runner 43 tests (70 total; all passed). These cover agent preferences/UI, settings, auto-sync, and Git-sync safety; **no tests reference `installSkill`, `uninstallSkill`, `diffDirs`, the install/update/uninstall API routes, CORS/binding, symlink reads, clone-origin validation, or all 73 live harnesses**. `npm run build` exit 0: TypeScript + Vite 5.4.21, 56 modules transformed.
+
+`npm audit --omit=dev --audit-level=moderate --registry=https://registry.npmjs.org` exit 0: 0 production vulnerabilities. Full `npm audit --registry=https://registry.npmjs.org` exit 1: 6 development-tree advisories (2 moderate, 2 high, 2 critical), affecting `@vitest/mocker`/Vitest, `esbuild` via Vite, `source-map-js`, and `tinypool`; lock resolved Vitest 3.2.7, Vite 5.4.21, `source-map-js` 1.2.1 and `tinypool` 1.1.1. No app exploit is claimed from these advisories; see linked upstream advisories in this report's source references below.
+
+## Disposition
+
+**Reject as a Nexus Memory migrator and do not use it to write into real user profiles.** It can inform a future optional Skill ResourcePlane catalog, but first needs loopback/auth/CORS safeguards, realpath/symlink validation, collision-free origin-bound clone IDs, exact commit/content pinning, atomic stage/verify/rollback update semantics, and per-agent versioned path/behavior tests. The installation/update and path risks outweigh the usefulness of the catalog UI as-is. Source is unlicensed, so no code reuse. All runtime tests used disposable `/tmp` roots, synthetic metadata and sentinel content; no user profile, Skill install, GitHub token, private repo, API key, or session was accessed.
+
+## Public references
+
+- [Repository README](https://github.com/xdlkc/SkillHub/blob/a5e955012307b59ba47a49f6366d45c662b04f77/README.md)
+- [Pinned `server/agents.mjs`](https://github.com/xdlkc/SkillHub/blob/a5e955012307b59ba47a49f6366d45c662b04f77/server/agents.mjs)
+- [Pinned `server/index.mjs`](https://github.com/xdlkc/SkillHub/blob/a5e955012307b59ba47a49f6366d45c662b04f77/server/index.mjs)
+- [GitHub Actions page](https://github.com/xdlkc/SkillHub/actions)
+- [Vitest file-read advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9), [Vitest code-injection advisory](https://github.com/advisories/GHSA-qxg6-89mg-rqv8), [tinypool RCE advisory](https://github.com/advisories/GHSA-5gmw-xhrv-c9v3), [tinypool second RCE advisory](https://github.com/advisories/GHSA-85c8-ppgw-ccpr), [source-map DoS advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q), [esbuild dev-server advisory](https://github.com/advisories/GHSA-67mh-4wv8-2f99).

@@ -1,0 +1,37 @@
+# rtaparay/Open-Skills-Manager source review — 2026-11-21
+
+## Identity and disposition
+
+- Controller clone: https://github.com/rtaparay/Open-Skills-Manager; exact default branch HEAD 2541c9df6f1f20fad774a38d5b3dbda6f5c1c78d, merge commit dated 2026-02-18. MIT, package/extension 0.2.0; 3 stars and 0 forks. Latest GitHub release is signed 0.2.0 (2026-02-18); the checkout contains no .github/workflows and no automated test script/directory.
+- Classification: a VS Code extension for finding, installing, and managing Agent Skills across VS Code forks. Keep only as an adjacent Skill ResourcePlane/UI reference, not a Harness project/session migration engine.
+- Its README lists seven VS Code-based install roots: VS Code, Antigravity, CodeBuddy, Cursor, Qoder, Trae, and Windsurf. It detects the active IDE and deploys SKILL.md folders. It does not export/import ChatGPT/Codex projects, Section Groups, sessions, transcripts, branches, attachments, tool events, memory, schedules, MCP/plugin definitions, provider credentials, or Claude Desktop Chat/Cowork/Code client session state.
+- Local discovery can show global .agents/.claude/.codex skill folders, but this is inventory of skill directories, not Claude Desktop or Codex transcript support. No stable session archive schema or native session writer exists.
+- README advertises a cloud catalog of ~58K skills, sourced from claude-plugins.dev and GitHub search. That count was not independently measured. The cloud path installs a selected skill archive; it does not move personal project or conversation state.
+
+## Implementation and safety observations
+
+- Skill repositories are cloned/pulled to an OS temporary cache using Git argument arrays. Skill scanning searches nested directories for SKILL.md frontmatter. Local groups are IDE-specific skill directories.
+- Cloud search combines claude-plugins.dev and GitHub repository search. The external skill path requests a ZIP through github-zip-api.val.run, extracts it with adm-zip, selects a directory containing SKILL.md, then copies it into the active IDE skill directory. No actual cloud query or skill install was performed in this review.
+- src/utils/fs.ts copyRecursiveSync removes an existing destination directory recursively before copying. This helper is called by repository installs and the remote ZIP path without a backup/undo transaction. The ordinary UI action is user-triggered, but a collision can replace custom local skill contents.
+- Static path-boundary finding: sanitizeDirName replaces separators and punctuation but leaves dot components. In a non-destructive Node check, input name "." remained ".", resolving the install destination to the skills root; input ".." remained "..", resolving to its parent. The cloud install path later removes any existing targetDir recursively before copying. Thus an untrusted catalog skill name "." or ".." could escape the intended skill directory and delete an adjacent folder. This path effect was calculated without deleting anything; the remote catalog input and full VS Code command path were not runtime tested.
+- Dependency audit of package-lock.json with npm audit --omit=dev against registry.npmjs.org exited 1 and reported one high-severity direct dependency group: adm-zip locked at 0.5.16, package range ^0.5.12. The code uses adm-zip for remote downloaded ZIP extraction. GitHub advisories identify high-severity unbounded ZIP uncompressed-size allocations for affected adm-zip versions; npm audit offered 0.6.1, outside the current ^0.5.12 range. This is a dependency finding and relevant attack surface, not a reproduced crash. A separate advisory describes symlink-following extraction; the extension extracts to a fresh temporary directory, so exploitability of that specific path was not established.
+- The cloud search uses public catalog/GitHub endpoints without provider credentials. The manager does not store or migrate agent conversation context.
+
+## Local build checks (disposable copy only)
+
+- CodeGraph initialized and verified: 12 files, 225 nodes, 688 edges; .codegraph/.gitignore preserved and only its !.gitignore exception removed. Source checkout remained clean.
+- npm ci --ignore-scripts exited 0 in a disposable copy (142 packages installed). npm run check-types exited 0. npm run compile exited 0. No test script, test folder, or CI workflow was found in the checkout.
+- npm audit --omit=dev exited 1: metadata reported 1 high vulnerable direct dependency group (adm-zip). This was run with the official npm registry.
+- No VS Code Extension Host was launched. Build/typecheck do not prove interactive editor compatibility or install safety. No real user skill directory, marketplace token, API key, session, or project was accessed.
+
+## Primary sources
+
+- Repository and README: https://github.com/rtaparay/Open-Skills-Manager
+- Signed release 0.2.0: https://github.com/rtaparay/Open-Skills-Manager/releases
+- Actions page: https://github.com/rtaparay/Open-Skills-Manager/actions
+- Pinned extension source: https://github.com/rtaparay/Open-Skills-Manager/blob/2541c9df6f1f20fad774a38d5b3dbda6f5c1c78d/src/extension.ts
+- Skills provider: https://github.com/rtaparay/Open-Skills-Manager/blob/2541c9df6f1f20fad774a38d5b3dbda6f5c1c78d/src/skillsProvider.ts
+- Installer copy helper: https://github.com/rtaparay/Open-Skills-Manager/blob/2541c9df6f1f20fad774a38d5b3dbda6f5c1c78d/src/utils/fs.ts
+- adm-zip advisories: https://github.com/advisories/GHSA-xcpc-8h2w-3j85 ; https://github.com/advisories/GHSA-7q85-xj36-vmfc ; https://github.com/advisories/GHSA-vwc7-r8mq-g2x9
+
+Evidence boundary: exact source/docs, local typecheck/build, package-lock audit, and a non-destructive path calculation only. No extension was installed in a real editor; no cloud catalog item was installed; no user workspace or skill directory was modified.

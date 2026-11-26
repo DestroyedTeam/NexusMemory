@@ -1,0 +1,27 @@
+NEXUS MEMORY — PINNED SOURCE / PACKAGE / RUNTIME REVIEW
+Repository: LiorStrugach/task-manager-mcp
+Default branch: master; pinned remote and local HEAD: 5b2bda4e8c462b39d1b37ed7b1f9748a225e9f0c
+GitHub API snapshot 2026-11-21: 2 stars, 1 fork, 0 open issues; created 2025-04-08, pushed 2025-04-08, updated 2026-02-17; 0 releases, no Actions workflow/runs. GitHub API did not identify a license; pyproject.toml claims MIT, but the checkout has no LICENSE file, so license is unverified.
+
+FUNCTIONAL SCOPE / DATA MODEL
+- A small local Terminal Task Tracker with Task list, one Project Plan, notes, CLI/TUI and a generic MCP server. Default files under ~/.tasktracker: tasks.json, plan.json, notes.txt. Tasks are a flat array (id,title,description,priority,status,created_at,updated_at); plan steps are a separate flat ordered list (id,name,description,details,order,completed,timestamps). There is no Project ID / Section Group membership, no task parent/child edge, no conversation/session object or event log.
+- MCP README lists resources tasks://all, tasks://{task_id}, plan://all, plan://{step_id}, notes://all; tools manage tasks, plan steps, notes, export and import; prompts only create a task or plan. The CLI/API data archive has exactly the keys tasks, plan, notes. Synthetic local round-trip preserved those fields. An empty object import returns success and clears tasks/plan; no backup/merge/schema validation is performed. Export/import is only TaskTracker's own application data, not ChatGPT/Codex conversation or project-session migration.
+- MCP README documents mcp install mcp_server_fixed.py for Claude Desktop. It is local MCP setup, not a remote API-key service, mode-specific Claude Desktop session importer, or Claude Code API-key conversation writer. No scheduled-task, memory, plugin, attachment or token-usage transfer exists in the reviewed implementation.
+
+QUALITY / CURRENT COMPATIBILITY FAILURES (observed)
+- Root contains mcp_server_fixed.py, not mcp_server.py; tests/test_mcp_server.py imports the absent mcp_server, so isolated pytest stops during collection with ModuleNotFoundError. Five test functions exercise mocks against the wrong/absent module, not the documented fixed server or real MCP persistence/import/export.
+- pyproject.toml declares unbounded mcp>=0.1.0 and imports FastMCP from mcp.server.fastmcp. A fresh isolated environment resolved mcp==2.3.0; running mcp_server_fixed.py failed with ModuleNotFoundError because current MCP Python SDK v2 renamed FastMCP to MCPServer. Pinning to mcp<2 resolved v1.30.0 and the fixed server then passed an interactive stdio test: tools/list, task + plan create, restart, and read persisted task/plan rows. This does not repair packaging or tests.
+- Built wheel tasktracker_mcp-0.1.0-py3-none-any.whl (SHA-256 58e6266db2153d1424d034b709b0a0b38215e96491d8d78ebb4b115ebf109c47) contains app/ but omits mcp_server.py, mcp_server_fixed.py and main.py, while entry points declare tasktracker-mcp = mcp_server:main. Installing that wheel and running tasktracker-mcp --help exits 1 with ModuleNotFoundError: No module named mcp_server. Legacy setup.py also points to main:main.
+- Metadata is stale/low adoption (2 stars, 1 fork, no CI workflow, no releases, no license file/API license detection). Do not use as a dependency for Nexus Memory; at most borrow task/plan/notes domain vocabulary and generic MCP tool/resource grouping.
+
+LOCAL TEST / FIXTURE EVIDENCE
+- First host check python3 -m pytest could not run because pytest was not installed. In an isolated /private/tmp/tasktracker-mcp-audit-20261121/venv, installed pytest, mcp 2.3.0 and hatchling without changing the host. Pytest then exited 2 at collection because mcp_server is missing.
+- mcp_server_fixed.py with resolved mcp 2.3.0 exited 1 at import (mcp.server.fastmcp removed); after explicit pip install mcp<2 selected mcp 1.30.0, the fixed server's stdio EOF smoke exited 0. Interactive MCP probe under mcp 1.30.0 confirmed initialize/tools/list and add_task/add_plan_step; a second server process read back both persisted records. All data lived in a private /private/tmp HOME.
+- API synthetic probe: export_data bundle keys exactly notes, plan, tasks; one task/one plan/notes re-imported exactly. Importing valid empty JSON object returned success, cleared tasks and plan, and left previous notes intact. No user data used.
+- Exact CodeGraph: 17 files, 233 nodes, 597 edges. Checkout remained clean after local verification.
+
+PRIMARY SOURCES
+- Pinned README / MCP guide: https://github.com/LiorStrugach/task-manager-mcp/blob/5b2bda4e8c462b39d1b37ed7b1f9748a225e9f0c/README.md ; https://github.com/LiorStrugach/task-manager-mcp/blob/5b2bda4e8c462b39d1b37ed7b1f9748a225e9f0c/MCP-README.md
+- Pinned packaging and API: https://github.com/LiorStrugach/task-manager-mcp/blob/5b2bda4e8c462b39d1b37ed7b1f9748a225e9f0c/pyproject.toml ; https://github.com/LiorStrugach/task-manager-mcp/blob/5b2bda4e8c462b39d1b37ed7b1f9748a225e9f0c/app/api/api.py
+- Pinned test and server: https://github.com/LiorStrugach/task-manager-mcp/blob/5b2bda4e8c462b39d1b37ed7b1f9748a225e9f0c/tests/test_mcp_server.py ; https://github.com/LiorStrugach/task-manager-mcp/blob/5b2bda4e8c462b39d1b37ed7b1f9748a225e9f0c/mcp_server_fixed.py
+- Official MCP Python SDK v2 migration: https://py.sdk.modelcontextprotocol.io/v2/migration/#fastmcp-renamed-to-mcpserver

@@ -1,0 +1,34 @@
+Candidate #265 — yoyooyooo/pi-session-history
+Reviewed: 2026-11-25
+
+Identity / provenance
+- Origin: https://github.com/yoyooyooo/pi-session-history
+- Pinned main and v0.1.0: 334d1e7e62fe8dfc9046b503bdb8e6feea714636 (2026-07-26)
+- MIT; Pi extension; Node >=22; npm dependency @letta-ai/trajectory 0.2.0.
+- GitHub snapshot: 3 commits, 1 star, 0 forks. Shallow clone and `git ls-remote` confirmed main and peeled v0.1.0 point to the reviewed commit.
+
+What the implementation actually does
+- Reads local Pi session JSONL under `<PI_CODING_AGENT_DIR>/sessions/<project>/*.jsonl` (default `~/.pi/agent/sessions/`). It registers a `pi_history` list/search/read tool and `/history` picker for preview, agent handoff, or native Pi resume.
+- `HistorySession` is a local locator plus id, modified time, byte size, cwd, title, record count, and diagnostics count. Search is lexical AND-term matching. Read is a paginated normalized text projection via `@letta-ai/trajectory`.
+- Bounds scan count (default 1,000/max 5,000), list/search results (default 10/max 50), transcript records (default 80/max 200), and tool output by characters, UTF-8 bytes and lines. Supports cancellation and current-session exclusion.
+- Pi's append-only branch history is read in file order rather than reduced to a selected active branch; it does not export a branch graph.
+- Canonicalizes and realpaths the session root and requested path, enforces containment, rejects an outside file and a symlink escape, and only accepts a `.jsonl` session file. It does expose the local path/cwd in results; treat those as private metadata.
+- The extension does not write an interchange archive or import a session into another Harness. “Resume” calls Pi's native `ctx.switchSession`; it changes the active Pi UI session, not the source transcript format.
+
+Migration coverage and disposition
+- No ChatGPT export, ChatGPT Projects, Section Groups, project/session parent graph, task relationships, or Claude Desktop / Claude Code target adapter.
+- No transfer of Skills, MCP servers, plugins, memory, schedules, resource bindings, or credential/permission configuration.
+- Its normalized projection does not demonstrate preservation of typed images/files, source-native UI interactions, exact event/branch topology, aggregate token usage, or model billing metadata. Tool args/results are bounded; normalizing to text is not lossless interchange.
+- Useful as a narrow, read-only Pi reader/search/resume UX reference and a path-boundary example. Not a cross-Harness migrator and not code to adopt as a transfer backend.
+
+Observed validation (disposable checkout; no user Pi sessions accessed)
+- `rtk npm ci --ignore-scripts --registry=https://registry.npmjs.org`: exit 0; added 242 packages, audited 243. Lockfile was not intentionally edited.
+- `rtk npm test`: exit 0; 10 tests passed, 0 failed. Tests cover discovery/order, normalized search, cwd scoping, active-session exclusion, bounded pagination, outside-root and symlink rejection, cancellation, output limits, extension registration and the three UI actions.
+- `rtk npm run check`: exit 0; Prettier check, oxlint, TypeScript no-emit, the same 10 tests, and `npm pack --dry-run` passed.
+- `rtk npm audit --omit=dev --registry=https://registry.npmjs.org`: exit 0; 0 production advisories. `npm ci` reported 9 total audit findings (2 low, 4 moderate, 3 high) including development dependencies; full transitive audit was not treated as a product-safety certification.
+- CodeGraph initialized and status verified for source exploration (10 files, 164 nodes, 416 edges). No tracked source modifications; only the local `.codegraph/` evidence directory appeared untracked. No live Pi runtime or actual cross-Harness transfer was tested.
+
+Sources
+- Repository and README: https://github.com/yoyooyooo/pi-session-history
+- Release/tag: https://github.com/yoyooyooo/pi-session-history/releases/tag/v0.1.0
+- Security policy: https://github.com/yoyooyooo/pi-session-history/blob/main/SECURITY.md

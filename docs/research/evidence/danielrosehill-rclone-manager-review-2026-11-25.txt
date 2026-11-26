@@ -1,0 +1,38 @@
+# Candidate #276 — danielrosehill/Rclone-Manager (2026-11-25)
+
+## Decision
+**An Rclone configuration/admin Skill collection, not an AI Harness/session migrator.** Its `migrate-config` skill transfers named rclone remotes (credentials/configuration plus optional path-prefix rewrites) between machines. It does not migrate AI conversations, ChatGPT Projects, Section Groups, Claude sessions, Skills/MCP, or provider context. It can be viewed as adjacent infrastructure prior art for moving an already-exported local file or for handling configuration secrets, not as a Nexus Memory transfer engine.
+
+## Identity and provenance
+- Repository: https://github.com/danielrosehill/Rclone-Manager
+- Pinned shallow clone HEAD: `c6074c3690b8f7867ea21e503f8bfdafa171524b` (`2026-10-29T02:30:40+02:00`, `Initial commit: rclone-manager plugin`), plugin version 0.1.0, MIT license file present.
+- Clone: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-danielrosehill-rclone-manager-20261125-followup276`; CodeGraph indexes one Python script (13 nodes, 12 edges), current. `.codegraph/.gitignore` retained with only `!.gitignore` removed; checkout status clean.
+- Repo contains 14 `SKILL.md` workflows and one executable `scripts/merge_config.py`; no automated test suite or CI workflow found. Review used synthetic config files with a dummy token in `/tmp`; no actual Rclone credentials, remotes, cloud storage, AI transcript, or user data were accessed.
+
+## Actual operation
+- `migrate-config` reads one `rclone.conf` into a `ConfigParser`, selects sections/remotes, optionally rewrites values beginning with user-specified path prefixes, and merges them into a target config. Existing target sections are skipped unless `--replace` is set. It is a dry run unless `--write`; `--write` copies a timestamped backup first, then writes the merged config. In a synthetic test, dry run printed the planned `/home/alice/data` → `/home/bob/data` rewrite and left target bytes/hash unchanged; explicit `--write` created a byte-identical `.bak` of the original and wrote the mapped remote. The test token was synthetic and not a secret.
+- `backup-config` supports timestamped local or `age`-encrypted backups and restoration. `auto-backup` creates a private GitHub repo/local clone and a weekly systemd user timer; encryption is offered, not mandatory. The script can store plaintext `rclone.conf` in the private repository if encryption is not configured. The Skills themselves warn that this file contains OAuth tokens and credentials and that the destination repo must remain private.
+- Rclone remotes are cloud-storage configuration (Drive, OneDrive, S3-compatible, SFTP, WebDAV, etc.), not AI Harness accounts. The script transfers config sections; remote OAuth tokens may not be reusable on two machines and the Skill recommends reconnecting. Mounts are not part of the config and must be recreated separately.
+- The plugin marketplace integration is for Claude Code; the repository says other agents can be pointed at the generic Skills directory. That is skill distribution/invocation, not Claude Desktop Chat/Cowork/Code, local Claude Code API-key session persistence, or cloud chat migration.
+
+## Fit against the Nexus Memory target
+| Requirement | Candidate behavior |
+|---|---|
+| ChatGPT/Codex Projects, Section Groups, Destruction Era conversation tree | No parser, project/session schema, or conversation writer. |
+| Claude Desktop third-party-gateway Chat/Cowork/Code | No client/session support. |
+| Local/self-hosted Claude Code API-key/gateway history | No session or JSONL integration; it only assists with Rclone config. |
+| Skills | Provides plain `SKILL.md` workflows and a Claude Code marketplace plugin; these are generic admin Skills, not a cross-Harness Skills converter. |
+| MCP, plugins, memory, attachments, tools, branches, schedules, token usage | No migration support. |
+| Backups/file transport | Could help move or back up files through Rclone once they already exist, but it neither exports nor interprets AI history. |
+
+## Safety / platform caveats
+- The migration skill explicitly asks for source/target paths, previews by default, requires `--write` to mutate, backs up the target before writing, and tells the user to secure temporary source config copies. These are useful safeguards for config migration.
+- The config itself holds live cloud credentials; unencrypted Git backup is sensitive even when the repository is private. The skill offers `age` encryption and warns about provider refresh-token rotation.
+- It is built/tested on Linux with systemd user units; macOS alternatives are noted but untested. The backup script invokes `sha256sum`, which may not exist on stock macOS. Thus this is not an out-of-box cross-platform Mac/Windows product.
+- No external provider session or AI account is touched by the code under review. No official Rclone remote was contacted by the synthetic test.
+
+## Reuse recommendation
+**Reject as a Harness migration candidate.** Keep only the explicit dry-run → user-confirmation → backup-before-write pattern and the lesson that transport/config credentials must be separated from conversation data. A future Nexus adapter may optionally export encrypted, already-created archive files to an Rclone destination, but that must be a separate transport layer with its own credential/consent model and must not count as restoring a target-native session.
+
+## Sources
+Pinned primary sources: [README](https://github.com/danielrosehill/Rclone-Manager/blob/c6074c3690b8f7867ea21e503f8bfdafa171524b/README.md), [`migrate-config` Skill](https://github.com/danielrosehill/Rclone-Manager/blob/c6074c3690b8f7867ea21e503f8bfdafa171524b/skills/migrate-config/SKILL.md), [`backup-config` Skill](https://github.com/danielrosehill/Rclone-Manager/blob/c6074c3690b8f7867ea21e503f8bfdafa171524b/skills/backup-config/SKILL.md), [`auto-backup` Skill](https://github.com/danielrosehill/Rclone-Manager/blob/c6074c3690b8f7867ea21e503f8bfdafa171524b/skills/auto-backup/SKILL.md), [merge implementation](https://github.com/danielrosehill/Rclone-Manager/blob/c6074c3690b8f7867ea21e503f8bfdafa171524b/scripts/merge_config.py), [backup script](https://github.com/danielrosehill/Rclone-Manager/blob/c6074c3690b8f7867ea21e503f8bfdafa171524b/scripts/rclone-config-backup), [plugin manifest](https://github.com/danielrosehill/Rclone-Manager/blob/c6074c3690b8f7867ea21e503f8bfdafa171524b/.claude-plugin/plugin.json), [MIT license](https://github.com/danielrosehill/Rclone-Manager/blob/c6074c3690b8f7867ea21e503f8bfdafa171524b/LICENSE).

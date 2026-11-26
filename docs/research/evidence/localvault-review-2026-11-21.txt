@@ -1,0 +1,43 @@
+# inventlist/localvault — source and compatibility review (2026-11-21)
+
+## Bound object and verdict
+
+- Repository: https://github.com/inventlist/localvault
+- Exact source identity: `main` HEAD `9a9750bc3e87a444b624e626a3c773c8242c3a26` (2026-11-18); local `origin/main` resolved to the same commit.
+- Candidate class: **adjacent secret-management / MCP-security reference only**. This is not a cross-Harness memory or conversation migrator and is not an implementation dependency recommendation.
+- GitHub snapshot: 9 stars, 2 forks. Current release identity in source/RubyGems is v1.15.1; the project is a Ruby CLI/gem requiring Ruby >=3.2.0.
+
+## Product surface and actual data model
+
+LocalVault creates encrypted named vaults containing secret key/value material. Its “groups” are secret-key namespaces (including dot notation such as `project.API_KEY`), not ChatGPT Projects, Sidebar Sections, Section Groups, workspaces, or session containers. `localvault import` parses `.env`, JSON and YAML secret files; it does not parse conversation/session archives. Personal/team sync uploads encrypted vault bundles and metadata through the InventList vault API, authenticated by the service's bearer token; this is neither an LLM-provider API-key gateway nor a transcript/session cloud. Source code packs `meta` plus the existing encrypted `secrets.enc` bytes into the sync bundle.
+
+The MCP server uses local stdio JSON-RPC. Tools include `list_secrets`, `localvault_build_exec` (returns a command but does not execute it), `get_secret` (requires explicit `allow_plaintext: true`), `set_secret`, `delete_secret`, and `localvault_whoami`. The installer targets Claude Code CLI, Cursor, and Windsurf configuration. Claude Code-only guard hooks scan tool input/output for stored secret strings. No target for Claude Desktop Chat/Cowork/Code was verified. The `SessionCache` symbol is specifically an eight-hour cache of an unlocked vault master key in macOS Keychain or a file fallback; it is not a model conversation Session.
+
+Inspected source confirms Argon2id key derivation, XSalsa20-Poly1305 authenticated vault encryption, X25519 team-key slots, atomic ciphertext writes with restrictive file/directory permissions, and process-scoped secret injection. This is a useful security pattern: store credentials separately from portable context, refer to secrets by names/environment mappings, and require an explicit user action to reveal plaintext. Do not copy secret values, provider tokens, auth tokens, or decrypted session-cache keys into Nexus Memory bundles. Important limitation: the Claude Code guard fails open on errors/locked vaults and is only a defense-in-depth hook; it is not a hard sandbox or a general Harness policy.
+
+## Cross-Harness requirement mapping
+
+| Requested area | Observed support | Disposition |
+|---|---|---|
+| Credentials / API keys | Encrypted vault key/value store, import from env/JSON/YAML, env projection and child-process injection | Adjacent security component/reference; never bundle raw values or treat it as an LLM gateway |
+| MCP | Local stdio server for vault-specific secret operations | No MCP migration, compatibility inventory, or conversation/session conversion |
+| Projects / Sections / groups | Groups organize secret names only | No source-project, sidebar-section or hierarchy migration |
+| Sessions / parents / forks / turns / tools / attachments | No transcript parser/model/writer found | Not supported; no round-trip fidelity measurement |
+| Skills / plugins / memory / scheduled jobs | No migration surface found | Not supported |
+| Claude Desktop modes / hosted Cloud | No desktop-session or third-party gateway integration found | Not supported / unverified; don't infer from Claude Code CLI installer |
+
+## Quality, live status, and execution evidence
+
+- GitHub exact-main Test workflow run #72 for commit `9a9750bc3e87a444b624e626a3c773c8242c3a26` completed **Success** on 2026-11-18 in 1m13s. The official workflow specifies Ruby 3.4, installs libsodium and runs `bundle exec rake test`.
+- Local test suite was **not run**. Isolated `bundle check` exited 1 because the available system Ruby is 2.6.10 and only Bundler 1.17.2 is installed; the project declares Ruby >=3.2.0 and the lockfile requires Bundler 2.6.9. This is an environment limitation, not a test failure or pass. No API account, real provider, credential, vault, or user configuration was used.
+- License metadata conflicts: repository README and `LICENSE` identify Apache-2.0, while `localvault.gemspec` and RubyGems v1.15.1 identify MIT. Registry SPDX remains null/NOASSERTION; resolve with maintainers before dependency adoption.
+- Upstream references: [repository](https://github.com/inventlist/localvault/tree/9a9750bc3e87a444b624e626a3c773c8242c3a26), [exact-main CI #72](https://github.com/inventlist/localvault/actions/runs/44269992948), [RubyGems v1.15.1](https://rubygems.org/gems/localvault/versions/1.15.1), [LICENSE](https://github.com/inventlist/localvault/blob/main/LICENSE), [gemspec](https://github.com/inventlist/localvault/blob/main/localvault.gemspec).
+
+## Nexus Memory decision
+
+Keep as a **medium-value adjacent security/MCP reference**, not as a direct migration candidate or shortlisted implementation. Its helpful design cue is a credential plane separated from the conversation/context plane, with references and just-in-time process injection rather than embedding credentials. The project cannot satisfy ChatGPT Project/Section/session hierarchy, Claude Desktop mode, or cross-Harness transcript import/export requirements. Direct adoption is further gated by unresolved license metadata.
+
+
+## Release metadata discrepancy
+
+The GitHub Releases landing page labels v1.5.2 “Latest” (dated 2026-04-12), although the separate v1.15.1 release/tag page shows v1.15.1 tagged 2026-10-04 and RubyGems publishes v1.15.1 as of 2026-10-04. This may be a stale/manual “latest release” flag or an upstream packaging inconsistency; do not infer newest release solely from the landing-page badge. Source main `lib/localvault/version.rb` and the RubyGems 1.15.1 record agree, and current-main CI #72 passed. This joins (but is distinct from) the README/LICENSE vs gemspec/RubyGems license mismatch.

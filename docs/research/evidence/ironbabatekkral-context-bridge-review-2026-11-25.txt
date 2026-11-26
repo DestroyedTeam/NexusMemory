@@ -1,0 +1,33 @@
+# Candidate #284 source review: ironbabatekkral/context-bridge
+
+- Review date: 2026-11-25 (Asia/Shanghai).
+- Repository: https://github.com/ironbabatekkral/context-bridge; pinned `main` HEAD `24b89acd6b7af6ab79d10e0a39ea862570dfb61d` (2026-11-15, `Initial local release of ctx-bridge (experimental)`).
+- GitHub API: public, MIT, 0 stars / 0 forks, one commit, no release, no Actions runs, last pushed 2026-11-14. CodeGraph: 3 Python source/test files indexed, 124 nodes, 303 edges; current.
+- The README prominently states **experimental / NOT WORKING END-TO-END**. It says source list/export worked in the author's tests but neither OMP nor Antigravity has been verified to load injected files. The two Antigravity rule-location docs conflict; the README says its `.agents/rules/` target likely needs to change to root `AGENTS.md`.
+
+## What it actually does
+
+- Reads only two source families: `omp` session JSONL plus `~/.omp/agent/history.db`, and Antigravity `conversation_summaries.db` plus step transcripts. SQLite source is copied (including `-wal`/`-shm`) to a temp directory and opened read-only. It never writes source stores.
+- Exports a token-budgeted Markdown **context pack** (front matter, summary/recap, recent user/assistant text) and can inject it as a project rule file. This is file-based handoff, not native session restoration. It does not parse/translate ChatGPT export or Projects/Sections, Claude Desktop Chat/Cowork/Code, Claude Code sessions, OpenCode, DSH, or the other listed Harnesses. No session hierarchy is carried.
+- Losses are substantial and explicit: `thinking`, tool calls/results/output, images, protobuf blobs, Antigravity annotations/state, and most non-user/assistant conversation records are skipped. The FORMATS document notes OMP memory directories (`MEMORY.md`, `raw_memories.md`, `skills/` etc.) but the exporter does not read or migrate those; no MCP/plugins/schedules/independent memory are moved.
+- The injected content is only a Markdown file. OMP target `.omp/AGENTS.md` is inferred from strings in its binary; Antigravity `.agents/rules/*.md` is contested by conflicting docs. There is no post-injection check that either target actually loaded the pack. This is not a trustworthy `Session` import or target-native transcript.
+- Positive design ideas: dry-run by default, explicit `--apply`, no overwrite (`open(..., 'x')`), fallback output path, source stores read-only, bounded newest-message pack with summary share, simple secret redaction, small standard-library implementation. Redaction is best-effort and the pack preserves a project path and source text.
+
+## Executed tests and targeted synthetic probes
+
+- Environment Python 3.12.10 (README tested Python 3.12.5 on Windows). `python3 -m unittest -v test_ctxbridge`: **11 tests passed**, exit 0, stdout `Ran 11 tests in 0.001s\n\nOK`, stderr empty. Tests cover known secret patterns, normal text, rough token estimates, chronological/newest-message trimming, and front matter; they do not test local DB parsing, target loading, file containment, or end-to-end migration.
+- Synthetic token-budget probe (no source data): `MIN_BUDGET=200`; a synthetic 20,000-character title plus 10,000-character project path produced a 7,546-token pack. `render_pack` subtracts the front-matter cost from the remaining budget but does not truncate metadata, so the advertised token cap can be exceeded by large metadata. This probe used only fabricated strings.
+- Synthetic isolated POSIX symlink probe: selected temp project had `.omp` symlinked to an adjacent temp directory. `plan_inject` + `apply_inject` returned success and created `outside/AGENTS.md`, outside the selected project. The code resolves the project root but does not verify the final destination remains under it; `write_new` follows the symlinked parent. This was contained entirely under `/private/tmp` and cleaned up. Windows junction/reparse-point behavior was not tested.
+- GUI `--selftest` was not run because it creates a Tk window and calls source listing; no GUI/session profile was opened. Author reports GUI only smoke-tested the list path.
+
+## Disposition
+
+**EXPERIMENTAL_LOSSY_CONTEXT_PACK_REFERENCE; NOT A VERIFIED MIGRATOR.** It is a useful example of a possible file-based bridge when a Harness has no import API, but its only two sources are OMP and Antigravity, the target rule locations are not verified, and it explicitly does not work end-to-end. It cannot satisfy Nexus Memory's ChatGPT Projects/Section Groups → Claude Desktop Chat/Cowork/Code or local Claude Code requirements. Retain only as a design experiment; do not present it as a functioning product or use its injector without path-containment hardening and native-load proof.
+
+## Pinned sources
+
+- [README](https://github.com/ironbabatekkral/context-bridge/blob/24b89acd6b7af6ab79d10e0a39ea862570dfb61d/README.md)
+- [DESIGN.md](https://github.com/ironbabatekkral/context-bridge/blob/24b89acd6b7af6ab79d10e0a39ea862570dfb61d/DESIGN.md)
+- [Observed format notes](https://github.com/ironbabatekkral/context-bridge/blob/24b89acd6b7af6ab79d10e0a39ea862570dfb61d/FORMATS.md)
+- [Core CLI and injector](https://github.com/ironbabatekkral/context-bridge/blob/24b89acd6b7af6ab79d10e0a39ea862570dfb61d/ctxbridge.py)
+- [Unit tests](https://github.com/ironbabatekkral/context-bridge/blob/24b89acd6b7af6ab79d10e0a39ea862570dfb61d/test_ctxbridge.py)

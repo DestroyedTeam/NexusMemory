@@ -1,0 +1,35 @@
+# Candidate #257 — landywei/my-ex review (2026-11-24)
+
+## Provenance, scope and maturity
+- Repository: https://github.com/landywei/my-ex
+- Shallow clone command: rtk git clone --depth 1 https://github.com/landywei/my-ex /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-my-ex-20261124-followup257; observed exit 0. Local main HEAD and git ls-remote origin refs/heads/main both equal 024ce29ebe198869b915a061ac7bff99c563ecaf; commit date 2026-09-25, message: Add Chinese README with language switch.
+- Tracked LICENSE grants MIT, copyright Lan Wei (2026). The local discovery-registry metadata snapshot retrieved 2026-11-22 lists 1 star / 0 forks; do not treat that as a live count. Anonymous GitHub API returned a rate-limit message; Web search/open returned connection failures, so current stars/issues were not verified. git ls-remote --tags origin returned no tags.
+- README calls this an early personal project, says it is in active use, and claims end-to-end verification on about 500 sessions / 7,500 turns. Those private-data/end-to-end claims were not reproduced; no test directory or public fixture suite is present. The two requirements are numpy and mcp.
+
+## What the code actually does
+- Source is local Codex JSONL only: ~/.codex/{sessions,archived_sessions}/**/*.jsonl plus session_index.jsonl for names. No ChatGPT/Destruction Era import, Claude Desktop, Claude Code, Cowork, or general Harness adapter was found.
+- scripts/extract_sessions.py emits a coarse per-session row: ID, source file path, CWD, thread source, created-at/model-provider metadata, counts, first cleaned user ask, last assistant reply, tool names, and a small touched-file sample. It does not preserve the full transcript in the summary row.
+- scripts/extract_turns.py emits per-user-turn records containing session ID, turn index, thread name, CWD, a user message and combined assistant text, plus tool-call name/input/output. Tool input/output are capped at 4,000/3,000 characters; user and assistant text at 6,000 each. It filters one known internal-noise prefix. It does not retain message timestamps/IDs, exact interleaving order across assistant text and tool calls, branch/fork/subtask edges, token accounting, or typed media bytes/references.
+- extract_text() reads text/input strings from blocks; image/file asset references are omitted. A disposable synthetic fixture with one image pointer returned the text and did not preserve the image pointer.
+- Session summaries are compressed by local Ollama qwen2.5:7b-instruct; embeddings/search use local Ollama bge-m3. scripts/mcp_server.py exposes one retrieval tool, search_codex_memory(query, top_k, detailed), usable by MCP clients; it returns selected session/turn excerpts and a path to the original file. There is no native target writer, session restore/import, Project/Section mapper, Skill/MCP package transfer, schedule transfer, memory writer, or rollback path.
+
+## Privacy and portability implications
+- The pipeline model/embedding calls target localhost:11434; no remote inference call is implemented in the reviewed code. This is not a guarantee that returned context stays local: an MCP host can pass the selected transcript/tool output to its configured model/provider, and results expose source file paths. No encryption-at-rest or source-level secret redaction was identified. Treat session and tool outputs as sensitive.
+- data/ is gitignored and README cautions against committing extracted history. The detailed index is capped/projection-based, not a lossless archive; the original Codex JSONL remains the only transcript-like source and stays one local file pointer away.
+
+## Validation performed
+- CodeGraph initialized on this clone: 7 Python files, 113 nodes / 210 edges, status up to date; .codegraph/.gitignore retained and only its self-preserving exception removed. Candidate tracked source remained unchanged; the local CodeGraph folder is an untracked review artifact.
+- rtk proxy python3 -m py_compile scripts/*.py exited 0.
+- A synthetic-only call to parse_session_turns() exited 0 and asserted one user message, assistant response, correlated tool call/output, CWD and thread name. Literal stdout: {"synthetic_turns": 1, "user_message": "Find the safe synthetic issue.", "assistant_text": "Synthetic answer.", "tool_call": {"name": "exec_command", "input": "{\"cmd\":\"echo fixture\"}", "output": "fixture output"}, "image_reference_preserved": false, "status": "PASS"}.
+- No real Codex profile/history was read; extraction defaults were not run. No Ollama service, embedding/index build, MCP server, provider, app, account, credential, or transfer was exercised. This validates a parser slice only, not interoperability or the README real-corpus claim.
+
+## Disposition for Nexus Memory
+Adjacent memory/search reference, not a migrator and not a migration dependency. It demonstrates a useful local Codex reader + coarse session / detailed turn retrieval + MCP exposure. It cannot establish ChatGPT Projects/Section Groups/session hierarchy or any Claude Desktop third-party-gateway target behavior. Reuse no code until dependency/license and privacy review; adopt only the general idea of keeping the original source record separate from retrieval projections and explicitly reporting projection loss.
+
+## Pinned source links
+- Repository: https://github.com/landywei/my-ex/tree/024ce29ebe198869b915a061ac7bff99c563ecaf
+- README: https://github.com/landywei/my-ex/blob/024ce29ebe198869b915a061ac7bff99c563ecaf/README.md
+- Session extractor: https://github.com/landywei/my-ex/blob/024ce29ebe198869b915a061ac7bff99c563ecaf/scripts/extract_sessions.py
+- Turn extractor: https://github.com/landywei/my-ex/blob/024ce29ebe198869b915a061ac7bff99c563ecaf/scripts/extract_turns.py
+- MCP retrieval server: https://github.com/landywei/my-ex/blob/024ce29ebe198869b915a061ac7bff99c563ecaf/scripts/mcp_server.py
+- MIT license: https://github.com/landywei/my-ex/blob/024ce29ebe198869b915a061ac7bff99c563ecaf/LICENSE

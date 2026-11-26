@@ -1,0 +1,329 @@
+PASS repair rewrites stale repo-local helper targets using current runtime config
+PASS runtime entry script resolves source and built installs correctly
+PASS init generates zero-touch system artifacts and optional startup hook
+PASS repo runtime override keeps self-dogfooding files local-only
+PASS legacy state-branch option keeps visible branch sync compatibility
+PASS resume payload starts empty and writes visible docs
+PASS resume CLI output includes the ASCII splash banner
+PASS CLI help text documents completion metadata and natural breakpoint safety valves
+PASS bootstrap installs hooks, daemon, and Claude Desktop MCP config in one step
+PASS bootstrap is idempotent and preserves existing MCP servers
+PASS status shows active session details without mutating state
+PASS status shows last handoff and pending work with no active session
+PASS archived sessions live under archive storage and merged history reads across active/archive files
+PASS diff helpers compare archived sessions in text and json formats
+PASS continueFromLatest keeps the active session and preserves queued work
+PASS continueFromLatest infers a session from recent repo changes when no carryover exists
+PASS mcp tool list stays intentionally thin and tool calls persist state
+PASS new next steps take precedence in handoffs and current plan rendering
+PASS mcp connect auto-starts an inferred session before sending resume notification
+PASS mcp connect skips resume notification when there is no carryover
+PASS mcp server waits for stdio shutdown instead of exiting immediately
+PASS init can install git hooks and generate portable hook scripts
+PASS managed hook refresh heals stale hooks and preserves custom hooks
+PASS 30 day hygiene archives stale unreferenced sessions and leaves referenced ones active
+PASS 30 day hygiene skips sessions with missing or malformed endedAt
+PASS daemon tick runs 30 day hygiene before passive checkpoint decisions
+PASS session start runs 30 day hygiene before creating a new session
+PASS daemon tick with no archive candidates leaves passive checkpoint behavior unchanged
+PASS 30 day hygiene handles multiple stale candidates in one pass
+PASS diff CLI compares distinct archived sessions without changing storage
+PASS handoff reactivates exact session-id matches in relatedSessions
+PASS explicit reactivation moves an archived session by exact id
+PASS search CLI reads archived and active sessions without changing storage
+PASS reactivation returns null for unknown session ids and does not mutate files
+PASS reactivation ignores empty id and free-form text that is not a session id
+PASS handoff does not reactivate free-form relatedSessions entries that are not session ids
+PASS daemon tick clusters repo activity until a quiet point before checkpointing
+PASS daemon tick checkpoints branch switches immediately
+PASS mcp checkpoint tool accepts explicit completion metadata and writes one deduped draft handoff
+PASS mcp checkpoint tool ignores malformed completion metadata without blocking checkpoints
+PASS daemon tick helper triggers an elapsed-time checkpoint at exactly two hours
+PASS daemon tick helper triggers a checkpoint at exactly five meaningful files
+PASS health diagnostics emits stale checkpoint warning at the 3-day boundary
+PASS health diagnostics ignores malformed stale checkpoint timestamps
+PASS health diagnostics flags unusual pattern when 50+ files exist without checkpoint evidence
+PASS health diagnostics does not flag unusual pattern below the 50-file boundary without checkpoint evidence
+PASS health diagnostics does not flag unusual pattern when checkpoint evidence exists
+PASS daemon tick checkpoints immediately at five meaningful files and clears passive pending state
+PASS daemon tick checkpoints on elapsed time with zero changed files
+PASS completion metadata normalizer ignores malformed inputs
+PASS MCP server respects logging levels for session metadata
+PASS generated artifacts contain privacy guards when portableState is off
+PASS generated artifacts do NOT contain privacy guards when portableState is on
+PASS auto-draft handoff triggers immediately for an explicit completion signal
+PASS auto-draft handoff suppresses duplicate completion-signal drafts for unchanged sessions
+PASS auto-draft handoff preserves the idle 29-vs-30 minute boundary
+PASS auto-draft handoff triggers for significant work milestones
+PASS auto-sync planning respects config toggles and platform-specific scripts
+PASS daemon tick saves an idle auto-drafted handoff and handoff --draft consumes it
+PASS getSetupStatus is read-only and does not mutate Git hooks
+PASS doctor treats info status as healthy and shows advice
+PASS doctor supports --json output
+PASS safeMode propagation: config enables minimal instructions in HOLISTIC.md
+PASS getRuntimePaths enforces repository containment for all configurable paths
+PASS loadState handles corrupt state file by backing it up and reporting degraded status
+PASS doctor surfaces repository containment and state integrity findings
+PASS safeMode produces minimal instructions in master doc
+PASS session id validation accepts real ids and rejects traversal payloads
+PASS reactivateArchivedSession refuses to read, move, or delete outside the session directories
+PASS reactivateArchivedSession still restores a legitimate archived session
+PASS agent-supplied relatedSessions cannot escape the session directory during handoff
+PASS local runtime refuses a caller-supplied command unless explicitly allowlisted
+PASS runtime service rejects task requests carrying an unauthorized browser origin
+PASS andon api rejects unauthorized origins and non-JSON event bodies
+PASS a hostile git commit subject does not become the agent objective
+PASS session text cannot forge markdown structure in generated agent docs
+PASS untrusted() defangs structure while preserving readable content
+PASS generated agent docs carry a provenance boundary around observed data
+PASS generated turn hook records the sidecar and never rewrites state.json
+PASS legacy to runtime event mapping preserves the documented contract
+PASS bootstrap dry run enumerates every target and changes nothing
+PASS uninstall removes Holistic artifacts while preserving user-owned files
+PASS handoff answers are rescued when the session ends mid-draft
+PASS hand-authored adapter docs survive regeneration
+PASS user-edited marker protects every derived doc from regeneration, not just adapters
+PASS andon event dispatches remove themselves so long-lived processes do not leak
+PASS andon emission is suppressed under a test runner and by any truthy disable flag
+PASS emitAndonEvent dispatches nothing while the suite is running
+PASS session content is not sent to a non-loopback host without explicit opt-in
+PASS containment resolves symlinks so a linked directory cannot redirect writes
+PASS pending work is bounded by age and count, and an expired entry stops pinning its session
+PASS carryover preserves what was tried, blocked, and must not regress across a session boundary
+PASS a session with nothing actionable does not enqueue a placeholder
+PASS andon api requires a bearer token on every route except health
+PASS runtime service requires a bearer token before it will start a process
+PASS token file is created with owner-only permissions and read back consistently
+PASS daemon starts in a clean repo and writes its pidfile to the configured runtime directory
+PASS buildStartupGreeting returns null for empty state
+PASS buildStartupGreeting includes system health warnings for stale daemon checkpoints
+PASS buildStartupGreeting emits warning-only startup output when carryover is empty but diagnostics exist
+PASS buildStartupGreeting emits warning text that is diagnostic (not user-blaming instructions)
+PASS buildStartupGreeting keeps no-warning startup output unchanged when diagnostics are clear
+PASS buildStartupGreeting includes objective, status, and next steps from active session
+PASS buildStartupGreeting includes 'continue, tweak, start-new' choices for active session
+PASS buildStartupGreeting includes adapter doc path
+PASS buildStartupGreeting includes long-term history and regression watch paths
+PASS buildStartupGreeting shows last handoff when no active session
+PASS buildStartupGreeting shows pending work when no active session or handoff
+PASS buildStartupGreeting includes recommended command
+PASS sanitizeText redacts OpenAI-style sk- keys
+PASS sanitizeText redacts GitHub PATs
+PASS sanitizeText redacts JWT tokens
+PASS sanitizeText redacts Bearer tokens
+PASS sanitizeText redacts AWS Access Key IDs
+PASS sanitizeText redacts PEM Private Key blocks
+PASS sanitizeText redacts assignment-style secrets
+PASS sanitizeText redacts Azure keys
+PASS sanitizeText redacts Stripe keys
+PASS sanitizeText preserves common non-secret strings
+PASS sanitizeText preserves prose that merely mentions a secret keyword
+PASS sanitizeText still redacts secret-shaped and quoted assigned values
+PASS sanitizeText redacts Slack and npm tokens
+PASS Andon runtime writer captures live local session into fleet cards
+PASS Andon lastMeaningfulEvent skips idle pings but falls back to newest event
+PASS Andon deriveSupervisionSeverity maps blocked to critical and parked to info
+PASS Andon buildSupervisionSignals composes last timestamp and severity
+PASS Andon status Why keeps substantive work first and surfaces latest checkpoint when distinct
+PASS Andon status engine prioritizes unresolved agent questions as needs_input
+PASS Andon status engine marks repeated failures as at_risk
+PASS Andon status engine marks idle-after-failure sessions as blocked
+PASS Andon status engine marks completed work as awaiting_review
+PASS Andon status engine flags Holistic scope drift as at_risk
+PASS Andon status engine parks inactive sessions after the activity window expires
+PASS Andon collector skips still-progressing heartbeats after task completion or parking
+PASS Andon API serves active session, timeline, detail, and ingests events end to end
+PASS Andon timeline pagination and tail slice
+PASS Andon fleet heatmap mapper returns chronological cells with numeric counts
+PASS Andon recent-signal mapper normalizes fleet event summary fields
+PASS Andon fleet ranks blocked and needs-input sessions above routine running work
+PASS Andon fleet tie-break keeps equal-rank sessions ordered by newest lastEventAt
+PASS Andon fleet shows mirrored runtime for unresolved question after legacy ingest
+PASS Andon fleet keeps legacy summary mirror out of Mission Control cards
+PASS Andon fleet keeps one active runtime session visible and excludes fifty terminated sessions
+PASS Andon fleet moves cold running runtime sessions out of Mission Control
+PASS Andon fleet maps runtime waiting_for_input as the only needs_input status
+PASS Andon fleet shows disconnected legacy sessions when runtime sessions exist
+PASS Andon fleet surfaces disconnected legacy checkpoint-only sessions as parked below runtime
+PASS Andon fleet resolves runtime objectives and unknown agent identity from runtime metadata
+PASS Andon ingest resets objective on session.started when no runtime objective is provided
+PASS Andon fleet maps non-input runtime waiting states to non-needs_input statuses
+PASS Andon route continuity keeps sessions list, detail, active, and timeline endpoints compatible
+PASS Andon fleet omits parked stale sessions older than one hour from mission control
+PASS Andon OpenHarness adapter normalizes known event types and drops unknown types
+PASS File HolisticBridge returns grounding from state.json activeSession
+PASS Daemon isPortFree returns false for an occupied port and true after release
+PASS Daemon isDaemonRunning returns false with no PID file, false with stale PID, true with live PID
+PASS Daemon runDaemonTick returns correct shape on a fresh repo
+PASS runtime-core exports the canonical runtime enums and event contract
+PASS runtime-core adapter contract supports a typed local adapter shape
+PASS runtime-core contract separates heartbeat/no-op/summary/context from meaningful activity
+PASS runtime-core contract keeps waiting/review/terminal statuses distinct from running
+PASS runtime-core live trust requires runtime truth and fresh telemetry
+PASS runtime-local parser consumes NDJSON and falls back for malformed lines
+PASS runtime-local adapter emits lifecycle and heartbeat events
+PASS runtime-local adapter can stop an active session
+PASS runtime storage schema persists and queries sessions, events, approvals, and processes
+PASS runtime service exposes empty states and missing-session errors
+PASS runtime service can start/query/transition sessions and stream normalized local events
+PASS Andon Mission Control renders one active session as one traffic-light card
+PASS Andon Mission Control one workflow with many child events still produces one session card
+PASS Andon Mission Control renders two active sessions as two cards
+PASS Andon Mission Control renders status inside session cards and has no status lane headings
+PASS Andon Mission Control tests do not import or validate the old lane model
+PASS Andon Mission Control traffic-light mapping covers every canonical primary status
+PASS Andon Mission Control displays finished waiting work as Awaiting Assignment not review
+PASS Andon Mission Control action-required count follows explicit action policy
+PASS Andon Mission Control parked idle session does not render as Running
+PASS Andon Mission Control derives signal age from the fallback timestamp when no age is supplied
+PASS Andon Mission Control reports no signal when neither an age nor a timestamp exists
+PASS Andon Detail and Mission Control expose the same canonical primaryStatus label
+PASS Andon Mission Control excludes old review and degraded artifacts from session cards
+PASS Andon Mission Control header summary reconciles with visible cards
+PASS Andon Mission Control consumes canonical status without reclassifying raw runtime status
+PASS Andon Mission Control separates agent signal age from API refresh and runtime liveness
+PASS Andon Mission Control normal one two and three session fixtures are capped to visible cards only
+PASS Andon Mission Control no registered sources does not render plain idle success
+PASS Andon Mission Control connected idle source renders true idle state
+PASS Andon Mission Control stale source renders stale warning
+PASS Andon Mission Control uninstrumented source renders instrumentation-specific message
+PASS Andon Mission Control card is the Detail link and Replay is not visible on the card
+PASS Andon History renders historical sessions only
+PASS Andon Detail projection exposes canonical status category reason source freshness and confidence
+PASS Andon status presentation remains available for supporting History and Detail pages
+PASS Andon Dashboard API client no longer exports old fleet UI fetchers
+PASS Andon Replay keeps heartbeat noop and context spam out of primary meaningful activity
+PASS Andon Replay labels normalized event kinds for operator scanning
+PASS operational projection keeps one active runtime session operational and fifty terminated sessions historical
+PASS operational projection parked session is historical not live
+PASS operational projection parked session with fresh heartbeat remains parked not live
+PASS operational projection awaiting review is review not live
+PASS operational projection forty-one hour old review ages into history not Mission Control review
+PASS operational projection waiting for input is needs_action not live
+PASS operational projection awaiting assignment is actionable and not review
+PASS operational projection active blocked and failed sessions are degraded_active not live
+PASS operational projection old terminated session with missing telemetry is historical not degraded_active
+PASS operational projection stale active runtime carries telemetry warning without intervention status
+PASS operational projection apparently active legacy session without runtime truth is unknown not live
+PASS operational projection heartbeat-only session can be live without implying meaningful progress
+PASS operational projection exposes waiting review blocked editing planning activity as operator insight
+PASS operational projection fresh direct runtime activity can prove running without treating heartbeat as canonical status
+PASS operational projection branch context-only activity is not progress and cannot keep a session live
+PASS operational projection policy keeps completed but unacknowledged sessions in review until acknowledged
+PASS operational projection ages an abandoned needs_action card off Mission Control
+PASS operational projection keeps a genuinely waiting session on the board
+PASS operational projection ages an abandoned blocked session off Mission Control
+PASS operational projection ages out an actionable canonical hint that has gone cold
+PASS operational projection stale review no longer reports action required from history
+PASS Andon event integrity same branch observed 100 times stores at most one branch context event
+PASS Andon event integrity actual branch A to B emits exactly one branch context event
+PASS Andon event integrity branch B repeated after transition emits no additional branch context spam
+PASS Andon event integrity heartbeat noop and checkpoint events are not persisted as agent summaries
+PASS Andon event integrity runtime writer heartbeat summary is normalized to liveness not agent summary
+PASS Andon event integrity repeated runtime writer heartbeat does not create meaningful Session started replay rows
+PASS Andon event integrity mirrored compatibility events are grouped out of primary replay
+PASS Andon event integrity replay classifier distinguishes liveness noop checkpoint context summary and activity
+PASS Andon event integrity runtime mirror preserves replay event semantics instead of heartbeat-wrapping everything
+PASS Andon API contract no registered sources reports source configuration gap
+PASS Andon API contract connected idle source is distinct from missing instrumentation
+PASS Andon API contract stale and uninstrumented sources are not plain idle
+PASS Andon API contract mission-control returns one active runtime and history returns fifty terminated
+PASS Andon API contract waiting review input completed and stale states project server-side
+PASS Andon API contract exposes operator activity and resolves unknown agent from runtime source
+PASS Andon API contract generic local_cli source can emit an active Mission Control session
+PASS Andon API contract awaiting assignment is actionable and is not review
+PASS Andon API contract derives awaiting assignment from telemetry even when runtime row still says running
+PASS Andon API contract generic claude_code source can emit an active Mission Control session
+PASS Andon API contract runtime writer heartbeat produces live activity insight without summary replay spam
+PASS Andon API contract consolidates one workflow with twenty tasks and ten checkpoints into one Mission Control row
+PASS Andon API contract compatibility mirror events do not create top-level Mission Control sessions
+PASS Andon API contract many artifact sessions do not create many Mission Control cards
+PASS Andon API contract suppresses child runtime sessions from top-level Mission Control rows structurally
+PASS Andon API contract final agent response transitions current workflow out of live
+PASS Andon API contract parked session with fresh heartbeat is parked not running and detail agrees
+PASS Andon API contract Mission Control and Detail use the same canonical primaryStatus
+PASS Andon API contract forty-one hour old review is historical not current Mission Control review
+PASS Andon API contract abandoned needs_input card ages off Mission Control into history
+PASS Andon API contract a currently waiting session still reaches Mission Control
+PASS Andon API contract shutdown restart with no fresh heartbeat does not leave zombie Live
+PASS Andon API contract fresh heartbeat after restart remains Live with runtime liveness proof
+PASS Andon API contract API refresh alone does not make a running session Live
+PASS Andon API contract stale legacy-only sessions go to history not live Mission Control
+PASS Andon API contract replay preserves normalized event semantics
+PASS Andon API contract health endpoint reports DB path and operational counts
+PASS Andon runtime writer emits stable session.started once per session state
+PASS Andon runtime writer treats a turn-completion signal as waiting-for-input, not session end
+PASS Andon runtime writer emits session.completed exactly once only when the session has ended
+PASS Andon runtime writer flips back to running (work.started) when work resumes after waiting
+PASS Andon runtime writer does not resurrect a stale active session after restart
+PASS Andon runtime writer fresh heartbeat after restart can prove liveness
+PASS Andon runtime writer stays live during a long turn when only the turn-state sidecar advances
+PASS Andon runtime writer asserts waiting from a fresh sidecar even when state.json is stale
+PASS Andon runtime writer still decays to stale when state.json and the sidecar are both old
+PASS Andon runtime writer sidecar record exposes turnState and recordedAt for freshness
+PASS Andon runtime writer heartbeat never emits agent.summary_emitted
+PASS Andon runtime writer does not default unknown platform identity to Codex
+PASS Andon runtime writer uses explicit turnState=waiting over completionSignal inference
+PASS Andon runtime writer uses explicit turnState=running to override completionSignal inference
+PASS Andon runtime writer falls back to completionSignal when turnState is absent
+PASS Andon runtime writer prefers the turn-state sidecar over session.turnState
+PASS Andon runtime writer reads and validates the turn-state sidecar
+PASS Andon runtime writer resolves a per-agent turn-state sidecar path
+PASS Andon runtime writer never lets one agent's turn signal drive another agent's session
+PASS Andon runtime writer prefers a per-agent sidecar over the legacy shared one
+PASS Andon runtime writer derives the turn-state agent from the session
+PASS Andon session beacon start emits a platform-neutral session.started event
+PASS Andon session beacon heartbeat work and action commands use telemetry contract events
+PASS Andon session beacon awaiting assignment status appears as one actionable Mission Control card
+PASS Andon session beacon begin changes awaiting assignment to running and preserves session id
+PASS Andon session beacon begin fails loudly when Mission Control does not reflect running
+PASS Andon session beacon resume can start only with explicit platform-neutral start args
+PASS Andon session beacon action telemetry derives input review and intervention without heartbeat override
+PASS Andon session beacon work telemetry ordering and direct primaryStatus hints cannot override canonical derivation
+PASS Andon session beacon completed quiet work stays Awaiting Assignment instead of Needs Intervention
+PASS Andon session beacon unknown source does not default to Codex
+PASS Andon session beacon writes local ignored session state for follow-up commands
+PASS Andon session beacon command output includes API URL and session id on start
+PASS Andon session beacon local state can be inspected and no-state inspect is clear
+PASS Andon session beacon local_cli session appears as one Mission Control card and detail agrees
+PASS Andon session beacon generic claude_code source uses the same Mission Control contract
+PASS Andon session beacon status review and complete update Mission Control History Replay
+PASS Andon session beacon parked session does not render as Running
+PASS Andon session beacon complete clears local state and follows stored API URL
+PASS Andon session beacon stale local state fails heartbeat safely
+PASS Andon session beacon connected source with no active session reports idle
+PASS findNearestHolisticRoot returns the dir itself when it contains holistic.repo.json
+PASS findNearestHolisticRoot returns the dir itself when it contains .holistic-local/ with state.json
+PASS findNearestHolisticRoot returns the dir itself when it contains .holistic/ with state.json
+PASS findNearestHolisticRoot ignores a runtime dir without state.json (e.g. ~/.holistic holding only a token)
+PASS findNearestHolisticRoot walks up from a worktree subdir to the main repo root
+PASS findNearestHolisticRoot prefers a closer ancestor over a more distant one
+PASS findNearestHolisticRoot falls back to startDir when no Holistic root is found
+PASS enumerateGitWorktrees returns empty list when no worktrees exist
+PASS enumerateGitWorktrees returns empty list for non-git directory
+PASS installAndonHooks propagates hooks into active git worktrees
+PASS installAndonHooks propagation is idempotent across repeated calls
+PASS installAllTurnHooks silently skips when no adapters directory exists
+PASS installAllTurnHooks silently skips adapters without Turn Hook Config section
+PASS installAllTurnHooks writes turn hook into (root)-keyed JSON config
+PASS installAllTurnHooks writes turn hook into named-key JSON config (Claude settings.json style)
+PASS installAllTurnHooks is idempotent: repeated calls do not duplicate hook entries
+PASS installAllTurnHooks installs turn hooks for all adapter docs with Turn Hook Config sections
+PASS installAllTurnHooks expands ~/ targets into the home directory only when the agent dir exists
+PASS installAllTurnHooks rejects ~/ targets that escape the home directory
+PASS installAllTurnHooks writes a ~/ target once and never resolves it against worktrees
+PASS installAllTurnHooks propagates to worktrees when install_targets includes worktrees
+PASS installAllTurnHooks preserves existing entries in the JSON config
+PASS installAllTurnHooks stamps the adapter's agent into the hook command
+PASS installAllTurnHooks resolves claude-cowork.md to the claude agent
+PASS installAllTurnHooks upgrades an identity-less turn hook command in place
+PASS installAllTurnHooks upgrades an identity-less nested (Claude-style) turn hook in place
+PASS installAllTurnHooks warns when a realtime_hooks adapter has no Turn Hook Config
+PASS installAllTurnHooks warns about a marker-less adapter that predates the template
+PASS installAllTurnHooks stays quiet for a legitimately hook-less adapter tier
+PASS refreshStaleAdapterDocs re-stamps marker-less adapters but never user-edited ones
+PASS validateAdapterProfile rejects realtime_hooks without turn_hook_config
+PASS validateAdapterProfile rejects turn_hook_config on non-realtime tiers
+PASS validateAdapterProfile accepts consistent capability declarations
+PASS every generated adapter doc declares a capability tier
+PASS adapter docs carrying Turn Hook Config declare realtime_hooks and vice versa

@@ -1,0 +1,43 @@
+NEXUS MEMORY CANDIDATE REVIEW — #200
+Repository: https://github.com/mazen160/skills-manager
+Reviewed: 2026-11-23
+Pinned default branch: main, 9bb8d40f77701ceb02dd15f49430c45dd04b8166 (2026-08-12)
+License: MIT
+PyPI package: agentic-skills-manager 1.0.4.
+
+Executive disposition
+High-value adjacent ResourcePlane / supply-chain security reference for scanning and installing Agent Skills across Claude, Cursor, Codex and OpenCode. It is not a Nexus Memory SessionGraph or a ChatGPT/Codex Project/Section migrator. It installs to user-global agent skill directories by default; environment overrides do not add session, project membership, branch/subtask or workspace migration. No Claude Desktop 3P Chat/Cowork/Code session adapter exists.
+
+Source identity, release and provenance
+- Shallow checkout main HEAD 9bb8d40f77701ceb02dd15f49430c45dd04b8166, subject release: v1.0.4. The default branch and refs/remotes/origin/main match.
+- GitHub remote tags contain v1.0.0, v1.0.1 and v1.0.2; no v1.0.3/v1.0.4 tag was returned. GitHub Releases currently identifies v1.0.2 as latest, while pyproject/main module and PyPI show 1.0.4; README Project status still says 1.0.2. Treat as release metadata drift.
+- PyPI 1.0.4 was uploaded 2026-08-12 without Trusted Publishing and without provenance metadata. Downloaded wheel SHA-256 matched PyPI's published wheel checksum: 6598ad4509006f7cb799386f4987cfaa74a308a5edfb100898ea8a1273faf255. Its sole production module skills_manager.py is byte-identical to the reviewed Git main module: 166,402 bytes, SHA-256 b7281c124c174335ae806a3e2d5e4c6ca42bf241e8bafeb95e9245cde9da4b3b. This verifies the wheel code matches the source tree, but does not create a PyPI build attestation.
+- GitHub has a draft PR #1, head 85d982038f0e4fc4a896c408bbbbd4326a76cd2b, titled feat(scanner): implement P1 and P2 security roadmap, from branch improvement. It is not merged into main. It changes five files, adding a large scanner expansion and 434-line test file. The visible GitHub Actions CI run #8 for this PR completed successfully. Local PR worktree is separate from the main checkout.
+
+Observed main-branch implementation
+- Python standard-library CLI; no third-party runtime dependencies. It scans GitHub or local Skill sources before copying, with rule/exclusion policy, severity thresholds, JSON and CI output, source metadata, update checks, analysis and uninstall preview.
+- Supported targets are global agent skill directories: Claude ~/.claude/skills, Codex ~/.codex/skills, Cursor ~/.cursor/skills-cursor or ~/.cursor/skills, OpenCode ~/.opencode/skills. User environment variables can override these paths. There is no per-session/project/Section store or transfer model.
+- Main-branch static scanner inventories files, SHA-256, hidden entries, symlinks/hardlinks, secrets/keys, executable modes, scripts, hooks, registry configuration, binaries, archives and resource limits. It does not execute bundled Skill code. Its default severity ceiling is medium: high/critical findings block; a deliberate --unsafe-install or a higher ceiling can permit risk. Optional AI review is agent-dependent and may pass source/inventory to a configured provider; it was not run.
+- Install metadata records the source, optional branch/path, installed name, agent and exclusions, but not a canonical session graph or immutable resolved commit identity. Updates fetch the source and compare installed content.
+- Positive design: preflight scan before copy, source-copy snapshot, no-shell subprocess argument arrays, bounded file/scan budgets, explicit exclusion records, preview-before-delete, and same-filesystem temp/backup rename for regular replacement.
+
+Tests and source-level probes
+- Main checkout CodeGraph: 4 indexed files, 465 nodes, 1,389 edges. PR worktree CodeGraph: 5 files, 578 nodes, 1,821 edges. Search for session/conversation/import/export/project/section/memory/attachment/transcript/migration models in main returned no relevant code.
+- Main: /opt/anaconda3/bin/python -m unittest discover -s tests -v; exit 0; Ran 155 tests in 10.718s; OK. The integration suite redirects HOME to a TemporaryDirectory and exercises local synthetic Skills, not user directories or live providers.
+- PR: same standard-library unittest command in a separate detached worktree; exit 0; Ran 176 tests in 12.234s; OK. GitHub CI run #8 was successful.
+- PR adds an analyzer registry, normalized finding schema v2/stable IDs, policy profiles and validated external rules, Unicode/tag-block detection, shell pipeline and focused Python AST dataflow checks, dependency/persistence/secret/PII/exfiltration checks, manifest/allowed-tools contracts, cross-skill correlation, SARIF 2.1.0, and recursive bounded ZIP/TAR inspection without extracting to disk. These are adjacent static security features, not session portability.
+- Verified PR TAR overflow gap with a temporary 1,001-member TAR: the first 1,000 members were directories; the 1,001st was payload.sh containing curl-to-bash. scan_zip_like_archive did not report the tail payload and emitted no truncation/budget finding. The enclosing TAR only produced the generic high-severity archive warning. The default medium ceiling blocks that high warning, but a user explicitly accepting high findings can pass it: accepted_at_high_ceiling=True. Source also calls TarFile.getmembers() before applying the member slice, so the cap does not bound the cost of materializing the member list. PR has ZIP recursion tests but no TAR member-overflow test. This finding applies to the unmerged PR scanner branch, not the current main TAR path.
+- Verified backup-restore failure edge in a disposable fixture against copy_skill_tree (same function body in main and PR): monkeypatched the new-tree rename to fail and then the backup-restore rename to fail. Exit raised synthetic backup restore failure; destination_exists=False; old_content_survives=False; temp_or_backup_dirs=[]. Normal replacement success is atomic and tests pass, but on a second restoration failure finally deletes the only backup. Preserve the backup when restoration fails.
+- No actual user Skill, provider credential, agent account or target Harness was used.
+
+Nexus disposition
+Retain the main project as a strong adjacent ResourcePlane safety/reference project, especially deterministic scan gates, stable findings, privacy caveats, and pre-install review. Do not claim its global Agent Skill folders represent chat Projects, Sections, Sessions, task trees, messages, attachments, tokens, memory or schedules. Review the draft PR separately as prospective scanner work; do not treat it as released behavior. Before Nexus adopts similar filesystem writes, use an ownership ledger, artifact-preserving atomic recovery, and test failed-rollback paths.
+
+Primary source links
+- GitHub main: https://github.com/mazen160/skills-manager
+- GitHub Releases: https://github.com/mazen160/skills-manager/releases
+- GitHub Actions CI: https://github.com/mazen160/skills-manager/actions/workflows/ci.yml
+- Draft scanner PR: https://github.com/mazen160/skills-manager/pull/1/files
+- PyPI release: https://pypi.org/project/agentic-skills-manager/
+- Claude Desktop 3P overview: https://claude.com/docs/third-party/claude-desktop/overview
+- Claude Desktop 3P local-data documentation: https://claude.com/docs/third-party/claude-desktop/data-storage

@@ -1,0 +1,59 @@
+# clictl/cli — pinned source, tests, and isolated security probes (2026-11-22)
+
+## Identity and provenance
+
+- Repository: https://github.com/clictl/cli
+- Isolated shallow clone: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-clictl-cli-20261122`
+- Default-branch snapshot / exact HEAD: `80a83a81c8978b883adbf7b7b67af70e0b0e7a61`
+- License: Apache-2.0. GitHub snapshot showed 0 stars/0 forks. Latest visible release: v0.1.2 (2026-04-11); visible Actions history includes run #29 passing on this revision. Repository metadata advertises 223+ APIs/CLIs; this was not independently enumerated.
+- Current checkout `git status --short` was empty after review/build cleanup. CodeGraph initialized and current: 255 files, 4,579 nodes, 11,391 edges. `.codegraph/.gitignore` is retained; only the `!.gitignore` exception was removed.
+- Primary pinned source: `internal/command/install.go`, `internal/command/install_targets.go`, `internal/memory/memory.go`, `internal/command/sandbox_cmd.go`, `internal/mcp/server.go`, `go.mod`, and repository tests. GitHub pinned source URLs appear below.
+
+## What it is / transfer value
+
+`clictl` is a Go CLI/package manager for agent tools and APIs. Specs describe API/CLI/MCP/Skill resources; installation can generate local MCP configuration and Skill files; it includes group/skill-set workflows, an MCP proxy/server, a local encrypted vault, tool-scoped note memory, and optional workspace note sync. This makes it a potentially useful **ResourcePlane/manifest and adapter-design reference**, not a session or project migrator.
+
+- Skill target map in `internal/command/install_targets.go`: `claude-code`, `gemini`, `codex`, `cursor`, `windsurf`, `goose`, `cline`, `roo-code`, `amazon-q`, `boltai`. CLI help prominently lists only the first five.
+- MCP config writers include a `claude-desktop` config location, as well as Claude Code, Cursor, Goose, Cline, Roo Code, Amazon Q, and BoltAI. The Claude Desktop writer is a narrow local JSON config path—not a Chat/Cowork/Code session adapter, Desktop 3P API-key runtime acceptance, or API gateway.
+- Resource specs carry useful portable metadata: source/revision, actions, server/transport, auth references, permissions/sandbox, runtime, and related constraints. Nexus can borrow a versioned manifest and explicit resource-adapter boundary while retaining provenance and target-side verification.
+- Local `memory` stores note entries as JSON files by tool name (`note`, `type`, `created_at`). It is not transcript storage, a Session graph, parent/child task structure, branch lineage, attachments, token/cost history, or Section/Project hierarchy. REPL/shell history is command history, not assistant conversation history.
+- No ChatGPT/Codex Project or Section importer/exporter; no message/turn/event graph or cross-Harness Session archive; no native Claude Desktop 3P Chat/Cowork/Code importer; no evidence of schedule migration. It has no Cloud session round-trip claim.
+- All user-confirmed Claude targets remain in scope as distinct acceptance surfaces: Desktop 3P Chat, Cowork, and Code individually, plus local/self-hosted Claude Code. Clictl supplied no mode-level runtime evidence for any of these.
+
+## Reproducible local validation
+
+All Go commands used the isolated checkout, temporary GOCACHE/GOMODCACHE, and the already provisioned Go 1.26.11 toolchain; no user config, provider credential, or live registry API was used.
+
+- Initial `rtk go version` failed (exit 1): `rtk: Failed to run go version: No such file or directory (os error 2)`. Corrected using `/tmp/nexus-go1.26.11/go/bin/go`.
+- `rtk proxy env GOCACHE=/tmp/nm-clictl-review-gocache-20261122 GOMODCACHE=/tmp/nm-clictl-review-gomodcache-20261122 /tmp/nexus-go1.26.11/go/bin/go test ./...` — exit 0. E2E and all package tests passed; packages without tests were reported as such. No credentialed live provider integration was exercised.
+- Same temporary environment with `/tmp/nexus-go1.26.11/go/bin/go vet ./...` — exit 0, stdout/stderr empty.
+- `go build` succeeded to a temporary binary. The CLI's `version` subcommand prints `clictl dev (darwin/arm64)` when directed to a disposable `CLICTL_HOME`; root `--version` instead exited 1 (`unknown flag: --version`), corrected to the documented `version` subcommand.
+- Temporary local memory smoke added, read, listed, and cleared a note under `CLICTL_HOME`; all commands exited 0. This confirms only the tool-note store described above.
+
+## Isolated runtime findings (all destructive fixtures disposable)
+
+The following probes ran against a copied checkout and disposable directories, not the candidate checkout, real `~/.claude`, or user configuration.
+
+1. **Skill path traversal can overwrite a sibling Skill.** In `installSkillFromSource`, file paths from `source.files[].path` are joined to the Skill directory and containment is tested using `strings.HasPrefix(resolvedPath, resolvedDir)`, which is not path-component containment. A synthetic file path `../demo-escape/SKILL.md` passed the prefix check and overwrote an existing sibling `SKILL.md` in the copied test fixture. The fake HTTP transport served bytes with a matching expected SHA-256; no GitHub content was fetched. Temporary test `TestTempSkillPathTraversalOverwritesSiblingSkill` passed after confirming the overwrite.
+
+2. **Codex target filename mismatch.** The target table maps Codex to `AGENTS.md`, but `installSkillFromSource` discards the returned filename from `skillInstallPath` and writes the original source file names. A temporary install of `SKILL.md` with target `codex` wrote `SKILL.md` into the disposable HOME rather than the adapter's `AGENTS.md`. This was confirmed by a copied-repo unit probe.
+
+3. **Tool-name traversal can delete adjacent config.** `internal/memory/toolPath` joins caller-controlled `tool + ".json"` without validating it; `forget` passes its tool argument to `memory.Clear`. On the compiled CLI with a synthetic `CLICTL_HOME`, `forget ../config --all` exited 0 and removed the fixture's sibling `config.json`. Stdout: `All memories cleared for ../config`. This was confined to a TemporaryDirectory; no real config was touched.
+
+4. **Sandbox defaults are important resource metadata.** `buildSandboxConfig` defaults network mode to host and enables SSH-agent/Git/npm config forwarding unless denied. `resolveAllowedTools` defaults an unspecified command allowlist to `[Bash, Read, Write]`. Specs and consumer restrictions exist, but Nexus should never infer least privilege from the mere existence of a `sandbox` field; preserve effective permissions, forwarded credential surfaces, network mode, and provenance separately. This is source analysis, not a proof that every command executes without a sandbox.
+
+5. **Pinned sources / content integrity matter.** `fetchAndVerifySkillFiles` defaults an empty source ref to mutable `main`; per-file SHA checks are optional, and the no-hash fallback warns and accepts content. Treat this as backward-compat behavior, not an exploit. Nexus manifests should pin immutable revisions and content hashes and record when the source did not provide them.
+
+## Disposition
+
+Keep `clictl` as a useful adjacent ResourcePlane reference for typed resource manifests, local MCP config generation, vault references, and explicit sandbox/auth metadata. Do not use the current Skill/memory mutators as a secure transplant backend until path containment, adapter filename serialization, tool-name validation, and permission defaults are redesigned and regression-tested. It does not reduce the required ChatGPT/Codex project/session graph or Claude Desktop mode-specific investigation.
+
+## Primary source links
+
+- Repository: https://github.com/clictl/cli
+- Release page: https://github.com/clictl/cli/releases
+- Actions: https://github.com/clictl/cli/actions
+- Pinned Skill installer: https://github.com/clictl/cli/blob/80a83a81c8978b883adbf7b7b67af70e0b0e7a61/internal/command/install.go
+- Pinned target adapter map: https://github.com/clictl/cli/blob/80a83a81c8978b883adbf7b7b67af70e0b0e7a61/internal/command/install_targets.go
+- Pinned tool-note store: https://github.com/clictl/cli/blob/80a83a81c8978b883adbf7b7b67af70e0b0e7a61/internal/memory/memory.go
+- Pinned sandbox config: https://github.com/clictl/cli/blob/80a83a81c8978b883adbf7b7b67af70e0b0e7a61/internal/command/sandbox_cmd.go

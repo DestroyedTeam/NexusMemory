@@ -1,0 +1,34 @@
+Brattlof/skillet — implementation review (2026-11-20)
+
+DISPOSITION
+- Verdict: cross-Harness asset/package manager only; not a Project/Section/Session migration tool. Do not place it on the core session-migrator shortlist. Retain as a low-priority implementation reference for typed asset manifests, pinned lockfiles, safe host-specific file materialization and preservation of pre-existing config.
+- TARGET remained `/private/tmp/nm-next-agent-sessions-review-20261120/candidate/project`; this review changed only the disposable project copy. No user credentials, host configuration, provider sessions, Skills install, MCP endpoint, or external account was touched.
+
+IDENTITY / PROVENANCE
+- Repository: https://github.com/Brattlof/skillet (MIT).
+- Source checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-Brattlof-skillet-20261120`; CodeGraph index current: 46 files, 857 nodes, 2,383 edges.
+- HEAD `7f3b43cc80873a665ecc188f675f1dec0cb2718f` (2026-11-05), local Git and `rtk proxy git ls-remote https://github.com/Brattlof/skillet.git refs/heads/main` matched. `go.mod` declares Go 1.23. GitHub page snapshot: 10 stars / 0 forks.
+- GitHub release page marks v1.6.1 latest, tag commit `8e0234a33a74cde3083e8fb1b08de1df76056074`; release page shows 11 commits to main since the tag. Exact-head main CI run #77 (`https://github.com/Brattlof/skillet/actions/runs/42023969402` linked from workflow listing) completed successfully on 2026-11-05 (1m15s). The repo workflow runs gofmt, `go vet`, race-enabled tests with a 55% coverage floor, build, registry validation, module-tidy check, govulncheck, and golangci-lint.
+
+WHAT THE CODE DOES
+- README describes a one-binary, no-backend registry/package manager for SKILL.md skills, MCP servers, and Claude Code commands, hooks, subagents and output styles; README claims a curated registry of 370+ entries. The default skill destination is `~/.claude/skills`; `--target agents` uses shared `~/.agents/skills` (README lists Cursor, Codex, Gemini CLI and GitHub Copilot as readers).
+- MCP implementations are explicit per-client writers in `internal/install/mcp.go`: `claude` writes the project `.mcp.json`; `cursor`, `windsurf`, `gemini`, and `cline` use their own JSON config paths/key variants. The map contains five clients, not a Claude Desktop config adapter. `InstallMCP` merges one named server into the existing JSON map; tests exercise preserving unrelated keys, list/remove, and unknown-client rejection. JSON values are kept with `UseNumber` and writes are atomic, though formatting/key order may change. This proves config-file manipulation, not that a live host activates a server. Codex is only listed as a shared Skill directory target, not a supported MCP config client.
+- Lock/install behavior: registry entries, install manifests and `skillet.lock` store artifact kind/path/repository, requested ref/resolved commit, checksum, and hook provenance. `install --frozen` verifies the local install against the lock; restore prunes only Skillet-managed installs with provenance records and leaves hand-placed files alone. Source has traversal/symlink-escape and lock restore/frozen tests. This is resource provenance, not a chat/session serialization. Compatibility policy documents 1.x stability for commands, registry schema, manifest/lock formats and install paths.
+- Security policy explicitly treats Skills as code running with agent privileges; unpinned third-party content can change, pinning does not create a transparency log, lockfiles are untrusted inputs, and community skills are not curated. The security policy says community scans may be missing/unreachable and cover current content, while lockfiles pin commits; users should review lockfiles like code.
+
+EXPLICIT PRODUCT GAPS FOR NEXUS MEMORY
+- No ChatGPT/Codex Project import, Section/Section Group hierarchy, nested project mapping, user-turn/session transcript reader/writer, branch/fork/subtask relation, attachments/images/links/tool events, token accounting, memory, scheduled task/automation, or fidelity benchmark was found in the source reviewed.
+- Does not bridge Claude Desktop Chat, Cowork, or Code session stores. `claude` MCP target is a Claude Code project `.mcp.json` writer; do not equate it with Claude Desktop MCP config or Desktop session transfer. It does not create/continue a Claude hosted Cloud Session or write an API-Key-backed Claude Desktop/Code session.
+- Useful lesson: separate portable Skill bytes from host-specific activation, preserve target config, record source identity/digest/transform, and report unsupported objects. It cannot supply session translation or establish a conversion accuracy rate.
+
+QUALITY / EXECUTION LEDGER
+- Static source review included CodeGraph nodes for `InstallMCP`, `lookupMCPClient`, `restoreFromLock`, `pruneToLock`, symlink/traversal/lock/MCP tests, plus README, compatibility policy, security policy, workflow and manifest/settings code.
+- Local test attempt `rtk proxy go test ./...` in the source checkout: exit 1; stdout empty; stderr exactly `rtk: Failed to execute command: go: No such file or directory (os error 2)`. No local Go tests or build were run. Exact-HEAD official CI passed as described above. No session-migration tests or live host activation test were run.
+
+OFFICIAL SOURCES
+- Repo/readme: https://github.com/Brattlof/skillet
+- MCP target table at reviewed commit: https://github.com/Brattlof/skillet/blob/7f3b43cc80873a665ecc188f675f1dec0cb2718f/internal/install/mcp.go#L34-L43
+- Release: https://github.com/Brattlof/skillet/releases/tag/v1.6.1
+- Compatibility contract: https://github.com/Brattlof/skillet/blob/main/COMPATIBILITY.md
+- Security policy: https://github.com/Brattlof/skillet/blob/main/SECURITY.md
+- CI workflow/runs: https://github.com/Brattlof/skillet/actions/workflows/ci.yml

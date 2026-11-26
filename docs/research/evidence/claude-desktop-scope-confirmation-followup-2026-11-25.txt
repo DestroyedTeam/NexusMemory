@@ -1,0 +1,25 @@
+CLAUDE DESKTOP SCOPE FOLLOW-UP — USER CONFIRMATION AND CURRENT OFFICIAL DOCS (2026-11-25)
+
+User confirmed that the destination acceptance scope includes all three Claude Desktop modes: Chat, Cowork, and Code. Preserve them as separate acceptance tracks; also keep local/self-hosted Claude Code as a distinct fourth runtime lane. “Cloud” in the request means the Claude Desktop/client session-management route, not merely Anthropic-hosted cloud execution.
+
+What the current official docs establish
+1. Third-party gateway support: Claude Desktop 3P explicitly supports a self-hosted gateway using Anthropic Messages API `POST /v1/messages` with streaming and tool use. Official docs state that Chat, Cowork, and Code sessions send requests to that gateway; static gateway API keys, identity-provider sign-in, and credential helpers are documented. Preserve prompt-caching fields/usage. This verifies inference routing capability, not that gateway config can import/restore arbitrary foreign session graphs.
+2. Gateway vs local Claude Code: the Desktop app reads its own Third-Party Inference configuration (Developer > Configure Third-Party Inference when Developer Mode is enabled), not `ANTHROPIC_BASE_URL` or `settings.json`; local Claude Code CLI uses its own environment/settings. The third-party configuration is forwarded to Desktop Code sessions. A gateway deployment excludes Anthropic-hosted cloud environments and Remote Control; do not classify those hosted sessions as API-key-backed Desktop sessions.
+3. Current Cowork model: Cowork sessions and data may be account-cloud-backed and resumed across surfaces; local file access still depends on the desktop app. Cowork project structure includes project instructions, scheduled tasks, context and memory. Projects are in Cowork/Chat, currently not Claude Code; Desktop can import an existing Claude chat project into Cowork one at a time (not bulk), which is same-vendor functionality, not cross-Harness migration.
+4. UI convergence is not schema equivalence: Chat and Cowork are being unified in the Claude UI for some cohorts/plans, so the visible mode selector changes over time. Maintain Chat and Cowork as separate semantic acceptance lanes and record the observed UI/app version.
+5. Local MCP/Desktop extensions and remote connectors are distinct transport/configuration lanes. Feature availability differs by surface and execution environment; capability tests must record whether a connector is local, remote, cloud-brokered, or bundled by a plugin rather than flattening them into “MCP transferred.”
+
+Official references checked 2026-11-25
+- Claude Desktop 3P gateway: https://claude.com/docs/third-party/claude-desktop/gateway
+- Third-party configuration reference: https://claude.com/docs/third-party/claude-desktop/configuration
+- Claude Code LLM gateway (surface-specific config): https://code.claude.com/docs/en/llm-gateway-connect
+- Cowork web/desktop/mobile and session behavior: https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+- Projects in Cowork, import and limitations: https://support.claude.com/en/articles/14116274-organize-your-tasks-with-projects-in-claude-cowork
+- Desktop vs remote connector availability: https://support.claude.com/en/articles/11725091-when-to-use-desktop-and-web-connectors
+- Local Desktop MCP extensions: https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop
+- Claude Code CLI migration/provider separation: https://support.claude.com/en/articles/18466061-move-claude-code-cli-users
+
+Decision for Nexus Memory
+- Required adapters/acceptance keys: `claude-desktop-3p/chat`, `claude-desktop-3p/cowork`, `claude-desktop-3p/code`, `claude-code-local`. Hosted Cowork/Claude cloud execution is an explicitly separate, non-gateway lane.
+- The API key/base URL is routing configuration and must never be copied into session archives, plans, diagnostics, or migration manifests. Do not claim a live gateway verification; only official-doc review occurred.
+- For each lane test hierarchy, project/group, session identity/resume, turns including addenda/interruptions, files/images/links, tool/MCP/plugin/Skill permissions and provenance, memory/instructions, scheduled tasks, artifacts, usage/tokens when source exposes them, and round-trip/rollback. Unknown/unexposed fields must remain explicitly unsupported or sidecar-preserved, not silently dropped.

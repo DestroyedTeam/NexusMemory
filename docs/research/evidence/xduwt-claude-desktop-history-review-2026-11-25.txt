@@ -1,0 +1,35 @@
+NEXUS MEMORY — CANDIDATE #304 REVIEW
+XDUwt/claude-desktop-history — 2026-11-25
+
+Disposition
+- High topical relevance but not suitable as the Claude Desktop 3P/API-key destination adapter. It is a narrow, macOS-only account re-homing toolkit for a legacy standard Claude Desktop layout (README explicitly says Desktop 2.1.x), plus a Markdown exporter for claude.ai Chat exports. It is not a cross-Harness importer and does not cover all three current Claude Desktop 3P lanes or their full project/session state.
+- Keep as a historical pattern reference: read-first discovery, separate Code index vs Cowork body handling, dry-run/confirmation, target backup, one-session trial. Do not reuse its local paths or apply scripts to the user's 3P profile.
+
+Identity / provenance
+- Repository: https://github.com/XDUwt/claude-desktop-history
+- Local shallow checkout commit `03b435348e68d472d578a5086903d557e969104a`, dated 2026-06-09 (one local commit because the checkout was depth 1; GitHub page reported 3 total commits, 1 star, 0 forks at review).
+- MIT LICENSE read locally. Bash/Python scripts, no package manifest, no test suite/CI test harness in checkout. CodeGraph initialization was attempted as instructed; it found 0 indexable files (shell/Markdown-only). `.codegraph/.gitignore` was retained, only its `!.gitignore` exception was removed, index status reports current, candidate `git status --short` is empty.
+
+Current official product mismatch (checked 2026-11-25)
+- Claude Desktop on third-party inference has a separate app-data root (`~/Library/Application Support/Claude-3p/` on macOS), distinct from the standard Claude Desktop root hard-coded by this toolkit (`~/Library/Application Support/Claude`). For MDM/local-file/bootstrap-managed 3P mode, Anthropic says the client has no Anthropic user account/per-user state; it assigns a random device `ant-did` and scopes sessions by that device identifier plus organization ID, not by the old Anthropic `accountUuid` directory assumed by this candidate.
+- In 3P mode, Chat conversations are local sessions stored using the same `local-agent-mode-sessions` session-state + working-directory model as Cowork; the working directory includes transcript/audit log, uploads and outputs. Code session records are separate, with their transcript under `~/.claude/projects/`. The README claim that Chat is cloud-only/no local content is not valid for the user's 3P desktop target.
+- Current Unified Claude can combine Chat/Cowork into one home-screen UX; Code remains separate. A home-screen turn can start Cowork on a device that supports the VM, or Chat otherwise. UI tab names are not a stable schema discriminator.
+- Official native export/import exists for same-vendor device migration and claude.ai-to-3P import, but it is a managed feature and default-off: `claudeAiImport.enabled` / `exportEnabled` must be enabled. Cross-device export requires the same OS and organization. It can carry chats, Cowork tasks, attachments/outputs, memory, projects (with user steps), scheduled tasks, Skills/plugins (disabled until re-enabled), and Code sessions with trusted folders; important exclusions include API keys/sign-ins, connectors, tool permissions, Code attachment files, environment variable values and terminal Claude Code settings/plugins. This is a useful first-party baseline, not a ChatGPT/Codex/other-Harness importer.
+- Compliance API session access is Enterprise-specific; Anthropic documents that Code sessions authenticated with a Claude Console API key or third-party cloud provider are not returned. Thus Nexus must not treat that API as a complete source for this API-key/gateway use case.
+
+Implementation / test review
+- `rtk proxy bash -n` passed for all 8 top-level shell scripts plus `lib/common.sh` (9 files total). No automated test suite was present.
+- Synthetic-only fake-HOME run: inspect, Code dry run/apply, Cowork dry run/apply (`--only`), verify, retention update, and synthetic claude.ai JSON → Markdown export all exited 0 on their normal paths. Synthetic Code index copy, Cowork index + body copy, Cowork `cwd` rewrite, identity rewrite, retention setting preservation and export filename marker were observed. No real Desktop, session store, API key, gateway, local DB, or account was accessed. Exact outputs are in `.verified304/logs/candidate-synthetic-tests.json`.
+- Targeted safety/quality probes (all synthetic):
+  1. `01-backup.sh --full` before `backups/` exists exits 1 because it never creates that parent directory. After the migration command created it, `01-backup.sh --full` printed “备份完成” and created a 0644 tar but still exited 1 because the final `[ "$FULL" -eq 0 ]` test is false under `set -u` without `set -e`; automation would see failure despite success. The archive contained synthetic Code and Cowork plaintext transcripts.
+  2. With umask 022, backup tar mode was 0644; no restrictive umask/chmod is applied even though `--full` includes plaintext conversation content.
+  3. Code collision: `02-migrate.sh --apply` did not refuse a same-name destination index; it overwrote the target sentinel and exited 0. Its pre-migration backup retained the sentinel, so recovery was possible only by manually restoring that backup.
+  4. Cowork collision: `05-migrate-cowork.sh --apply` overwrote the same-name destination index and `copytree(..., dirs_exist_ok=True)` merged the body; a target-only file remained. It did not reject or offer a semantic merge.
+  5. Verifier false positive: `03-verify.sh` counts a matching `<cliSessionId>.jsonl` basename anywhere under `~/.claude/projects`, without matching the encoded project path/cwd. A transcript planted under the wrong synthetic project made its output say 2/2 reachable.
+  6. `00-inspect.sh` prints the full CLI account email address; recent mtime is presented as approximate current Code account and is not authoritative. Its in-memory local-storage UUID search is heuristic.
+  7. `06-export-chat.sh` converts consumer claude.ai export data to Markdown and only writes attachment names, not attachment bytes or a restorable session. It is not an importer for local 3P Chat sessions.
+- `04-set-retention.sh` changes Claude Code CLI `cleanupPeriodDays`; it does not control current Desktop 3P `chatSessionRetentionDays`, `coworkSessionRetentionDays`, or `codeSessionRetentionDays` policy keys.
+
+Nexus reuse boundary
+- Reuse design ideas only: separate metadata/body store mapping; exact session graph/ID joins; explicit dry-run, user confirmation, backup, and selective test-session; account/workspace mismatch diagnostics.
+- Reject as a production adapter without major redesign: hard-coded standard-Claude path, account-UUID assumptions, legacy version model, no cross-platform support, no native 3P export/import integration, no collision safety, false-positive verifier, plaintext backups with unsafe permissions, incomplete Chat export, and no automated tests. For current 3P profiles, detect app mode/version/platform and use the documented `Claude-3p` storage/native import gates; keep credentials and connector secrets out of archives.

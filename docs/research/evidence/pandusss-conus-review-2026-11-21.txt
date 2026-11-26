@@ -1,0 +1,66 @@
+# Conus review — agent task/session ledger, not native conversation migration
+
+Date: 2026-11-21. Repository: Pandusss/conus. Exact reviewed checkout: main commit 83ab2b7994818c06386549ee456809023265a583; git ls-remote origin refs/heads/main matched. Commit time: 2026-11-16T13:20:50Z. License: MIT. GitHub shows latest named release v0.2.2 (2026-10-12), with 11 commits to main after that tag. Release workflow and CI both ran successfully on the reviewed main commit. GitHub HTML showed 3 stars/0 forks while the candidate registry snapshot had 6/1; adoption counts are dynamic and excluded from quality scoring.
+
+## Verdict
+
+**High-value adjacent reference for agent-driven task management and session-to-task activity attribution; not a cross-Harness session/memory migration tool.** Conus has a genuine Session record and useful parent-child tasks, but its central product is a self-hosted task board, not a portable conversation archive. It offers no import/export/migrate route for ChatGPT Projects/Sections or native transcript histories.
+
+## Model and fidelity boundary (source-level)
+
+- PostgreSQL stores Project, Agent, Session, Task, TaskEvent, Link, and SessionActivity records. A Session records Conus ref, agent id, provider agent_session_id, project, cwd, branch, model, current turn, state and start/last-seen/end metadata. Repeated start for the same (agent_id, agent_session_id) upserts/reuses the row. Session source values (startup/resume/clear/compact) are accepted by the hook contract but are not fields in the Session record/schema.
+- Tasks have parent_id/parent_ref, so the product has hierarchical work items/subtasks. TaskEvent and Link records can cite a session; a task can be claimed by one session. There is no parent_id/parent_session_ref, continuation/fork edge, multi-parent conversation graph, or native message/turn table that reconstructs a conversation.
+- SessionActivity stores typed facts (file edits, git commits, test runs, task operations) plus prompt_excerpt and answer_excerpt rows. Client code takes at most 2,000 UTF-16 units from the start of a prompt and the end of an assistant answer. It does not archive full prompts/answers, tool-call arguments/results, token/cost counts, image/audio/video/document payloads, URL provenance, or attachment blobs. Claude transcript parsing is used to extract the latest text/model and current-turn commit evidence; it is not a general transcript importer. Codex hooks report their current-session facts, not a cross-platform transcript.
+- The janitor deletes SessionActivity older than 30 days; idempotency keys expire after 7 days. Task/history retention is separate. This activity-retention policy is incompatible with a “preserve every session forever” requirement unless Nexus independently archives source data.
+- Session tracking by hook is implemented for Claude Code and Codex. Gemini CLI is supported as an MCP board client in the README, but not an equivalent hook/session lifecycle adapter. Any other MCP client can manually connect for board tools; that alone does not give it provider session import/export. No ChatGPT, Claude Desktop Chat, Cowork, Cursor, DeepSeek, or desktop session adapter was found.
+- Conus injects its task protocol via a Claude Code plugin/skill and Codex skills/hooks/MCP integration; Gemini integration is MCP-only. The skill says when agents should create/start/block/complete/drop main tasks; it is instruction delivery, not shared memory or transcript serialization.
+- Conus has its own daily task-manager review and Telegram reminders. Those are Conus product schedules, not converters for provider-native scheduled tasks.
+- Its project fingerprinting and task-event approach are useful references: keep Project/workspace identity, HarnessAgentSession, Task/TaskEvent, SessionActivity, MCP installation, and ConversationThread as separate linked objects. A task subtree is not a conversation tree.
+
+## Privacy and operations
+
+- The client config defaults send_text to true. Each prompt hook may send up to a 2,000-unit prefix, and each Stop hook may send up to a 2,000-unit assistant-answer suffix; setting send_text=false leaves the facts-only path. README also lists repository/branch/head/model, changed relative file paths, commit subjects/SHAs, test commands, task text, and Conus session id as transmitted service data; file contents and diffs are documented as not sent.
+- An optional local CONUS_HOOK_RECORD_DIR writes exact raw hook payloads (including prompt/last answer and Bash diff hunks) into owner-only files (mode 0600); this is an opt-in local debugging path, not the normal server transcript store.
+- Optional server-side Judge/Manager call Anthropic API when configured with a key; the manager can receive correspondence and task metadata. This must be a separate, explicit egress/credential policy, especially for third-party model gateways.
+- The user-visible login token is stored in ~/.conus/config.json (0600); the server stores a SHA-256 token hash. This is an agent-to-Conus token, not the provider API key and not a transferable native session credential.
+
+## Harness coverage / fit
+
+- README supports Claude Code (plugin, hooks, MCP, skill), Codex (hooks, MCP, skill), and Gemini CLI (MCP). Generic clients can manually use its MCP stdio bridge. These adapters manage Conus task-board access; they do not convert another harness's prompts, tool calls, images, forks, sections, scheduled tasks, or memory.
+- The generated task-protocol skill is versioned in the repo and delivered to Claude Code/Codex; this is useful practice for portable instructions but not the user's “carry all state” requirement.
+- There is no Claude Desktop Chat/Cowork native integration in the install commands. A manually configured MCP bridge may expose Conus's board tools to an MCP-capable client, but it is not proof of Desktop session capture or migration.
+
+## Local verification (review checkout only)
+
+- HEAD and remote main both equal 83ab2b7994818c06386549ee456809023265a583; CodeGraph status after full re-index: 260 files, 2,883 nodes, 12,296 edges, index current. The CLI still prints a v1.0.1 engine-version warning even after a full re-index; this is recorded rather than treated as source drift.
+- Environment: Node v26.7.0, npm 11.19.0; declared runtime is Node >=22.
+- npm ci exited 0 (459 packages; npm 11 warned that install scripts were not approved, but the required build succeeded).
+- npm run typecheck exited 0.
+- npm run build exited 0: server, CLI and UI production bundles built.
+- npm run gen and npm run gen:icon exited 0; git diff --exit-code exited 0 afterward (generated outputs matched the committed source).
+- A no-DB test configuration ran all CLI and Protocol tests: 9 files, 357 tests passed, exit 0. The UI suite ran 21 files, 150 tests passed, exit 0. No database-backed core/server test is included in that 357-test subset.
+- Root npm test exited 1 before a database-backed suite could run: Vitest printed no test files and its Testcontainers global setup then failed because Docker API at ~/.docker/run/docker.sock refused connections. The Docker Hub proxy also refused a Podman pull for postgres:16. A no-DB Vitest config enumerated and ran the CLI/protocol tests listed above. This is a local environment constraint, not a product regression claim.
+- GitHub Actions CI for this exact main commit (run #18) succeeded in 1m37s, including the database-backed test and image jobs. The Release workflow on the same commit also succeeded. The upstream CI evidence is useful but does not substitute for local test reproduction.
+- No client account, Anthropic API key, Gemini/Codex/Claude process, MCP server, provider session store, or user data was used. No live session migration was tested.
+
+## First-party sources and reviewed paths
+
+- Repository/README: https://github.com/Pandusss/conus
+- Pinned commit: https://github.com/Pandusss/conus/commit/83ab2b7994818c06386549ee456809023265a583
+- Session/task data types: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/core/src/types.ts
+- Session schema/migrations: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/core/src/migrations.ts
+- Session lifecycle: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/core/src/sessions.ts
+- Hook event pipeline: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/cli/src/hook/run.ts
+- Excerpt/fact extraction: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/cli/src/hook/transcript.ts
+- Hook API routes: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/server/src/routes/hooks.ts
+- Session activity storage: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/core/src/activity.ts
+- Activity retention/janitor: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/core/src/janitor.ts
+- CLI agent targets: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/cli/src/cli.ts
+- Task skill protocol generator: https://github.com/Pandusss/conus/blob/83ab2b7994818c06386549ee456809023265a583/packages/protocol/src/skill.ts
+- Latest named release: https://github.com/Pandusss/conus/releases/latest
+- Same-commit CI: https://github.com/Pandusss/conus/actions/runs/43874892230
+- Same-commit Release workflow: https://github.com/Pandusss/conus/actions/runs/43874892117
+
+## Nexus Memory disposition
+
+Retain as a reference for (1) native agent-session identity vs Conus-internal ID, (2) task/session claims and event timelines, (3) bounded, optional text excerpts plus structured activity facts, (4) retention and privacy controls, and (5) a shared operational skill/MCP layer. Do not count it as a session migrator, ChatGPT Projects/Sections adapter, or measured migration-accuracy result. It demonstrates that an external task ledger can coordinate ongoing agents, not that historic conversations can be losslessly reconstructed or moved.

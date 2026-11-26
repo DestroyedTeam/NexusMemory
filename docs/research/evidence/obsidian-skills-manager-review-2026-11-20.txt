@@ -1,0 +1,32 @@
+NEXUS MEMORY — CANDIDATE REVIEW (2026-11-20)
+
+Candidate: cbruyndoncx/obsidian-skills-manager
+Repository: https://github.com/cbruyndoncx/obsidian-skills-manager
+Checkout: /Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-cbruyndoncx-obsidian-skills-manager-20261120
+Reviewed HEAD: 68f74eaf555dc96191ccc0cfdda556b0a516b1ef (2026-02-20)
+Package/release: 0.2.0; latest GitHub release v0.2.0 (2026-02-20).
+GitHub API snapshot: 19 stars / 3 forks; `updated_at` 2026-10-26T14:55:17Z; `pushed_at` 2026-02-20T20:24:40Z; SPDX license field null. Root file listing contains no LICENSE; treat source reuse as license-unverified/excluded until permission is established.
+
+Classification / scope
+- Obsidian community plugin for managing AI-agent `SKILL.md` folders in an Obsidian vault: browse registries, install from GitHub/monorepos/ZIP/local folders, toggle/organize, check/update, generate a vault-root `SKILLS.md`, and export combined instructions to Cursor, GitHub Copilot, Windsurf and Cline.
+- Default skill directory is `.claude/skills`, but the plugin is not a Claude Code or Claude Desktop session importer. A bounded scan of `src/` and `README.md` for `conversation`, `transcript`, `session`, `chat history`, or `Project/Section` found no matches. No ChatGPT/Codex project graph, conversation events, attachments, subtask/fork relations, token accounting, MCP-server configuration migration or scheduled tasks were found.
+- Useful as a UI/UX and Skills-library example only; no complete asset interchange either. It is not evidence that a combined instructions file is a native or lossless Skill installation.
+
+Source findings (CodeGraph indexes `16 files / 320 nodes / 834 edges`; current; repo source status clean after the local `.codegraph/.gitignore` exception was removed per project instructions)
+- `src/exporter.ts::exportSkills` scans enabled Skills, removes YAML frontmatter, concatenates all bodies under headings, then writes one fixed file per selected target: `.cursor/rules/skills.md`, `.github/copilot-instructions.md`, `.windsurf/rules/skills.md`, `.clinerules/skills.md`. It has no merge/backup/overwrite confirmation and no target-native registration/discovery test. This can replace user-managed instruction files; no overwrite was executed.
+- `generateSkillsIndex` writes a vault-root `SKILLS.md` inventory and slash-command list. This index points to vault files; it is not an event log or cross-harness session archive.
+- `StateManager` persists the full `PluginSettings` via Obsidian `plugin.loadData()` / `plugin.saveData()`. `PluginSettings` contains `githubPat`; registry configs contain optional `apiKey`. The reviewed code uses these values in HTTP authorization headers and shows no external keychain/encryption handling. Treat them as local connector credentials, never portable migration content.
+- GitHub install stages files, validates root `SKILL.md` frontmatter and promotes by rename with a backup/rollback attempt. This is a useful transactional-install pattern. However remote tree paths/release asset names are written beneath the staging path without an explicit canonical containment check in the reviewed path; treat as a safety hardening question, not a reproduced path traversal. No malicious fixture was executed.
+- `scanForThreats` is a heuristic regex scan: it checks the `SKILL.md` body and direct files in `scripts/` for a finite list of network/destructive/credential/prompt-injection patterns. It is not a sandbox or comprehensive code audit; clean status does not imply safe execution.
+- Export target writes are deterministic fixed paths, but they overwrite existing instruction files; exports are a single merged Markdown projection and discard the original per-Skill boundary/metadata.
+
+Observed build/test results
+- `rtk npm run` exit 0 listed only `dev` and `build`; there is no `test` script. `rtk npm test` exit 1: `npm error Missing script: "test"` (stderr empty). No `.github` directory or test workflow was present; no test directory was found.
+- Direct `rtk npm run build` in the source checkout exited 1 because dependencies were not installed: Node `ERR_MODULE_NOT_FOUND`, package `builtin-modules` imported by `esbuild.config.mjs`.
+- A disposable copy at `/tmp/nm-obsidian-skills-build-20261120` was installed using `rtk npm ci --ignore-scripts` (exit 0; 32 packages added; no install lifecycle scripts run). `rtk npm run build` then exited 0; stdout `> node esbuild.config.mjs production`; stderr empty. The generated artifact was confined to that disposable copy. This verifies a production bundle only, not plugin runtime compatibility in Obsidian or any target harness.
+- `rtk codegraph status` exit 0: 16 files, 320 nodes, 834 edges; current. `rtk git status --short` exit 0 after correcting `.codegraph/.gitignore` was empty. Latest `rtk git log` HEAD matches the reviewed commit.
+
+Disposition
+- `ADJACENT_OBSIDIAN_SKILL_LIBRARY_AND_LOSSY_INSTRUCTION_EXPORTER_NOT_SESSION_MIGRATOR`.
+- Do not include as a migration dependency without a license; do not equate its fixed-file exports with native Skill/MCP/plugin activation. Potentially borrow only its visible catalogue/install/index UX and staging/rollback pattern, after target-native validation, per-file provenance, conflict preview, protected credential handling, and path-containment tests are added.
+- Candidate inventory after this review: 43/303 reviewed, 260 unreviewed. Next exact unreviewed row is stored in `docs/research/github-candidates.json`.

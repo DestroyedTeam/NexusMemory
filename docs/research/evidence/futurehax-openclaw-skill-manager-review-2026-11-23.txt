@@ -1,0 +1,37 @@
+# FutureHax/openclaw-skill-manager review — 2026-11-23
+
+## Identity and provenance
+
+- The continuation controller cloned `https://github.com/FutureHax/openclaw-skill-manager.git` into an isolated review checkout; observed clone exit 0. Pinned `main` HEAD `03f3542203522a3fcb0be9f030f768b2db90a0fa`, commit date 2026-02-12, subject `Support dual-token setup: RO for reads, RW for creates`. Review checkout `.../nm-review-FutureHax-openclaw-skill-manager-20261123` had a clean `git status --short`.
+- Root contains `README.md`, `SKILL.md`, `tools/create.sh`, `tools/install.sh`, `tools/pending.sh`, and `tools/status.sh`; no package manifest, test directory, CI workflow, build system, or top-level LICENSE. README claims MIT, but the repository's license metadata is unconfirmed; do not treat prose as a bundled license grant. GitHub currently shows 0 stars, 0 forks, two issues and no releases. The GitHub page describes the five-step create/track/remind/approve/install flow; the releases page says there are no releases.
+- Candidate primary sources: [repository README](https://github.com/FutureHax/openclaw-skill-manager/blob/03f3542203522a3fcb0be9f030f768b2db90a0fa/README.md), [SKILL.md](https://github.com/FutureHax/openclaw-skill-manager/blob/03f3542203522a3fcb0be9f030f768b2db90a0fa/SKILL.md), [install.sh](https://github.com/FutureHax/openclaw-skill-manager/blob/03f3542203522a3fcb0be9f030f768b2db90a0fa/tools/install.sh), [pending.sh](https://github.com/FutureHax/openclaw-skill-manager/blob/03f3542203522a3fcb0be9f030f768b2db90a0fa/tools/pending.sh), [create.sh](https://github.com/FutureHax/openclaw-skill-manager/blob/03f3542203522a3fcb0be9f030f768b2db90a0fa/tools/create.sh), [releases](https://github.com/FutureHax/openclaw-skill-manager/releases).
+
+## Scope and disposition
+
+This is an OpenClaw Skill lifecycle helper, not a cross-Harness migration engine. It has no ChatGPT/Codex Project, Section Group, Session/event/parent-child/fork graph, transcript/attachment, token/usage, MCP/plugin, memory, schedule, Claude Desktop third-party-gateway Chat/Cowork/Code, or local/self-hosted Claude Code reader/writer. SKILL.md itself relies on an agent to detect capability gaps, generate content, and request approval, so it does not meet the user's eventual AI-independent multi-Harness goal. The product's explicit user-approval-before-install workflow is a useful governance pattern only; retain no executable code until licensing and security are resolved. Disposition: `OPENCLAW_SKILL_LIFECYCLE_REFERENCE_ONLY; NO_HARNESS_MIGRATION; README_MIT_CLAIM_WITHOUT_LICENSE_FILE; INSTALLER_PATH_ESCAPE_AND_FALSE_SUCCESS; PYTHON_SOURCE_INTERPOLATION`.
+
+The scripts are unvalidated shell/JSON glue with important unsafe edges. `install.sh` treats skill name and `agent:` scope as filesystem path components without containment checks; chooses repo from pending JSON or an unpinned default GitHub slug; clones current repo content without commit/digest verification; copies directly into destination; and swallows any `pending.sh remove` failure. It checks an existing destination only if it already contains `SKILL.md`, then reports installed regardless of whether the required file landed at the reported path. `pending.sh` embeds names/descriptions/repos directly into Python source and rewrites JSON in place without locking or atomic replacement. `status.sh` makes GitHub API calls via curl and interpolates the name in Python. `create.sh` creates a public org repository (`private:false`) before local commit/push, may leave an orphan repo on later failure, and falls back from `GITHUB_WRITE_TOKEN` to `GITHUB_TOKEN` even though the read token is documented as usually insufficient for writes. The credential-bearing remote URL is briefly stored in temporary git configuration. No live GitHub write was attempted.
+
+## Isolated dynamic checks
+
+All checks used a `TemporaryDirectory` home. `install.sh`'s `git clone` was a local fake executable that copied a synthetic repository; `status.sh`'s `curl` was a local fake returning HTTP 404. No network or account credential was used.
+
+1. `bash tools/pending.sh check` on a fresh temp home: exit 0, stdout `''`, stderr `''`. `add demo-skill FutureHax/openclaw-skill-demo-skill 'synthetic test'`: exit 0, stdout `{"status": "added", "name": "demo-skill"}
+`, stderr empty. `list`: exit 0 and produced JSON with one demo entry. `check`: exit 0 and printed the expected Markdown entry. `remove demo-skill`: exit 0, stdout `{"status": "removed", "name": "demo-skill"}
+`. Subsequent `list`: exit 0, stdout `{"pending": []}`. These only establish the benign serial path.
+2. `bash tools/status.sh demo-skill` with mocked curl HTTP 404: exit 0, stdout `{"name":"demo-skill","installed":false,"github":false,"pending":false,"paths":[]}` plus newline; stderr empty.
+3. `bash tools/install.sh demo-skill shared` with mocked local clone: exit 0, stderr empty, JSON says `status=installed`; target `SKILL.md` exists and `pending.json` becomes `{"pending": []}`. This is a synthetic smoke test, not a real GitHub clone.
+4. Precreated an empty target at `~/.openclaw/skills/demo-skill`, then ran the same mocked install command. Exit 0, stdout claimed `status=installed` and the requested target path, stderr empty, but `target/SKILL.md` was false and `target/skill/SKILL.md` was true. Cause: `cp -r source target` nests when target directory exists but lacks `SKILL.md`; no post-copy assertion catches it.
+5. Ran mocked install with `SKILL_NAME=../../../outside/skills/escaped`, under a disposable tree. Exit 0, stdout reported `status=installed`; `.../outside/skills/escaped/SKILL.md` existed outside the configured `~/.openclaw/skills` root. No user files were involved.
+6. With no token and clean temp HOME, `bash tools/create.sh safe-skill synthetic`: exit 1, stdout empty, stderr exactly `{"error":"No GitHub write token available. Set GITHUB_WRITE_TOKEN (preferred) or GITHUB_TOKEN with repo scope."}
+`; no staging directory was written and no network call occurred.
+7. `pending.sh remove` was given `x' or (print('INJECTED') is None) or 'x` while temp `pending.json` contained a synthetic row named `x`. It exited 0; stdout was `INJECTED
+{"status": "not_found", "name": "x"}
+`; stderr empty; the row remained. This confirms arbitrary Python expression execution from the name argument (the injected code only printed a marker).
+8. The first injection payload attempt was malformed and safely failed without altering temp data: subprocess exit 1, stderr was a Python `SyntaxError` (`closing parenthesis ']' does not match opening parenthesis '('`), stdout empty. The corrected payload above demonstrated the source-interpolation issue.
+
+No repository test suite exists; the temporary probes do not establish safety under real credentials or migration fidelity. Do not use its `create.sh`/`install.sh` against live accounts, Skills homes, or untrusted pending entries.
+
+## Quality assessment
+
+Only an adjacent approval/pending lifecycle concept is worth carrying forward. The implementation is not transaction-safe, provenance-verifiable, credential-safe enough for a migration writer, or portable across Harness resource models. It does not move Projects, Sections, sessions or context; it merely creates an OpenClaw-specific Skill after an agent identifies a capability gap. Count it as reviewed for the broad candidate inventory, but not as a viable Nexus Memory engine or recommended dependency.

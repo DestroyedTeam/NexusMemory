@@ -1,0 +1,17 @@
+CLAUDE DESKTOP THIRD-PARTY GATEWAY SCOPE — USER CONFIRMATION AND OFFICIAL DOCS (2026-11-25)
+
+User answer received: include all three Claude Desktop modes (Chat, Cowork, Code). Preserve them as separate acceptance tracks because mode-specific stores/features may differ even where Unified Claude combines the Chat/Cowork UI. Also include local or self-hosted Claude Code; do not conflate that with Anthropic-hosted Claude Code Cloud or Claude.ai account history.
+
+Official current configuration reference: https://claude.com/docs/third-party/claude-desktop/configuration
+- `inferenceProvider` supports `gateway`; settings separately expose a gateway base URL, API key/auth scheme and Chat/Cowork/Code surface capabilities.
+- Unified Claude combines the Chat and Cowork interface in current releases, but Code remains separate. That is a UI convergence, not evidence that their session formats or exports are interchangeable.
+
+Official current migration guide: https://support.claude.com/en/articles/18426225-move-from-claude-enterprise-to-claude-desktop-on-a-cloud-provider
+- Claude Enterprise -> Claude Desktop on a third-party provider has a native Claude-origin one-time import: own chats/projects/instructions and local Cowork/Code sessions.
+- It does not carry uploaded/project file contents, Cowork/Code sessions in the cloud, connectors or everything else automatically; memory, personal instructions and Skills require manual handling. Desktop session ZIP is unencrypted and excludes Claude Code CLI sessions.
+- This is not a ChatGPT/Codex import API and is not proof that arbitrary Harness source data restores natively.
+
+Separate CLI guide: https://support.claude.com/en/articles/18466061-move-claude-code-cli-users
+The Claude Code CLI reads its own environment/settings/managed-settings and local session transcripts remain under `~/.claude/projects`; Desktop 3P provider config is distinct, though the Desktop app passes provider settings to its Code sessions. Model/provider/auth deployment must therefore be represented independently of the session content.
+
+Required Nexus adapter acceptance keys: `claude-desktop-3p/chat`, `claude-desktop-3p/cowork`, `claude-desktop-3p/code`, and `claude-code-local`. The API key is configuration only: do not archive it, infer it authorizes Anthropic Cloud sessions, or claim a successful transfer based only on the Code CLI transcript.

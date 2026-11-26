@@ -1,0 +1,29 @@
+NEXUS MEMORY — CODE AND TEST REVIEW
+Repository: jnMetaCode/skillet
+Pinned commit: b972e3dc28da0a0c94b6c4ec56a07ac491f966e8 (main HEAD and origin/HEAD agreed at review time)
+Commit date: 2026-09-10
+Package: @jnmetacode/skillet 0.1.2; MIT; Node >=18; zero runtime dependencies
+GitHub snapshot (2026-11-21): 2 stars, 3 forks; latest listed release v0.1.2.
+
+SCOPE / IMPLEMENTATION
+- Small JavaScript CLI + JSON registry for discovering and copying `SKILL.md` folders. Commands: search/add/install/list/remove/update/new/validate/gallery/init. Default destination is project `.claude/skills/`; per-project `skillet.json` controls skill directory/registry; `skillet.lock.json` records source ref and resolved Git commit SHA for reproducible reinstall.
+- `skillet mcp` is a local stdio JSON-RPC server exposing only `skillet_search`, `skillet_install`, `skillet_list`. MCP install is restricted to a registry name and writes Skills; the README tells users to add manual client MCP config. It does not migrate MCP servers/configs, OAuth/API credentials, or session transcripts.
+- No ChatGPT/Codex archive reader, Project/Section/Section Group/Session/event-graph import/export, branch/subtask relations, media/attachment/token preservation, memories, scheduled tasks, or Claude Desktop mode-specific session writer. An example `claude_desktop_config.json`/`.mcp.json` entry is a connector setup, not evidence for Chat/Cowork/Code session support or third-party gateway behavior. No local/self-hosted Claude Code API-Key session creation/restore path is implemented.
+
+CODE / TRUST REVIEW
+- `src/install.js` validates imported skill names as one safe path segment and prevents `--force` from bypassing path containment. `src/source.js` validates owner/repo/ref/path before invoking git without a shell; explicit commit SHA refs are fetched and checked out. `src/mcp.js` further limits MCP installs to registry names. The fixture test verifies a `../../pwned` name is rejected even with `--force`.
+- This copies remote or local Skill content into the project; the tool does not content-audit Skill prompt/scripts, sandbox execution, sign registry entries, or validate trust policy. A user-selected/alternate registry is trusted input. `--force` removes an existing skill directory before copying, so replacement is not transactional and local edits can be lost on a failed copy. There is no cross-harness discovery/host compatibility matrix or native behavior test.
+- Keep as an adjacent Skills asset-manager / lockfile / minimal MCP connector reference only; do not count it as project/session migration or a dependency for the migration engine.
+
+LOCAL VERIFICATION (bound checkout; no provider credentials or client state used)
+- CodeGraph initialized in this exact checkout: 15 files, 129 nodes, 410 edges; index current. `.codegraph/.gitignore` self-preserving `!.gitignore` exception removed; checkout remained clean.
+- `rtk npm test`: exit 0; 15 pass, 0 fail, 1 skipped (opt-in real GitHub install).
+- `rtk proxy env SKILLET_E2E=1 npm test`: exit 0; all 16 pass, 0 fail, 0 skipped; one actual public GitHub skill checkout/install in a disposable test directory, no Claude/API provider call.
+- Exact main commit GitHub CI workflow run CI #26 succeeded. CI matrix declares Ubuntu/macOS/Windows × Node 18/20/22, plus network install E2E on Ubuntu/Node 22. This is project CI, not an independent security audit or end-user Harness compatibility certification.
+
+SOURCES
+- Repository README: https://github.com/jnMetaCode/skillet/blob/b972e3dc28da0a0c94b6c4ec56a07ac491f966e8/README.md
+- Pinned installer and MCP source: https://github.com/jnMetaCode/skillet/blob/b972e3dc28da0a0c94b6c4ec56a07ac491f966e8/src/install.js ; https://github.com/jnMetaCode/skillet/blob/b972e3dc28da0a0c94b6c4ec56a07ac491f966e8/src/mcp.js
+- Pinned test suite / workflow: https://github.com/jnMetaCode/skillet/blob/b972e3dc28da0a0c94b6c4ec56a07ac491f966e8/test/run.js ; https://github.com/jnMetaCode/skillet/blob/b972e3dc28da0a0c94b6c4ec56a07ac491f966e8/.github/workflows/ci.yml
+- Exact HEAD commit: https://github.com/jnMetaCode/skillet/commit/b972e3dc28da0a0c94b6c4ec56a07ac491f966e8
+- Releases: https://github.com/jnMetaCode/skillet/releases

@@ -1,0 +1,52 @@
+# Candidate #230 — xfan3696-collab/skillpkg review (2026-11-24)
+
+## Identity and availability
+
+Pinned `main`/`origin/main` `ba406e139f12a0db6abcd1da232e5273e057b05f` (2026-03-13, clean shallow checkout). GitHub page snapshot: 8 commits, 0 stars, 0 forks, MIT license, no Releases, and no configured Actions workflow (Actions page is the generic setup page). Repo package is `skillpkg==0.1.0`, Python >=3.11, with a small CLI + optional FastAPI/S3 server. No test directory or automated tests are present.
+
+**Critical distribution-name mismatch:** this repository's README says `pip install skillpkg`, but current PyPI `skillpkg` is version 0.0.6 maintained by `parkerbrown` with a different, essentially empty project description—not this GitHub source. A distinct modern `skillpkg-cli` PyPI package belongs to another repository, `Exaggarate/skillpkg`, and is not this candidate. Do not install from the unqualified `skillpkg` name or conflate the two sources. `Exaggarate/skillpkg` is queued separately for source review based on this discovery; its README claims a security-aware multi-runtime installer, but that claim is not verified here.
+
+## Product / data model / fit
+
+This tool is an S3-backed **team registry for individual `SKILL.md` packages**. A client reads a JSON index, downloads a versioned `.tar.gz`, checks a SHA-256 value when supplied, and installs into its own configured generic `~/.skillpkg/skills` directory. The server stores package blobs + `index.json` in S3/MinIO; S3 credentials stay server-side. Skill metadata includes name/version/description/author/tags and `requires`.
+
+This is not a native cross-Harness installation router: there is no adapter for Claude Desktop 3P Chat/Cowork/Code or per-Harness discovery paths; it does not install into native Claude/Codex/DSH stores by default. Its `git` source is a **local directory copy**, not a remote Git client; the `version` argument is ignored by that source. `skillpkg update` is explicitly unimplemented and `requires` metadata has no dependency resolver. The generic package cannot represent ChatGPT/Codex Projects/Sections, Session logs, edits/interrupts, parent/fork/subagent edges, media, MCP/plugins, schedules, memory, token/cost provenance, or target resume. No migration fidelity metric or import/export/rollback contract exists.
+
+Positive design references for a future Nexus ResourcePlane: versioned package metadata, per-blob SHA-256, source index, private object-store backing, and server/client credential separation. A hash carried in the same mutable index proves consistency with that index, not publisher authenticity/signature or source provenance. MIT license permits reuse in principle, but current safety defects make direct reuse inappropriate.
+
+## Source and isolated behavior review
+
+The implementation was read at the pinned commit (`cli.py`, `config.py`, `index.py`, `pack.py`, `skill.py`, `server.py`, and both sources). All tests below used only synthetic `/tmp` paths, local HTTP, fake S3 storage, and sentinel data.
+
+1. **Local install/remove path traversal.** The CLI forms destination as `Path(cfg.skills_dir) / skill_name` without containment validation; remove calls `shutil.rmtree(dest)`. With temp `skills_dir=/tmp/nm-skillpkg-remove-smoke-followup230/home/.skillpkg/skills`, `skillpkg remove ../../../victim` exited 0 and removed a sentinel directory outside the skills root. A second fixture ran `skillpkg install ../../../../nm-skillpkg-outside-install-followup230`: exit 0, it wrote the skill outside the configured skills root and replaced a sentinel directory there.
+2. **Remote-index path can escape client temp staging.** `HttpIndexSource.install` trusts index `versions[version].file` to form `Path(tmpdir) / tarball_file` with no resolved-path containment. A local mock HTTP registry returned a valid hashed tarball and malicious `file: ../outside/payload.tar.gz`; the actual client install wrote the downloaded bytes over a synthetic file outside its `TemporaryDirectory`, SHA-256 matched, and it also installed the Skill. Only synthetic bytes were touched. `tarfile.extract(..., filter="data")` is a useful separate extraction safeguard, but does not protect the earlier download target path.
+3. **Registry publish is unauthenticated by default.** The FastAPI endpoint checks a bearer token only if `SKILLPKG_PUBLISH_TOKEN` is nonempty. With it unset and fake S3, a request with no Authorization was accepted and wrote both `packages/auth-fixture-1.0.0.tar.gz` and `index.json`; setting a token made the same request return HTTPException 401. Docker Compose sets `SKILLPKG_PUBLISH_TOKEN` to an empty default, maps host port 8787, and the server CLI/Dockerfile bind `0.0.0.0`. Thus the documented quick deployment is publicly writable unless an operator changes defaults/firewall; this was tested in-process with fake storage, not against a real S3 deployment.
+4. **Publish token stored plaintext with permissive mode.** In a temporary home under controlled umask `022`, `skillpkg login local --token SYNTHETIC_TOKEN_ONLY` wrote the token in plaintext to `.skillpkg/config.yaml` with mode `0644`. The test used a fake token only.
+5. **Version ordering is lexical, not semantic.** Fake-S3 route calls published `0.9.0` then `0.10.0`; the index still marked `0.9.0` as latest because string comparison treats `"0.10.0" < "0.9.0"`.
+6. **Incomplete package manager.** `skillpkg update sample` exits 1 with `Error: Update not yet implemented.` There is no dependency resolution, native install mapping, index signature, transaction/rollback, or trust/provenance model. The remote client can verify a blob hash only when the index includes it; both package and hash source are controlled by the same endpoint.
+
+## Build / tests / environment
+
+`uv` was not installed. Created isolated `/tmp/nm-skillpkg-venv-followup230` with Python 3.12.10 and ran `pip install --no-cache-dir '.[server]'` from the pinned repo: exit 0, built `skillpkg-0.1.0-py3-none-any.whl` (16,372 bytes), and installed Click/PyYAML/Pydantic/FastAPI/Uvicorn/Boto3; no repo source change. `python -m compileall -q src/skillpkg`, `python -m pip check`, `skillpkg --help`, and `skillpkg --version` all passed. No unit/integration suite, CI or release artifacts were found; the install success is a package/build smoke, not a behavioral test suite. Python dependency vulnerability audit was not run.
+
+## Disposition
+
+**Reject as a Nexus Memory migrator and do not install from its ambiguous `skillpkg` name.** Preserve only the abstract package/index/SHA design as a candidate ResourcePlane pattern; require immutable publisher signatures/provenance, validated version semantics, per-Harness adapters, and explicit package dependency graph before considering any registry design. Do not reuse current implementation because the tested path traversal, default-open publisher, plaintext token, and version-selection issues are disqualifying. No user account, key, S3 bucket, project, session, or private file was accessed.
+
+## References
+
+- [Pinned repository](https://github.com/xfan3696-collab/skillpkg/tree/ba406e139f12a0db6abcd1da232e5273e057b05f)
+- [Pinned client HTTP index source](https://github.com/xfan3696-collab/skillpkg/blob/ba406e139f12a0db6abcd1da232e5273e057b05f/src/skillpkg/sources/httpindex.py)
+- [Pinned server](https://github.com/xfan3696-collab/skillpkg/blob/ba406e139f12a0db6abcd1da232e5273e057b05f/src/skillpkg/server.py)
+- [GitHub Actions](https://github.com/xfan3696-collab/skillpkg/actions), [GitHub Releases](https://github.com/xfan3696-collab/skillpkg/releases)
+- Current PyPI [`skillpkg`](https://pypi.org/project/skillpkg/) name, and separate PyPI [`skillpkg-cli`](https://pypi.org/project/skillpkg-cli/) / GitHub [`Exaggarate/skillpkg`](https://github.com/Exaggarate/skillpkg).
+
+
+## Exact isolated stdout ledger
+
+- Remove traversal: `skillpkg remove ../../../victim` → exit 0; stdout `Removed '../../../victim'`; post-check `VICTIM_EXISTS_AFTER False`.
+- Install traversal: exit 0; stdout `Installed traversal-fixture@1.0.0 from 'local' → /tmp/nm-skillpkg-install-traversal2-followup230/home/.skillpkg/skills/../../../../nm-skillpkg-outside-install-followup230`; output checks `OUTSIDE_SKILLS_ROOT_WRITTEN True SENTINEL_REPLACED True`.
+- HTTP source write: `INSTALL demo 0.1.0 FILE_FIELD ../outside/payload.tar.gz`; `OUTSIDE_TEMP_WRITE True INSTALLED_SKILL True`. Local loopback HTTP mock only.
+- Optional auth: with token unset, accepted result `{'name': 'auth-fixture', 'version': '1.0.0', 'sha256': 'acf7d07ef8e5fca72383c52549191b5ffa3bd6f04816c4c6ea38e88c10cc5d16'}`, `S3_WRITES 2`, keys `['packages/auth-fixture-1.0.0.tar.gz', 'index.json']`; setting `SKILLPKG_PUBLISH_TOKEN` with no Authorization returned `HTTPException 401 Invalid or missing token`. Fake S3 only.
+- Saved token: both temporary CLI calls exit 0 (`Added repo 'local'...`; `Token saved for 'local'`); file output `MODE 0o644 TOKEN_PLAINTEXT True`.
+- Version ordering: `PUBLISH 0.9.0 ... LATEST 0.9.0`; `PUBLISH 0.10.0 ... LATEST 0.9.0`. Fake S3 only.

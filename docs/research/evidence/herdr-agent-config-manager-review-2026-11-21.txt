@@ -1,0 +1,40 @@
+# Phoobobo/herdr-agent-config-manager — source, behavior, and safety review (2026-11-21)
+
+## Identity and decision
+
+- Repository: https://github.com/Phoobobo/herdr-agent-config-manager
+- Exact `master` HEAD: `bac8484cfd67b2d39523e658cec6a51353687532` (2026-09-06); live `origin/master` matched.
+- Public snapshot: 9 stars / 0 forks; 10 commits; MIT; Python CLI `agentcfg` plus optional Herdr plugin wrapper.
+- **Disposition:** adjacent Skills inventory/central-store reference only. It is not a ChatGPT/Codex Projects/Sections or Session migration tool. The small scope is promising, but two synthetic safety probes found risks (inventory canary disclosure and divergent-copy deletion in TUI selection); do not adopt its output into AI context without redaction or use skill relinking without conflict safeguards.
+
+## Actual product scope
+
+`agentcfg detect` scans 11 configured dot-directories (`.trae`, `.claude`, `.codex`, `.pi`, `.omp`, `.hermes`, `.aiden`, `.cursor`, `.osadk`, `.openclaw`, `.trae-cn`) and discovers skill directories with `SKILL.md`, selected MCP declarations, plugin directories, and hook commands. Its canonical skill store is `~/.agents/skills/`; `organize`, `add`, and `fanout` move/copy and symlink Skills across those harnesses. Update delegates to `npx skills update`; delete/archive/unarchive manage Skills.
+
+Important scope limit: the code's mutation/planning paths are for Skills. MCP servers, plugins, and hooks are inventory items, not configuration objects it imports/exports or installs across harnesses. For MCP inventory it stores server name, agent, source path, transport and a truncated `command+args` or URL detail; it does not retain a typed, loss-aware MCP config model. No provider API gateway, API key auth translation, project/section hierarchy, session transcript parser, parent/child/fork model, attachment mover, native session writer, Cloud Session creator, token-usage adapter, or round-trip test was found.
+
+## Verified isolated behaviors
+
+All checks used `/tmp` fixture homes and synthetic content only; no host agent settings, login, credentials, or provider calls were read or changed.
+
+1. `python3 -m unittest discover -s tests -v` — exit 0, **25 tests**, 0 failures. Tests exercise detection/organizing, duplicate-content conflicts in organizer flow, add/fanout, archive/unarchive and managed-link deletion.
+2. Synthetic `agentcfg detect --json` fixture — exit 0. It correctly counted fake skills, MCPs, a fake plugin and a hook under `.claude`, and skills/MCP under `.codex`.
+3. Synthetic `agentcfg organize --dry-run` — exit 0; proposed one canonical store copy plus two links. `organize --apply` — exit 0; verified the shared canonical `SKILL.md` exists and both `.claude`/`.codex` locations became symlinks to it.
+4. **Secret-redaction probe:** a synthetic JSON config contained canaries in an MCP command argument, an MCP URL query, an MCP `env` value, and a hook command. `detect --json` output the command-argument, URL-query, and hook-command canaries; it did not output the `env` value. Code inspection confirms inventory formats command/args and URL directly and serializes hook command text. The bundled `skills/agentcfg-manage/SKILL.md` tells an agent to prefer `agentcfg detect --json`; therefore the raw report can expose sensitive arguments/URL parameters/hook commands in model context. No real secret was used.
+5. **Divergent-copy probe:** created different real `SKILL.md` content for the same skill name in temporary `.claude` and `.codex` copies; invoked `_save_skill_harness_selection("shared", {".agent", ".claude"})` in a temp HOME. It copied the Claude version to the canonical store, then removed the deselected real Codex directory without comparing/merging that content or showing a conflict warning. This is the TUI edit-selection path, not the separately tested `organize` CLI conflict path. Treat selecting/deselecting harnesses as potentially destructive unless the implementation adds a preflight conflict check/archive.
+
+## Quality and adoption
+
+The repository's GitHub Actions page showed only a Dependabot Dependency Graph run, not a CI test/build workflow, and its Releases page is empty. The README instructs using `--apply` for mutations and provides `HERDR_ACM_HOME` / `HERDR_ACM_MOUNT` test overrides. Its `delete` plan skips real directories and removes only links into the canonical store; the safer reversible archive flow is available. However, the TUI selection branch above can delete unselected real copies, and JSON detection can expose sensitive command lines. Current maintenance is light (10 commits, last code commit 2026-09-06).
+
+## Nexus Memory mapping
+
+| Requested requirement | Candidate support | Disposition |
+|---|---|---|
+| Skill portability across harnesses | Canonical `~/.agents/skills` store and symlinks across known agent directories | Useful narrow pattern, not a compatibility/translation matrix. |
+| MCP/plugin/hook migration | Detects summaries only; no import/export or target writer | Not supported. Raw MCP command/URL and hook summaries need redaction before any LLM sees output. |
+| Project/Section grouping | No project model beyond each harness config root | Not supported. |
+| Sessions, hierarchy, turns, attachments, token usage | No transcript model or session writer | Not supported. |
+| API-key / hosted Cloud / Claude Desktop modes | No provider gateway or Desktop/session integrations | Not supported. |
+
+Retain only as an adjacent Skills centralization reference. Nexus Memory should use explicit read-only inventory plus redacted reports and preserve divergent sources; do not treat agentcfg as a session migration dependency. Primary source links: [repository](https://github.com/Phoobobo/herdr-agent-config-manager/tree/bac8484cfd67b2d39523e658cec6a51353687532), [inventory](https://github.com/Phoobobo/herdr-agent-config-manager/blob/master/agentcfg/inventory.py), [skill manager](https://github.com/Phoobobo/herdr-agent-config-manager/blob/master/agentcfg/manage.py), [TUI selection](https://github.com/Phoobobo/herdr-agent-config-manager/blob/master/agentcfg/console.py), [agent skill instructions](https://github.com/Phoobobo/herdr-agent-config-manager/blob/master/skills/agentcfg-manage/SKILL.md).

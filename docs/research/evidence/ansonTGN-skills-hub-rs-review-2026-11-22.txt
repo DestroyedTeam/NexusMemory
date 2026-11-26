@@ -1,0 +1,41 @@
+# Candidate #148 — ansonTGN/skills-hub-rs (2026-11-22)
+
+## Scope and identity
+
+- Repository: https://github.com/ansonTGN/skills-hub-rs
+- Default branch: `main`; local shallow checkout HEAD `085e986288ae212f1845834c9ee06282ece2e157`.
+- Exact checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-ansonTGN-skills-hub-rs-20261122`.
+- License: MIT. Latest release shown by GitHub on this date: `v0.2.0-alpha.2`, marked pre-release. Main CI run #18 for commit prefix `085e986` is green; this is not the same claim as a desktop Tauri build on this machine.
+- Disposition: useful **Skills ResourcePlane** reference, **not** a conversation, Project/Section, or session-graph migration engine and not a Nexus Memory implementation dependency.
+
+## Implementation reviewed
+
+The repo provides a Rust CLI plus Tauri Desktop for a local central Skill store (`skills/` + SQLite) and syncs `SKILL.md` directories into configured harness paths. `src/tools.rs::builtin_tools()` lists 47 adapters and `tests/core.rs::builtin_catalog_has_expected_tools_and_cursor_forces_copy` asserts that count; the test only spot-checks Cursor and Codex paths. Claude Code is the `.claude/skills` adapter, not Claude Desktop Chat/Cowork/Code or the Desktop 3P gateway. `MCPJam` is another Skills-directory adapter; the implementation does not parse, import, merge, or restore MCP server configurations. No Projects, Sections, sessions, transcript graph, parent/child sessions, interruptions, attachments, media, token-usage ledger, memory graph, plugins, or schedules are modeled.
+
+Source-level fidelity / safety notes:
+
+1. `run_git_clone` performs a depth-1 clone and optionally passes the user-supplied ref to `git clone --branch`. The record retains that supplied ref, not the resolved commit SHA. With no ref, later updates reclone the moving default branch. The Cargo lockfile locks Rust dependencies, not Skill source revisions; reproducibility/provenance must be implemented separately.
+2. `sync_dir` with `overwrite=true` removes an existing target before creating the replacement. If the later copy/link creation fails, that old target is not restored. `update_skill` does stage/rename the central managed directory, but then resyncs each existing adapter target with overwrite enabled. This is a source-derived failure window, not an empirically triggered data-loss incident.
+3. `update_skill` replaces the central directory before writing its DB metadata; a DB failure after filesystem replacement could leave fresh content with stale metadata. This ordering is source-derived and was not fault-injected.
+4. Tool path mappings are static. The 47 count is source/test-confirmed; target correctness across tool versions/operating systems is not implied by the count.
+
+## Local checks and isolated probes
+
+All build/test data went to `/tmp/nm-rust-target-ansonTGN-skills-hub-rs-20261122`, `/tmp/nm-skills-hub-test-20261122`, or another `/tmp` smoke directory.
+
+- `rtk cargo fmt --all -- --check` — exit 0, stdout/stderr empty.
+- `rtk proxy env CARGO_TARGET_DIR=/tmp/nm-rust-target-ansonTGN-skills-hub-rs-20261122 SKILLS_HUB_HOME=/tmp/nm-skills-hub-test-20261122 cargo test --locked` — exit 0; `tests/core.rs`: 6 passed, 0 failed; lib/main/doc tests: 0.
+- `rtk proxy env CARGO_TARGET_DIR=/tmp/nm-rust-target-ansonTGN-skills-hub-rs-20261122 SKILLS_HUB_HOME=/tmp/nm-skills-hub-test-20261122 cargo clippy --all-targets --locked -- -D warnings` — exit 0.
+- `rtk proxy env CARGO_TARGET_DIR=/tmp/nm-rust-target-ansonTGN-skills-hub-rs-20261122 SKILLS_HUB_HOME=/tmp/nm-skills-hub-test-20261122 cargo build --release --locked` — exit 0; core CLI package only. No Tauri Desktop/installer build was run.
+- Isolated CLI demo installed `examples/demo-skill` with `--home` under a new `/tmp` hub, synchronized to a synthetic project using `--tool claude_code --scope project`, and `show` returned status `ok`, mode `symlink`, target `/tmp/nm-skills-hub-smoke.NOKjR1/project/.claude/skills/demo-skill`. `SKILL.md` SHA-256 matched source and target: `ff7e3b8ba1f3ee09645b85f92d410e677d68244cccad297d5960ff3aa2dfc409`. Command exit 0.
+- `tools --json` also exited 0. Its code calls `Path::exists()` for adapter detection, so this read-only probe observed existence flags for configured tool-root paths under the user's home directory. No files inside those directories, session stores, credentials, or API keys were read; no user path was written or synchronized.
+
+## Conclusion
+
+Keep only the central Skills library / static adapter catalog / explicit copy-vs-link model as comparison material. Exclude this repo as a session migrator: SKILL.md compatibility is a separate portability plane, and the exact user-confirmed target here (Claude Desktop 3P Chat/Cowork/Code plus local/self-hosted Claude Code) needs native mode-aware Project/Session/MCP/plugin/memory/assets/schedule handling that this repo does not implement.
+
+## Current primary-source references
+
+- GitHub release list: https://github.com/ansonTGN/skills-hub-rs/releases
+- Exact main CI run list: https://github.com/ansonTGN/skills-hub-rs/actions/workflows/ci.yml
+- Local-code source reviewed at exact checkout above; no remote source was assumed beyond that pinned checkout.

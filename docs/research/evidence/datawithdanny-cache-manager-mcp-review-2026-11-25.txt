@@ -1,0 +1,43 @@
+# Candidate #278 source review: datawithdanny/cache-manager-mcp
+
+- Review date: 2026-11-25 (Asia/Shanghai)
+- Repository: https://github.com/datawithdanny/cache-manager-mcp
+- Pinned HEAD: `1609df1e075746e7c5556a2fdd46d38679302781` (2026-06-26; `Add value-explainer SVG to README`)
+- Package: `@dannyma/cache-manager-mcp@0.1.4`, Node >=20, MIT; no npm runtime dependencies listed.
+- CodeGraph: 21 files, 531 nodes, 1,068 edges, index current. Review checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-datawithdanny-cache-manager-mcp-20261125-followup278`.
+- No private exports, live harness session, provider credential, or user file was read; all dynamic probes used synthetic data in disposable `/tmp` paths.
+
+## What it does / does not do
+
+- Standalone MCP stdio server + optional Zed editor extension wrapper. Persistent local state defaults to `~/.cache/cache-manager-mcp/`: `sessions.json`, `aliases.json`, and Markdown summaries in `memories/`.
+- Session tracking state is not a conversation: timer/session id, label, cwd, timestamps, the last 50 heartbeat/action records, checkpoint counters and optional transcript IDs. `save_memory` stores only a caller-supplied short summary and tags; `resume_or_start` returns the newest matching summary and creates a new tracking session.
+- `project_group` is a free-form sticky string on the alias row, defaulting to `cwd` basename. It only buckets dashboard rows/cost totals; it is not a project tree, section/group membership graph, or project-scoped memory store. The README lists project-scoped stores as a future improvement.
+- The source explicitly cannot identify native host thread IDs, observe chat activity, clear the active context, open a native thread, or prefill the next chat. Restoring means the model reads a saved memory and the user/client starts a fresh conversation. The server instructions require agent-invoked tool calls, so the automation depends on AI/client protocol support and model compliance.
+- Usage/cost collection reads Claude Code JSONL transcripts (default Claude project transcript root or configured override); it does not import those transcripts or calculate equivalent usage for ChatGPT/Codex. Price data is labelled as a June 2026 snapshot.
+- No native ChatGPT/Codex connector, Projects/Sections/branch/subtask/event model, attachment-byte reader, skill/MCP/plugin/schedule exporter, target-native session writer, or tests for Claude Desktop gateway Chat/Cowork/Code and local Claude Code API-key mode.
+
+## Tests and synthetic probes
+
+1. `rtk proxy env CACHE_MANAGER_STORE_DIR=/tmp/nm-cache-manager-review-278-store CACHE_MANAGER_TRANSCRIPT_DIR=/tmp/nm-cache-manager-review-278-transcripts CACHE_MANAGER_WEB_DASHBOARD=0 CACHE_MANAGER_PRUNE_ON_STARTUP=false CACHE_MANAGER_NOTIFY_DELIVERY=log npm test`
+   - Exit 0: the 10-script suite passed (MCP, notifier, terminal/web dashboards, failover, checkpoint suggestion, turn timer, filename, attribution and project groups). Web dashboard reported 30/30 checks; failover reported 4/4. Smoke fixtures write to temporary stores and the notifier delivery was forced to `log`.
+2. `rtk proxy env CARGO_TARGET_DIR=/tmp/nexusmemory-cache-manager-rust-target cargo test --manifest-path Cargo.toml`
+   - Exit 0; root Zed shim compiled; `running 0 tests`, `0 passed; 0 failed`. This does not verify a running Zed app or installed extension.
+3. Disposable MCP probe `save_memory` on a synthetic summary only:
+   - MCP call exit 0; generated Markdown summary mode `0644`; store directory mode `0755` under the inherited review-host umask. This is a local observation; other hosts' umasks may differ. Contents are plaintext, with no encryption/secure-file mode in the writer.
+4. Disposable malformed-index probe:
+   - Wrote exactly `{ this is intentionally malformed; disposable probe only }\n` to temporary `sessions.json`; `start_session` with alias `corrupt-index-probe` returned an `ok: true` status and rewrote `sessions.json` as a new JSON object. The previous malformed bytes were replaced without a warning. No production/user store was touched.
+5. Concurrency caveat from source inspection, not runtime reproduced: `writeJson` overwrites JSON files directly (no temp/rename, lock or merge) while docs describe concurrent MCP clients sharing the same store/dashboard. Simultaneous read-modify-write from separate server processes can lose updates.
+6. Default startup pruning (`CACHE_MANAGER_PRUNE_ON_STARTUP=true`, retention 30 days) removes old non-latest Markdown handoffs; only the newest memory per `session_id`/alias group is protected by default. Reviewers should not treat this as an immutable archive.
+
+## Disposition
+
+Not a session migration/restore project. Keep only the checkpoint-and-restart-memory pattern as adjacent prior art; do not use its current persistence or dashboard as Nexus's archival backing store without safer file modes, atomic writes, concurrency control, backups, export/import, and tested target adapters.
+
+## Pinned source links
+
+- [README](https://github.com/datawithdanny/cache-manager-mcp/blob/1609df1e075746e7c5556a2fdd46d38679302781/README.md)
+- [session/alias/memory server](https://github.com/datawithdanny/cache-manager-mcp/blob/1609df1e075746e7c5556a2fdd46d38679302781/server/cache-manager.mjs)
+- [Claude Code transcript statistics reader](https://github.com/datawithdanny/cache-manager-mcp/blob/1609df1e075746e7c5556a2fdd46d38679302781/server/transcript-stats.mjs)
+- [localhost dashboard server](https://github.com/datawithdanny/cache-manager-mcp/blob/1609df1e075746e7c5556a2fdd46d38679302781/server/cache-manager-web.mjs)
+- [package scripts and metadata](https://github.com/datawithdanny/cache-manager-mcp/blob/1609df1e075746e7c5556a2fdd46d38679302781/package.json)
+- [Zed root extension](https://github.com/datawithdanny/cache-manager-mcp/blob/1609df1e075746e7c5556a2fdd46d38679302781/src/lib.rs)

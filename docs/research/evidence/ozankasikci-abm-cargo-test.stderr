@@ -1,0 +1,4 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/main.rs (/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/abm293/target/debug/deps/abm-49ae0c7e9624bc5f)
+     Running tests/live_chrome.rs (/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/abm293/target/debug/deps/live_chrome-21be40b1e692ccf7)
+     Running tests/profile_cli.rs (/Users/vincentadamnemessis/Library/Caches/NexusMemory/test-results/abm293/target/debug/deps/profile_cli-385cfc71e38e97b4)

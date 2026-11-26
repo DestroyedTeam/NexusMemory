@@ -1,0 +1,6 @@
+{"type":"session_meta","payload":{"id":"fixture-codex-001","cwd":"/tmp/nexus-memory-fixture","title":"Synthetic Codex rollout","parent_thread_id":"fixture-parent-1"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect fixture."}]}}
+{"type":"response_item","payload":{"type":"function_call","name":"Read","arguments":{"file_path":"README.md"},"call_id":"call-fixture-1"}}
+{"type":"response_item","payload":{"type":"function_call_output","call_id":"call-fixture-1","output":"Fixture contents."}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Inspection complete."}]}}
+{"type":"event_msg","payload":{"type":"token_count","total_token_usage":{"input_tokens":42,"output_tokens":7}}}

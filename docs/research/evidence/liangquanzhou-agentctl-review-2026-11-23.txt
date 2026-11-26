@@ -1,0 +1,37 @@
+# Candidate #193 — `liangquanzhou/agentctl`: useful resource control plane, not session migration
+
+Review date: 2026-11-23. The shallow default-branch clone is `master` (not `main`); exact `HEAD` and `refs/remotes/origin/master` are both `006d5c3b3c604e938fef93f65a0ccca1d75a7d6c`, commit time `2026-09-01T22:07:04+08:00`. It matches GitHub's latest listed release `v0.6.0` (2026-09-01); release page: <https://github.com/liangquanzhou/agentctl/releases>. Source: <https://github.com/liangquanzhou/agentctl/tree/006d5c3b3c604e938fef93f65a0ccca1d75a7d6c>. Checkout clean after CodeGraph setup. CodeGraph: 74 files, 1,540 nodes, 4,607 edges; index current.
+
+The GitHub candidate index had `license_spdx: null`; repo root has no `LICENSE` file, though README and `.goreleaser.yml` declare MIT. Treat license evidence as incomplete until a license text/legal grant is confirmed. GitHub snapshot in candidate catalogue: 0 stars, 0 forks; this does not erase the useful implementation evidence, but adoption is not demonstrated.
+
+## Disposition
+
+**Retain as a high-quality ResourcePlane/configuration deployment reference only. Reject as a ChatGPT/Codex Project/Section/session/history importer or session-graph converter.** It centrally distributes MCP, static rules, hooks, slash commands, files, ignore patterns, Skills and static subagent role definitions across agent-specific config formats. It has no canonical chat/session/message/transcript or Project/Section/attachment/turn hierarchy. The source search for `transcript|conversation history|session import|session tree|session graph|chat history` found no matches. Broader “session” hits are MCP protocol session IDs, hook lifecycle names (`SessionStart`/`SessionEnd`) and tests, not user conversations. `SubagentsSync` hashes/converts static `.md` role definitions; it does not preserve dynamic parent/child task execution topology.
+
+The project’s `claude-code` registry entry and `claude-3p` entry manage agent resources, not API-key inference or session state. Search for `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, gateway, inference-provider, model-endpoint/API-key configuration in its CLI/source/README found no matches. Its encrypted MCP credentials are for tools, not the model gateway.
+
+## Genuine value and code behavior
+
+- A real plan/apply/status/rollback control plane for tool configuration, per-agent capability registry, per-agent Skill filtering, custom MCP server profiles, and atomic config writes. `go test ./...` exercises it deeply. These are good Nexus Memory *resource-plane* patterns.
+- README declares Claude Code, Claude Desktop, and `Claude Cowork 3P`. The registry uses `claude-code` config/Skills under `~/.claude*`, plus `claude-3p` MCP at `~/Library/Application Support/Claude-3p/claude_desktop_config.json`; the 3P target has a local `skills-plugin/<org>/<account>/skills` Skill projection.
+- SkillsSync creates `.claude-plugin/plugin.json`, `manifest.json`, copies Skills and maintains `agentctlManaged` entries and per-agent managed-state. It rejects a symlinked destination before replacement, hashes directory contents for drift, and prunes stale managed Skills. Static subagent definitions are separately converted per agent.
+
+## Critical 3P caveats demonstrated from code and synthetic fake-HOME probes
+
+1. The Cowork 3P Skills target is an app-internal path selected by globbing `~/Library/Application Support/Claude-3p/local-agent-mode-sessions/skills-plugin/*/*/skills`. The repo's `claudeDesktopSkillsTarget()` hardcodes the macOS path, unlike Anthropic's documented Windows `%LOCALAPPDATA%\\Claude-3p\\` and Linux `~/.config/Claude-3p/` roots. Windows/Linux 3P target discovery is therefore not implemented by this function.
+2. With no pre-existing Skills-plugin cache, `SkillsTarget` is empty. In a fake HOME, `agentctl skills sync --dry-run --output json --target claude-3p ...` exited 0 with `actions: 0`, `targets: null`, despite a one-Skill source. The dynamic `--cowork-3p-dir` flag is absent from `--help` until a target path already exists. It does not bootstrap a new Desktop 3P extension location.
+3. With one synthetic cache at `.../skills-plugin/org-id/account-id/skills`, the command exposed `--cowork-3p-dir`; dry-run reported one create/drift, actual sync copied one synthetic Skill and generated the plugin/manifest files, and the second sync reported `actions:0`, `unchanged:1`, `status:synced`. This tests the writer against a synthetic folder only, not Claude Desktop recognition.
+4. With two fake org/account plugin roots, `claudeDesktopSkillsTarget()` chose the lexicographically first (`a-org/a-account`) rather than an explicit active account/organization selection. Users with multiple 3P identities risk syncing to the wrong profile unless they override the target path.
+5. The official Anthropic Desktop 3P extension docs describe managed MCP via `managedMcpServers`, organization plugins via marketplaces or system-wide directories, and user extensions through the in-app UI. They do not document `skills-plugin` as a supported external provisioning API/path. Direct cache writes must be treated as implementation-dependent/unsupported until tested against each Desktop release. Official 3P data roots and plugin layers: <https://claude.com/docs/third-party/claude-desktop/data-storage> and <https://claude.com/docs/third-party/claude-desktop/extensions>.
+
+## Isolated build/test evidence
+
+The host had no `go` executable in PATH. Used official Go `go1.27.4.darwin-arm64` in `/private/tmp` only; downloaded archive SHA-256 `91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4` matches the official download page <https://go.dev/dl/>. Isolated `GOCACHE`/`GOMODCACHE`; no installation into the system.
+
+- `go test ./...`: exit 0; `go test -json` independently counted 553 individual passing tests, 0 skipped, 0 failed, across 10 test packages (command package has no tests).
+- `go test -race ./...`: exit 0 for all test packages; no race report.
+- `go vet ./...`: exit 0.
+- `go build -o /private/tmp/nm-agentctl-review-193/agentctl ./cmd/agentctl`: exit 0.
+- CI workflow `.github/workflows/release.yml` runs tests on tag pushes before building a release; official GitHub Actions showed latest listed v0.6.0 release workflow succeeded. No live Claude Desktop, real API key, MCP endpoint, account or user files were used; all 3P Skills path tests used fake HOME.
+
+**Recommendation for Nexus:** use its registry/capability matrix, resource plan/apply/drift/rollback and static role conversion only as design references. Do not use its hidden 3P Skills cache writer as a production importer without vendor-contract confirmation and Windows/Linux/active-profile handling. Keep `SessionGraph`, Project/Section structure, message/event trees, attachments, costs/tokens, memory and schedule migration in separate adapters and a portable provenance archive. Full source: `docs/research/evidence/liangquanzhou-agentctl-review-2026-11-23.txt`.

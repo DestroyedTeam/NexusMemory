@@ -1,0 +1,46 @@
+# Candidate #247 — AndySze/session-seek (2026-11-24)
+
+## Disposition and scope
+
+This is a useful, narrow **local session-search/MCP prior-art** project, not a cross-Harness migration tool. It cannot perform the requested ChatGPT **Destruction Era** Projects, Section Groups, complete Session/branch hierarchy, resources, dependencies, memory, or scheduled-task migration. The confirmed destination scope remains Claude Desktop third-party-inference **Chat, Cowork, and Code, treated as separate surfaces**, plus local/self-hosted Claude Code using an API key or gateway. No provider credentials, personal session roots, or live destination client were used in this review.
+
+## Identity, license, provenance
+
+- Repository: https://github.com/AndySze/session-seek (public, MIT).
+- Shallow clone observed exit 0. Bound checkout: `/Users/vincentadamnemessis/Library/Caches/NexusMemory/review-checkouts/nm-review-andy-session-seek-20261124-followup247`; branch `main`, HEAD `da27a2632c7941afc8d8335bdd42a3ea8b8c7ade`, clean after inspection. `git ls-remote ... refs/heads/main` matched that HEAD.
+- At review the public GitHub page showed 1 star, 0 forks, 21 commits; no releases/tags; Issues showed 0 open and Pull requests showed 0 open/closed. This is a small, young project (package 0.1.0), not an established migration benchmark.
+- Source and docs reviewed at the pinned commit: README, package manifest, `src/db.ts`, `src/parser.ts`, `src/providers/{base,claude,codex}.ts`, `src/embed.ts`, `src/grep.ts`, `src/server.ts`. CodeGraph index was initialized and verified (10 files, 132 nodes, 297 edges; up to date). No repository test directory was present.
+
+## What it does
+
+It exposes an MCP server for **searching local Claude Code and Codex CLI JSONL histories**: semantic/vector `search_sessions`, exact/regex `grep_sessions`, `get_session_context`, `index_sessions`, and `session_stats`. It writes derived text chunks and embeddings to local LanceDB; it is not an importer/exporter, doesn't write a target Harness session, and doesn't translate projects or capabilities. README describes a Claude Code Stop hook for auto-indexing and Bun + ripgrep prerequisites. Semantic indexing requires an OpenAI-compatible embedding API unless configured to a local endpoint; therefore a local database alone does not guarantee local-only processing.
+
+## Data model and observed fidelity limits
+
+`SessionChunk` has `id`, `sessionId`, `project`, role, text, timestamp, cwd, slug, source line number, and a coarse content type. LanceDB rows add a chunk index and vector. There are no first-class parent/child or fork links, Section/Project identity or membership graph, attachment/blob objects, token/cost totals, scheduled-task model, MCP/plugin/skill dependency graph, or target resume IDs. Context expansion sorts by timestamp within one session rather than traversing a cross-session lineage graph.
+
+The Claude parser walks `~/.claude/projects` JSONL and extracts user/assistant text, textual tool results, and partial `tool_use` names/string arguments (short strings only); nontext blocks and most structured state are not a migration representation. The Codex parser scans `~/.codex/sessions/.../rollout-*.jsonl`, derives a project label from the final component of `cwd`, and extracts message/reasoning/final text plus truncated tool-call arguments; it does not build parent/fork relationships or retain tool outputs as full events. These are source-format search adapters, not normalized lossless session graphs.
+
+## Reproducible local checks and findings
+
+- Bun 1.4.5 was installed in a disposable `/tmp` prefix; dependencies were installed into a disposable copy (123 packages, exit 0). No user environment was changed.
+- A real MCP stdio client connected to the candidate server with synthetic Claude/Codex JSONL fixtures and no API key: exit 0; five tools registered. `grep_sessions` returned both fixture markers with neighboring assistant context. This validates basic local protocol/provider routing only, not import fidelity or ranking quality.
+- A second synthetic probe used a **fake local embedding endpoint** (no external inference/API provider). It indexed two files / four chunks, and semantic search returned the expected synthetic Claude and Codex answers. After deleting the Codex fixture and reindexing, indexing reported zero files/chunks processed, but semantic search still returned the deleted Codex text and stats still showed two indexed files/four chunks; raw `grep_sessions` no longer found it. This dynamically reproduces stale indexed content after source deletion: there is no MCP forget/prune operation, and the indexer only walks currently discoverable files. This is a material correctness and privacy/retention risk, not just a missing feature.
+- Static source review adds two untested risks: unchanged file size is treated as unchanged (same-size edits can be skipped); and a shortened file whose line count is at/below the old checkpoint is skipped without reconciling the stored state. These two are source-level inferences, not dynamically reproduced in this review.
+- The package manifest's `index` script points to absent `test-index.ts`. First `bun run index` attempt exited 127 because Bun was not on the spawned PATH; after correcting PATH, the script itself exited 1 with “Module not found `test-index.ts`.” The actual server entrypoint `index.ts` was exercised directly by the MCP smoke probe. So the broken helper script is recorded separately from the successful server smoke.
+- The owner’s current repository page reports 1 star / 0 forks, no releases, and no open issues or pull requests. GitHub REST API fallback was rate/permission blocked (curl exit 56, HTTP 403); browser-rendered repository pages were used instead.
+
+## Fit and recommendation
+
+**Direct migration fit: low / not applicable.** **Adjacent value: moderate** as a small reference for read-only MCP search, multi-provider local transcript discovery, configurable embeddings, and a lexical + semantic retrieval UX. Do not treat retrieval, embeddings, or session labels as migration; do not use this code as the source of truth for deletion or archive fidelity without fixing reconciliation and adding a verified forget/prune contract. No dependency/adoption recommendation. Nexus Memory should keep retrieval as an optional derivative index over a canonical, loss-accounted event graph; source records and deletion state must remain authoritative.
+
+The priority implication for Nexus is explicit: every index-based memory/search feature needs source-fingerprint reconciliation, deletion tombstones/forget semantics, and a post-delete no-resurrection test. That is separate from the core migration requirements: parent/fork graph preservation, per-surface destination capabilities, project/Section mapping, attachments, tool events, memory, skills/MCP/plugins, schedules, and an explicit loss ledger.
+
+## Source links
+
+- Repository and README: https://github.com/AndySze/session-seek
+- Pinned source tree: https://github.com/AndySze/session-seek/tree/da27a2632c7941afc8d8335bdd42a3ea8b8c7ade
+- Session chunk schema / incremental indexing / LanceDB writes: https://github.com/AndySze/session-seek/blob/da27a2632c7941afc8d8335bdd42a3ea8b8c7ade/src/providers/base.ts and https://github.com/AndySze/session-seek/blob/da27a2632c7941afc8d8335bdd42a3ea8b8c7ade/src/db.ts
+- Provider parsers and embedding endpoint: https://github.com/AndySze/session-seek/blob/da27a2632c7941afc8d8335bdd42a3ea8b8c7ade/src/providers/claude.ts, https://github.com/AndySze/session-seek/blob/da27a2632c7941afc8d8335bdd42a3ea8b8c7ade/src/providers/codex.ts, and https://github.com/AndySze/session-seek/blob/da27a2632c7941afc8d8335bdd42a3ea8b8c7ade/src/embed.ts
+- Package script: https://github.com/AndySze/session-seek/blob/da27a2632c7941afc8d8335bdd42a3ea8b8c7ade/package.json
+- Issues, pull requests, releases: https://github.com/AndySze/session-seek/issues, https://github.com/AndySze/session-seek/pulls, https://github.com/AndySze/session-seek/releases

@@ -1,0 +1,35 @@
+CANDIDATE #302 — Thespaceblade/Fantasy-Basketball-Manager
+Review date: 2026-11-25
+
+Identity, relevance, and license
+- Pinned clone at `0c574112297b356d116dd0f556d4ae4c6218c232` (2026-11-18; merge pull request #4). The official GitHub page showed 9 commits, 0 stars, 0 forks, and one open PR; `licenseInfo` is null. The local root LICENSE is absent and `pyproject.toml` has no license declaration. No license grant is asserted; source reuse is gated.
+- This is a domain-specific ESPN fantasy basketball CLI + optional local MCP server + agent Skill, not a Harness/session migrator. README says 15 ESPN operations, uses unofficial website endpoints, and has only been exercised on one live points league; it explicitly does not establish compatibility with every league/lock/season.
+
+What it does / where it connects
+- Python CLI exposes reads, projections, free-agent ranking, and roster mutations. Optional stdio MCP server exposes the same workflows; Skills instructions are in `skills/fantasy-basketball-manager/SKILL.md`. The Skill is copy-installed into a compatible agent skills directory; no project/session import/export or source/target adapters exist.
+- Requests are delegated to `npx -y api-anything@0.4.0` and an API Anything local saved session; the README requires a local Chrome login window and says no ESPN API key is required. That is a local browser/session-cookie integration, not an API-key Claude Desktop gateway. No account, saved session, credentials, or ESPN data were opened during review.
+
+Positive MCP side-effect design prior art
+- MCP writes are absent by default: `create_server(..., allow_writes=False)` registers `fantasy_apply` only when the server is started with `--allow-writes`; the offline optional-dependency test verifies this. Other tools are reads or previews.
+- Write workflow fetches fresh snapshot/calendar/lineup, checks period/limits/roster/waiver/lock constraints, asks the backend for a dry preview, validates the exact HTTPS ESPN host/path/body/players/slots, and sends only with `--apply`. It writes an intent record before sending, records the response, reads back actual roster/lineup state, and refuses automatic retry after ambiguous sends. Tests cover preview-no-send, one send + readback, uncertain-send no retry, waivers, locked players, mismatched preview and slot/capacity constraints.
+- Caveat: the MCP permission gate is server-wide, not a per-call human confirmation. The MCP tool docstring says “explicitly user-authorized”, but once `--allow-writes` exposes `fantasy_apply`, the code itself accepts the tool call and invokes `--apply`; authorization is a prompt/host policy.
+
+Security and data-handling finding (synthetic only)
+- The transaction journal records operation and arguments before send and after readback. A synthetic probe using fake HOME/config directories mode 0755 and umask 022 wrote a fabricated player-ID marker to `transactions.local.jsonl` mode 0644. The code uses ordinary `mkdir`/`open('a')` with no explicit chmod. If the user's home/config parent is traversable, local roster/action metadata may be readable by other local users; enforce 0700 directories and 0600 files. No real ID, credential, or session was used.
+- `Client.run` calls the external API Anything CLI via `npx`, pins version 0.4.0, captures stdout/stderr and avoids echoing request body, headers, or session data in backend errors. Session cookies stay in API Anything's separate local store. Project README warns never to paste cookies or publish captured sessions.
+
+Tests and reproducibility
+- `python -m unittest discover -s tests -v` with temporary HOME/TMPDIR, no inherited secrets, and API Anything absent: 45 tests run, 44 passed, 1 skipped because the optional MCP extra was not installed.
+- Installed `mcp>=1.28,<2` (resolved 1.30.0) only into an isolated temp venv; the same offline suite then passed **45/45**, including `test_write_tool_is_opt_in`. All calls are fake/mocked; no real API Anything session, login, account, HTTP request or model was used. Full unittest output is archived in `.verified302/logs/unittest-mcp.stderr` (Python unittest writes its report to stderr).
+
+Disposition
+- Keep as **adjacent MCP/Skill integration and explicit-write transaction pattern** only. Its preview/validation, one-shot send, journaling/readback and default-disabled write surface can inform Nexus migration side effects, but its domain API, Skill, session auth, and ESPN data model do not satisfy cross-Harness migration. No-license state prevents source reuse.
+
+Sources inspected
+- https://github.com/Thespaceblade/Fantasy-Basketball-Manager
+- https://github.com/Thespaceblade/Fantasy-Basketball-Manager/blob/0c574112297b356d116dd0f556d4ae4c6218c232/README.md
+- https://github.com/Thespaceblade/Fantasy-Basketball-Manager/blob/0c574112297b356d116dd0f556d4ae4c6218c232/pyproject.toml
+- https://github.com/Thespaceblade/Fantasy-Basketball-Manager/blob/0c574112297b356d116dd0f556d4ae4c6218c232/src/fantasy_basketball_manager/mcp_server.py
+- https://github.com/Thespaceblade/Fantasy-Basketball-Manager/blob/0c574112297b356d116dd0f556d4ae4c6218c232/src/fantasy_basketball_manager/manager.py
+- https://github.com/Thespaceblade/Fantasy-Basketball-Manager/blob/0c574112297b356d116dd0f556d4ae4c6218c232/src/fantasy_basketball_manager/client.py
+- https://github.com/Thespaceblade/Fantasy-Basketball-Manager/blob/0c574112297b356d116dd0f556d4ae4c6218c232/skills/fantasy-basketball-manager/SKILL.md
