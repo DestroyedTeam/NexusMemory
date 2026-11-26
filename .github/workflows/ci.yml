@@ -52,27 +52,22 @@ jobs:
         run: |
           python -m pip install --upgrade pyinstaller
           python -m PyInstaller --clean --noconfirm packaging/windows/nexus_memory.spec
-          Test-Path "dist/NexusMemory.exe"
-          $out = & "dist/NexusMemory.exe" --self-test
-          Write-Host "SELF-TEST: $out"
-          if ($out -notmatch '"self_test": "ok"') { throw "Windows self-test failed: $out" }
-          $mat = & "dist/NexusMemory.exe" --cli matrix --from codex-cli --to claude-code
-          if ($mat -notmatch '"native_projection_plus_lossless_sidecar"') { throw "Windows CLI matrix failed" }
+          if (!(Test-Path "dist/NexusMemory.exe")) { throw "Missing dist/NexusMemory.exe" }
           python -c @"
           import json, subprocess, urllib.request
+          r1 = subprocess.run(['dist/NexusMemory.exe', '--self-test'], capture_output=True, text=True, timeout=30, check=True)
+          print('SELF_TEST:', r1.stdout.strip())
+          assert json.loads(r1.stdout)['self_test'] == 'ok'
+          r2 = subprocess.run(['dist/NexusMemory.exe', '--cli', 'matrix', '--from', 'codex-cli', '--to', 'antigravity'], capture_output=True, text=True, timeout=30, check=True)
+          assert json.loads(r2.stdout)['overall_mode'] == 'native_projection_plus_lossless_sidecar'
           p = subprocess.Popen(['dist/NexusMemory.exe', '--server-only'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
           try:
-              line = p.stdout.readline()
-              info = json.loads(line)
+              info = json.loads(p.stdout.readline())
               assert info['ready'] is True, info
               with urllib.request.urlopen(info['url'] + 'api/health', timeout=10) as r:
-                  assert r.status == 200
-                  h = json.loads(r.read().decode('utf-8'))
-                  assert h['ok'] is True
+                  assert r.status == 200 and json.loads(r.read().decode('utf-8'))['ok'] is True
               with urllib.request.urlopen(info['url'], timeout=10) as r:
-                  assert r.status == 200
-                  html = r.read().decode('utf-8')
-                  assert 'Nexus Memory' in html
+                  assert r.status == 200 and 'Nexus Memory' in r.read().decode('utf-8')
               print('WINDOWS_EXE_LIVE_UI_SERVER_OK:', info['url'])
           finally:
               p.terminate()

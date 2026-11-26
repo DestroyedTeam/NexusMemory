@@ -112,12 +112,13 @@ def _render_conversation_turns(conv: dict[str, Any]) -> str:
             body_html = f"<details class='tool-box'><summary>展开{lbl_kind}（{len(red_text)} 字符）</summary><pre>{_esc(red_text)}</pre></details>"
         else:
             body_html = f"<pre>{_esc(red_text)}</pre>"
+        ts_span = f"<span class='ts'>{_esc(ts[:19])}</span>" if ts else ""
         turns_html.append(
             f"<article class='turn {css_role}'>"
             f"<div class='turn-meta'>"
             f"<span class='role-tag {css_role}'>{_esc(role_label)}</span>"
             f"<span class='badge'>{_esc(ev)}</span>"
-            f"{f'<span class=\"ts\">{_esc(ts[:19])}</span>' if ts else ''}"
+            f"{ts_span}"
             f"</div>{body_html}</article>"
         )
 

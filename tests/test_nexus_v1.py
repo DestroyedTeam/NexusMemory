@@ -258,9 +258,10 @@ class NexusV1EndToEndTests(unittest.TestCase):
             tx = apply_bundle(bundle_dir, target_root=c3p, claude_dir=cc, apply=True)
             self.assertTrue(tx["post_write_verification"]["ok"], tx)
             self.assertEqual(tx["post_write_verification"]["verified_code_joins"], 2)
-            # Verify 0o600 permissions on transaction journal and backup archive
-            self.assertEqual(os.stat(tx["backup_archive"]).st_mode & 0o777, 0o600)
-            self.assertEqual(os.stat(Path(tx["journal_dir"]) / "transaction.json").st_mode & 0o777, 0o600)
+            # Verify 0o600 permissions on transaction journal and backup archive (POSIX only)
+            if sys.platform != "win32":
+                self.assertEqual(os.stat(tx["backup_archive"]).st_mode & 0o777, 0o600)
+                self.assertEqual(os.stat(Path(tx["journal_dir"]) / "transaction.json").st_mode & 0o777, 0o600)
 
             by_lane = parse_claude_desktop_3p_root(c3p, claude_dir=cc)
             self.assertEqual(len(by_lane["chat"]), 2)
@@ -590,9 +591,15 @@ class NexusV1EndToEndTests(unittest.TestCase):
         # Agent Skill wrapper smoke test
         skill_script = REPO_ROOT / "skills/nexus-memory/scripts/run_nexus.sh"
         self.assertTrue((REPO_ROOT / "skills/nexus-memory/SKILL.md").is_file())
-        proc = subprocess.run([str(skill_script), "--version"], capture_output=True, text=True, check=False)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("1.0.0", proc.stdout)
+        if sys.platform != "win32":
+            proc = subprocess.run([str(skill_script), "--version"], capture_output=True, text=True, check=False)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("1.0.0", proc.stdout)
+        else:
+            env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")}
+            proc = subprocess.run([sys.executable, "-m", "nexus_memory", "--version"], env=env, capture_output=True, text=True, check=False)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("1.0.0", proc.stdout)
 
         # macOS .app bundle smoke test (built in dist/Nexus Memory.app)
         app_bin = REPO_ROOT / "dist/Nexus Memory.app/Contents/MacOS/nexus-memory-app"

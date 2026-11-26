@@ -170,18 +170,30 @@ def atomic_write_bytes(path: Path, data: bytes, *, mode: int = 0o600) -> None:
     ensure_private_dir(path.parent)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
     tmp_path = Path(tmp_name)
+    closed = False
     try:
-        os.chmod(fd, mode)
+        if os.name != "nt":
+            try:
+                os.chmod(fd, mode)
+            except OSError:
+                pass
         with os.fdopen(fd, "wb") as handle:
+            closed = True
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_path, path)
-        try:
-            path.chmod(mode)
-        except OSError:
-            pass
+        if os.name != "nt":
+            try:
+                path.chmod(mode)
+            except OSError:
+                pass
     except Exception:
+        if not closed:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         try:
             tmp_path.unlink(missing_ok=True)
         except OSError:
