@@ -75,20 +75,30 @@ def _detect_local_agent_mode(sidecar: dict[str, Any], session_dir: Path) -> str:
 def parse_local_agent_session(
     session_dir: str | Path,
     *,
+    sidecar_path: str | Path | None = None,
     lane_override: str | None = None,
 ) -> ConversationGraph:
-    """Read one Claude Desktop 3P `local_<uuid>/` session (Chat or Cowork) without silent data loss."""
+    """Read one Claude Desktop 3P `local_<uuid>/` or `<uuid8>/` session (Chat or Cowork) without silent data loss."""
     sdir = Path(session_dir).expanduser()
-    sidecar_path = sdir.with_suffix(".json")
+    resolved_sidecar = Path(sidecar_path).expanduser() if sidecar_path else sdir.with_suffix(".json")
+    if not resolved_sidecar.is_file() and sdir.parent.is_dir() and not sdir.name.startswith("local_"):
+        matches = sorted(sdir.parent.glob(f"local_{sdir.name}*.json"))
+        if matches:
+            resolved_sidecar = matches[0]
     raw_sidecar: dict[str, Any] = {}
-    if sidecar_path.is_file():
+    if resolved_sidecar.is_file():
         try:
-            loaded = json.loads(sidecar_path.read_text(encoding="utf-8-sig"))
+            loaded = json.loads(resolved_sidecar.read_text(encoding="utf-8-sig"))
             if isinstance(loaded, dict):
                 raw_sidecar = loaded
         except (json.JSONDecodeError, OSError):
             pass
     sidecar = _sanitize_sidecar(raw_sidecar)
+    if not sdir.is_dir() and resolved_sidecar.is_file():
+        short_prefix = resolved_sidecar.stem.removeprefix("local_").split("-", 1)[0]
+        alt_dir = resolved_sidecar.parent / short_prefix
+        if alt_dir.is_dir():
+            sdir = alt_dir
     lane = lane_override or _detect_local_agent_mode(sidecar, sdir)
 
     raw_sid = str(sidecar.get("sessionId") or sdir.name)
@@ -302,11 +312,36 @@ def parse_local_agent_session(
     )
 
 
+def _infer_claude_projects_dir(app_root: Path, claude_dir: str | Path | None) -> Path | None:
+    if claude_dir:
+        cand = Path(claude_dir).expanduser() / "projects"
+        return cand if cand.is_dir() else None
+    mirror = app_root / "_claude_projects_mirror" / "projects"
+    if mirror.is_dir():
+        return mirror
+    # Infer sibling user home `.claude/projects` when `app_root` lives inside a user profile
+    resolved = app_root.resolve()
+    parts = resolved.parts
+    for marker_len, marker_tail in (
+        (3, ("Library", "Application Support", "Claude-3p")),
+        (3, ("AppData", "Roaming", "Claude-3p")),
+        (2, (".config", "Claude-3p")),
+    ):
+        if len(parts) > marker_len and parts[-marker_len:] == marker_tail:
+            inferred_home = Path(*parts[:-marker_len])
+            cand = inferred_home / ".claude" / "projects"
+            if cand.is_dir():
+                return cand
+    return None
+
+
 def parse_claude_desktop_3p_root(
     app_root: str | Path,
     *,
     claude_dir: str | Path | None = None,
     lanes: tuple[str, ...] = ("chat", "cowork", "code"),
+    limit: int | None = None,
+    include_subagents: bool = False,
 ) -> dict[str, list[ConversationGraph]]:
     """Read all three Claude Desktop 3P lanes separately (never conflated)."""
     root = Path(app_root).expanduser()
@@ -314,16 +349,19 @@ def parse_claude_desktop_3p_root(
 
     lam_root = root / "local-agent-mode-sessions"
     if lam_root.is_dir() and ("chat" in lanes or "cowork" in lanes):
-        seen_dirs: set[Path] = set()
-        for sidecar in sorted(lam_root.rglob("local_*.json")):
-            if not sidecar.is_file():
+        seen_sidecars: set[Path] = set()
+        for sidecar in sorted(lam_root.rglob("local_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not sidecar.is_file() or sidecar in seen_sidecars:
                 continue
+            seen_sidecars.add(sidecar)
             sdir = sidecar.with_suffix("")
-            if sdir in seen_dirs:
-                continue
-            seen_dirs.add(sdir)
+            if not sdir.is_dir():
+                short_prefix = sidecar.stem.removeprefix("local_").split("-", 1)[0]
+                alt = sidecar.parent / short_prefix
+                if alt.is_dir():
+                    sdir = alt
             try:
-                g = parse_local_agent_session(sdir)
+                g = parse_local_agent_session(sdir, sidecar_path=sidecar)
             except (OSError, ValueError):
                 continue
             if g.app_mode == "claude-desktop-3p-chat" and "chat" in lanes:
@@ -332,9 +370,11 @@ def parse_claude_desktop_3p_root(
                 out["cowork"].append(g)
 
     ccs_root = root / "claude-code-sessions"
-    cc_projects = (Path(claude_dir).expanduser() / "projects") if claude_dir else None
+    cc_projects = _infer_claude_projects_dir(root, claude_dir)
     if ccs_root.is_dir() and "code" in lanes:
-        for idx_file in sorted(ccs_root.rglob("local_*.json")):
+        entries: list[tuple[Path, dict[str, Any]]] = []
+        cli_by_local_sid: dict[str, str] = {}
+        for idx_file in ccs_root.rglob("local_*.json"):
             if not idx_file.is_file():
                 continue
             try:
@@ -344,8 +384,64 @@ def parse_claude_desktop_3p_root(
             except (json.JSONDecodeError, OSError):
                 continue
             meta = _sanitize_sidecar(raw_meta)
-            cli_sid = str(meta.get("cliSessionId") or meta.get("sessionId") or idx_file.stem).removeprefix("local_")
+            local_sid = str(meta.get("sessionId") or idx_file.stem)
+            cli_sid = str(meta.get("cliSessionId") or local_sid).removeprefix("local_")
+            cli_by_local_sid[local_sid] = cli_sid
+            entries.append((idx_file, meta))
+
+        entries.sort(
+            key=lambda item: (
+                int(item[1].get("lastActivityAt") or item[1].get("createdAt") or 0),
+                item[0].name,
+            ),
+            reverse=True,
+        )
+
+        # Build parent-child subagent map from `spawnedFrom`
+        children_by_parent_local: dict[str, list[tuple[Path, dict[str, Any]]]] = {}
+        top_entries: list[tuple[Path, dict[str, Any]]] = []
+        for idx_file, meta in entries:
+            sp = meta.get("spawnedFrom") if isinstance(meta.get("spawnedFrom"), dict) else None
+            p_local = str(sp.get("sessionId") or "") if sp else ""
+            if p_local and p_local in cli_by_local_sid:
+                children_by_parent_local.setdefault(p_local, []).append((idx_file, meta))
+            else:
+                top_entries.append((idx_file, meta))
+
+        base_entries = top_entries if top_entries else entries
+        if limit and limit > 0:
+            base_entries = base_entries[:limit]
+
+        ordered_entries: list[tuple[Path, dict[str, Any]]] = []
+        if include_subagents and children_by_parent_local:
+            seen_local: set[str] = set()
+            for item in base_entries:
+                stack = [item]
+                while stack:
+                    cur_f, cur_m = stack.pop()
+                    cur_lsid = str(cur_m.get("sessionId") or cur_f.stem)
+                    if cur_lsid in seen_local:
+                        continue
+                    seen_local.add(cur_lsid)
+                    ordered_entries.append((cur_f, cur_m))
+                    for ch in reversed(children_by_parent_local.get(cur_lsid, [])):
+                        stack.append(ch)
+        else:
+            ordered_entries = base_entries
+
+        for idx_file, meta in ordered_entries:
+            local_sid = str(meta.get("sessionId") or idx_file.stem)
+            cli_sid = str(meta.get("cliSessionId") or local_sid).removeprefix("local_")
             cwd = meta.get("cwd") or meta.get("originCwd") or meta.get("projectPath")
+            sp = meta.get("spawnedFrom") if isinstance(meta.get("spawnedFrom"), dict) else None
+            sc = meta.get("startChain") if isinstance(meta.get("startChain"), dict) else None
+            p_local = str(sp.get("sessionId") or "") if sp else ""
+            parent_cli_sid = cli_by_local_sid.get(p_local) if p_local else None
+            root_local = str(sc.get("firstSessionId") or "") if sc else ""
+            root_cli_sid = cli_by_local_sid.get(root_local) if root_local else None
+            depth = int(sc.get("depth") or (1 if parent_cli_sid else 0)) if sc else (1 if parent_cli_sid else 0)
+            child_cnt = len(children_by_parent_local.get(local_sid, []))
+
             matched_transcript: Path | None = None
             transcript_verified = False
             if cc_projects and cc_projects.is_dir() and isinstance(cwd, str) and cwd:
@@ -354,19 +450,25 @@ def parse_claude_desktop_3p_root(
                 if candidate.is_file():
                     matched_transcript = candidate
                     transcript_verified = True
+
+            lineage_extra = {
+                "desktop_lane": "claude-desktop-3p-code",
+                "desktop_code_index_file": idx_file.name,
+                "desktop_code_sidecar": meta,
+                "transcript_project_verified": transcript_verified,
+                "device_scope": idx_file.parent.parent.name,
+                "org_scope": idx_file.parent.name,
+                "project_name": Path(str(cwd)).name if isinstance(cwd, str) and cwd not in {"", "/", "\\"} else None,
+                "parent_session_id": parent_cli_sid,
+                "root_session_id": root_cli_sid or cli_sid,
+                "nesting_depth": depth,
+                "subagent_role": (str(sp.get("name") or "subagent") if sp else None),
+                "child_subagent_count": child_cnt,
+            }
             if matched_transcript is not None:
                 g = parse_claude_code_session(matched_transcript)
                 g_meta = dict(g.metadata)
-                g_meta.update(
-                    {
-                        "desktop_lane": "claude-desktop-3p-code",
-                        "desktop_code_index_file": idx_file.name,
-                        "desktop_code_sidecar": meta,
-                        "transcript_project_verified": transcript_verified,
-                        "device_scope": idx_file.parent.parent.name,
-                        "org_scope": idx_file.parent.name,
-                    }
-                )
+                g_meta.update(lineage_extra)
                 out["code"].append(
                     ConversationGraph(
                         source_format="claude_desktop_3p_code",
@@ -393,14 +495,7 @@ def parse_claude_desktop_3p_root(
                         nodes=(),
                         root_ids=(),
                         active_node_id=None,
-                        metadata={
-                            "desktop_lane": "claude-desktop-3p-code",
-                            "desktop_code_index_file": idx_file.name,
-                            "desktop_code_sidecar": meta,
-                            "transcript_project_verified": False,
-                            "device_scope": idx_file.parent.parent.name,
-                            "org_scope": idx_file.parent.name,
-                        },
+                        metadata=lineage_extra,
                         raw_source={"code_index": meta},
                         app_mode="claude-desktop-3p-code",
                     )

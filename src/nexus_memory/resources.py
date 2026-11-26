@@ -87,26 +87,28 @@ def _scan_skills_dir(base_dir: Path, *, harness: str, scope: str) -> list[SkillR
     if not base_dir.is_dir():
         return out
     for child in sorted(base_dir.iterdir()):
-        if not child.is_dir() or child.name.startswith("."):
-            continue
-        skill_md = child / "SKILL.md"
-        if not skill_md.is_file():
+        if child.name.startswith(".") or not child.is_dir():
             continue
         try:
-            ensure_within_root(child, base_dir)
+            real_child = child.resolve()
+            if not real_child.is_dir():
+                continue
+            skill_md = real_child / "SKILL.md"
+            if not skill_md.is_file():
+                continue
             fm = _parse_frontmatter(skill_md.read_text(encoding="utf-8", errors="replace"))
         except (OSError, ValueError):
             continue
         files_meta: list[dict[str, Any]] = []
-        for f in sorted(child.rglob("*")):
+        for f in sorted(real_child.rglob("*")):
             if not f.is_file() or f.is_symlink():
                 continue
             try:
-                ensure_within_root(f, child)
+                ensure_within_root(f, real_child)
                 data = f.read_bytes()
                 files_meta.append(
                     {
-                        "rel_path": f.relative_to(child).as_posix(),
+                        "rel_path": f.relative_to(real_child).as_posix(),
                         "sha256": hashlib.sha256(data).hexdigest(),
                         "size_bytes": len(data),
                     }
@@ -118,7 +120,7 @@ def _scan_skills_dir(base_dir: Path, *, harness: str, scope: str) -> list[SkillR
                 name=sanitize_single_segment(str(fm.get("name") or child.name), fallback=child.name),
                 source_harness=harness,
                 scope=scope,
-                source_path=str(child),
+                source_path=str(real_child),
                 description=str(fm.get("description") or ""),
                 files=tuple(files_meta),
                 frontmatter=fm,

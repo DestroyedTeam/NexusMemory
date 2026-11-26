@@ -22,6 +22,31 @@ def _count_files(path: Path, pattern: str) -> int:
     return sum(1 for p in path.rglob(pattern) if p.is_file())
 
 
+def _count_skill_dirs(skills_dir: Path) -> int:
+    """Count valid skills under `skills_dir`, including 1-level symlinked skill folders (e.g. cc-switch / npx skills)."""
+    if not skills_dir.is_dir():
+        return 0
+    seen_real: set[Path] = set()
+    count = 0
+    try:
+        for child in skills_dir.iterdir():
+            if child.name.startswith("."):
+                continue
+            try:
+                if child.is_dir() and (child / "SKILL.md").is_file():
+                    rp = (child / "SKILL.md").resolve()
+                    if rp not in seen_real:
+                        seen_real.add(rp)
+                        count += 1
+            except OSError:
+                continue
+    except OSError:
+        return 0
+    if count > 0:
+        return count
+    return _count_files(skills_dir, "SKILL.md")
+
+
 def discover_harnesses(
     *,
     home: str | Path | None = None,
@@ -65,7 +90,7 @@ def discover_harnesses(
             "display_name": "Claude Desktop 3P (Code claude-code-sessions index)",
             "root": c3p,
             "session_dir": c3p / "claude-code-sessions",
-            "session_glob": "*.json",
+            "session_glob": "local_*.json",
             "skills_dir": hroot / ".claude/skills",
             "mcp_config": c3p / "claude_desktop_config.json",
         },
@@ -257,6 +282,8 @@ def discover_harnesses(
         sess_p: Path = item["session_dir"]
         skills_p: Path = item["skills_dir"]
         mcp_p: Path = item["mcp_config"]
+        if item["id"] == "warp-oz" and not mcp_p.is_file() and (hroot / ".warp" / ".mcp.json").is_file():
+            mcp_p = hroot / ".warp" / ".mcp.json"
         present = root_p.exists() or sess_p.exists() or skills_p.exists() or mcp_p.exists()
         subagent_count = 0
         if item["id"] == "t3code":
@@ -264,13 +291,21 @@ def discover_harnesses(
             t3_db = root_p / "userdata" / "statev2.sqlite"
             if t3_db.is_file():
                 try:
+                    import json as _json
                     import sqlite3
                     con = sqlite3.connect(f"file:{t3_db}?mode=ro", uri=True)
                     try:
-                        row = con.execute(
-                            "SELECT COUNT(*) FROM orchestration_v2_projection_threads WHERE deleted_at IS NULL"
-                        ).fetchone()
-                        sess_count = int(row[0]) if row else 0
+                        for (pjson,) in con.execute(
+                            "SELECT payload_json FROM orchestration_v2_projection_threads WHERE deleted_at IS NULL"
+                        ):
+                            try:
+                                lin = (_json.loads(pjson or "{}").get("lineage") or {})
+                            except Exception:
+                                lin = {}
+                            if isinstance(lin, dict) and lin.get("parentThreadId"):
+                                subagent_count += 1
+                            else:
+                                sess_count += 1
                     finally:
                         con.close()
                 except Exception:
@@ -296,6 +331,71 @@ def discover_harnesses(
                     sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
             else:
                 sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
+        elif item["id"] == "opencode":
+            split_sess_dir = root_p / "storage" / "session"
+            if split_sess_dir.is_dir():
+                sess_count = _count_files(split_sess_dir, "*.json")
+            else:
+                sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
+        elif item["id"] == "workbuddy":
+            wb_ids: set[str] = set()
+            if sess_p.is_dir():
+                for fp in list(sess_p.glob("*.jsonl")) + list(sess_p.glob("*.json")):
+                    if fp.is_file():
+                        wb_ids.add(fp.stem)
+            wb_proj = root_p / "projects"
+            if wb_proj.is_dir():
+                for fp in wb_proj.rglob("*.jsonl"):
+                    if fp.is_file():
+                        wb_ids.add(fp.stem)
+            wb_db = root_p / "workbuddy.db"
+            if wb_db.is_file():
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(f"file:{wb_db}?mode=ro", uri=True)
+                    try:
+                        for (sid,) in con.execute("SELECT id FROM sessions WHERE deleted_at IS NULL"):
+                            if sid:
+                                wb_ids.add(str(sid))
+                    finally:
+                        con.close()
+                except Exception:
+                    pass
+            sess_count = len(wb_ids)
+        elif item["id"] == "claude-desktop-3p-code":
+            sess_count = 0
+            if sess_p.is_dir():
+                import json as _json
+                for fp in sess_p.rglob("local_*.json"):
+                    if not fp.is_file():
+                        continue
+                    try:
+                        obj = _json.loads(fp.read_text(encoding="utf-8-sig", errors="replace"))
+                    except Exception:
+                        obj = {}
+                    if isinstance(obj, dict) and obj.get("spawnedFrom"):
+                        subagent_count += 1
+                    else:
+                        sess_count += 1
+        elif item["id"] == "warp-oz":
+            sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
+            if plat == "darwin":
+                warp_db = (
+                    hroot
+                    / "Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Stable/warp.sqlite"
+                )
+                if warp_db.is_file():
+                    present = True
+                    try:
+                        import sqlite3
+                        con = sqlite3.connect(f"file:{warp_db}?mode=ro", uri=True)
+                        try:
+                            row = con.execute("SELECT COUNT(*) FROM agent_conversations").fetchone()
+                            sess_count += int(row[0]) if row else 0
+                        finally:
+                            con.close()
+                    except Exception:
+                        pass
         else:
             sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
         detected.append(
@@ -308,7 +408,7 @@ def discover_harnesses(
                 "session_file_count": sess_count,
                 "subagent_count": subagent_count,
                 "skills_dir": str(skills_p),
-                "skill_count": _count_files(skills_p, "SKILL.md") if skills_p.is_dir() else 0,
+                "skill_count": _count_skill_dirs(skills_p),
                 "mcp_config_present": mcp_p.is_file(),
                 "mcp_config_path": str(mcp_p),
             }

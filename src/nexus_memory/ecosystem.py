@@ -46,11 +46,17 @@ from .harnesses_extended import (
     build_warp_oz_sessions,
     build_windsurf_sessions,
     build_workbuddy_sessions,
+    parse_amp_home,
     parse_amp_thread,
+    parse_kiro_home,
     parse_kiro_session,
     parse_t3code_source,
+    parse_trae_home,
     parse_trae_trajectory,
+    parse_warp_oz_home,
     parse_warp_oz_session,
+    parse_warp_sqlite,
+    parse_windsurf_home,
     parse_windsurf_session,
     parse_workbuddy_home,
     parse_workbuddy_session,
@@ -1206,6 +1212,39 @@ def build_zed_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tuple[li
     return sessions, losses
 
 
+def _parse_dir_files(
+    root: Path,
+    subdirs: tuple[str, ...],
+    patterns: tuple[str, ...],
+    parser_fn: Callable[[Path], ConversationGraph],
+    *,
+    exclude_names: set[str] | None = None,
+    limit: int | None = None,
+) -> list[ConversationGraph]:
+    skip = exclude_names or set()
+    bases = [root / sub for sub in subdirs if (root / sub).is_dir()]
+    if not bases:
+        bases = [root]
+    files: list[Path] = []
+    seen: set[Path] = set()
+    for b in bases:
+        for pat in patterns:
+            for fp in b.rglob(pat):
+                if fp.is_file() and fp.name not in skip and fp not in seen:
+                    seen.add(fp)
+                    files.append(fp)
+    files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    out: list[ConversationGraph] = []
+    for fp in files:
+        try:
+            out.append(parser_fn(fp))
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+        if limit and len(out) >= limit:
+            break
+    return out
+
+
 # ── Unified Auto-Detect Loader ───────────────────────────────────────────────
 
 
@@ -1246,11 +1285,17 @@ def load_any_source(
             if p.is_dir()
             else [parse_claude_code_session(p)]
         ), {}
-    if fmt in {"claude-desktop-3p", "claude-desktop-3p-chat", "claude-desktop-3p-cowork", "claude-desktop-3p-code"}:
+    if fmt in {"claude-desktop-3p", "claude-desktop-3p-all", "claude-desktop-3p-chat", "claude-desktop-3p-cowork", "claude-desktop-3p-code"}:
         if p.is_dir() and p.name.startswith("local_"):
             return [parse_local_agent_session(p)], {}
-        lanes = ("chat", "cowork", "code") if fmt == "claude-desktop-3p" else (fmt.rsplit("-", 1)[-1],)
-        by_lane = parse_claude_desktop_3p_root(p, claude_dir=claude_dir, lanes=lanes)
+        lanes = ("chat", "cowork", "code") if fmt in {"claude-desktop-3p", "claude-desktop-3p-all"} else (fmt.rsplit("-", 1)[-1],)
+        by_lane = parse_claude_desktop_3p_root(
+            p,
+            claude_dir=claude_dir,
+            lanes=lanes,
+            limit=limit if not (project_filter or section_filter) else None,
+            include_subagents=include_subagents,
+        )
         return [*by_lane["chat"], *by_lane["cowork"], *by_lane["code"]], {}
     if fmt == "antigravity":
         return (
@@ -1268,21 +1313,25 @@ def load_any_source(
     if fmt == "workbuddy":
         return (parse_workbuddy_home(p, limit=limit) if p.is_dir() else [parse_workbuddy_session(p)]), {}
     if fmt in {"t3code", "t3-code"}:
-        return parse_t3code_source(p), {}
+        return parse_t3code_source(p, limit=limit, include_subagents=True if p.is_file() else (include_subagents or True)), {}
     if fmt == "kiro":
-        return [parse_kiro_session(p)], {}
+        return parse_kiro_home(p, limit=limit), {}
     if fmt == "amp":
-        return [parse_amp_thread(p)], {}
+        return parse_amp_home(p, limit=limit), {}
     if fmt == "trae":
-        return [parse_trae_trajectory(p)], {}
+        return parse_trae_home(p, limit=limit), {}
     if fmt in {"warp-oz", "warp", "oz"}:
-        return [parse_warp_oz_session(p)], {}
+        return parse_warp_oz_home(p, limit=limit), {}
     if fmt == "windsurf":
-        return [parse_windsurf_session(p)], {}
+        return parse_windsurf_home(p, limit=limit), {}
     if fmt == "opencode":
         return (parse_opencode_storage_dir(p, limit=limit) if p.is_dir() else [parse_opencode_session(p)]), {}
     if fmt == "pi":
-        return [parse_pi_session(p)], {}
+        return (
+            _parse_dir_files(p, ("agent/sessions", "sessions"), ("*.jsonl",), parse_pi_session, limit=limit)
+            if p.is_dir()
+            else [parse_pi_session(p)]
+        ), {}
     if fmt == "cursor":
         if p.is_dir():
             db = p / "User" / "globalStorage" / "state.vscdb"
@@ -1291,17 +1340,29 @@ def load_any_source(
         return parse_cursor_vscdb(p), {}
     if fmt == "dsh":
         return parse_dsh_directory(p), {}
-    if fmt in {"cline", "roo"}:
+    if fmt in {"cline", "roo", "cline-roo"}:
+        if p.is_dir() and not (p / "api_conversation_history.json").is_file():
+            return _parse_dir_files(p, ("tasks",), ("api_conversation_history.json",), parse_cline_roo_task, limit=limit), {}
         return [parse_cline_roo_task(p)], {}
     if fmt in {"gemini", "gemini-cli"}:
+        if p.is_dir():
+            return _parse_dir_files(p, ("tmp",), ("session-*.json",), parse_gemini_cli_session, exclude_names={"projects.json", "settings.json"}, limit=limit), {}
         return [parse_gemini_cli_session(p)], {}
     if fmt == "goose":
+        if p.is_dir():
+            return _parse_dir_files(p, ("sessions",), ("*.jsonl",), parse_goose_session, limit=limit), {}
         return [parse_goose_session(p)], {}
     if fmt == "aider":
+        if p.is_dir():
+            return _parse_dir_files(p, (), (".aider.chat.history*.md",), parse_aider_history, limit=limit), {}
         return [parse_aider_history(p)], {}
     if fmt == "continue":
+        if p.is_dir():
+            return _parse_dir_files(p, ("sessions",), ("*.json",), parse_continue_session, exclude_names={"config.json"}, limit=limit), {}
         return [parse_continue_session(p)], {}
     if fmt == "zed":
+        if p.is_dir():
+            return _parse_dir_files(p, ("threads",), ("*.json",), parse_zed_thread, exclude_names={"settings.json"}, limit=limit), {}
         return [parse_zed_thread(p)], {}
     if fmt == "portable":
         return parse_portable_bundle(p), {}
@@ -1326,16 +1387,31 @@ def load_any_source(
         if (p / "workbuddy.db").is_file() or (p / "edge-sync-mapping-v4.db").is_file():
             return parse_workbuddy_home(p, limit=limit), {}
         if (p / "userdata" / "statev2.sqlite").is_file():
-            return parse_t3code_source(p), {}
+            return parse_t3code_source(p, limit=limit), {}
         if (p / "local-agent-mode-sessions").is_dir() or (p / "claude-code-sessions").is_dir():
-            by_lane = parse_claude_desktop_3p_root(p, claude_dir=claude_dir)
+            by_lane = parse_claude_desktop_3p_root(p, claude_dir=claude_dir, limit=limit, include_subagents=include_subagents)
             return [*by_lane["chat"], *by_lane["cowork"], *by_lane["code"]], {}
         if p.name.startswith("local_") and ((p / "audit.jsonl").is_file() or p.with_suffix(".json").is_file()):
             return [parse_local_agent_session(p)], {}
-        if (p / "storage" / "session").is_dir() or (p / "session").is_dir() and (p / "message").is_dir():
+        if (p / "storage" / "session").is_dir() or ((p / "session").is_dir() and (p / "message").is_dir()):
             return parse_opencode_storage_dir(p, limit=limit), {}
+        if (p / "agent" / "sessions").is_dir():
+            return _parse_dir_files(p, ("agent/sessions",), ("*.jsonl",), parse_pi_session, limit=limit), {}
         if (p / "state_5.sqlite").is_file() or (p / "session_index.jsonl").is_file() or (p / "archived_sessions").is_dir():
             return parse_codex_home(p, section_filter=section_filter, project_filter=project_filter, limit=limit), {}
+        if (p / "cascade").is_dir():
+            return parse_windsurf_home(p, limit=limit), {}
+        if (p / "trajectories").is_dir():
+            return parse_trae_home(p, limit=limit), {}
+        if (p / "threads").is_dir():
+            sample_t = next((f for f in sorted((p / "threads").rglob("*.json")) if f.is_file()), None)
+            if sample_t is not None and sample_t.name.startswith("T-"):
+                return parse_amp_home(p, limit=limit), {}
+            return _parse_dir_files(p, ("threads",), ("*.json",), parse_zed_thread, exclude_names={"settings.json"}, limit=limit), {}
+        if (p / "tasks").is_dir() and any((p / "tasks").rglob("api_conversation_history.json")):
+            return _parse_dir_files(p, ("tasks",), ("api_conversation_history.json",), parse_cline_roo_task, limit=limit), {}
+        if (p / "tmp").is_dir() and (any((p / "tmp").rglob("session-*.json")) or any((p / "tmp").rglob(".project_root"))):
+            return _parse_dir_files(p, ("tmp",), ("session-*.json",), parse_gemini_cli_session, exclude_names={"projects.json", "settings.json"}, limit=limit), {}
         if (p / "sessions").is_dir():
             sample_jl = next((f for f in sorted((p / "sessions").rglob("*.jsonl")) if f.is_file()), None)
             if sample_jl is not None:
@@ -1345,20 +1421,56 @@ def load_any_source(
                     if isinstance(hdr, dict):
                         if hdr.get("type") == "session_header" or "dsh_schema_version" in hdr:
                             return parse_dsh_directory(p / "sessions"), {}
-                        if hdr.get("type") == "workbuddy_session_meta":
+                        if hdr.get("type") in {"workbuddy_session_meta", "session-meta"}:
                             return parse_workbuddy_home(p, limit=limit), {}
                         if hdr.get("type") == "kiro_session_meta":
-                            return [parse_kiro_session(f) for f in sorted((p / "sessions").rglob("*.jsonl")) if f.is_file()], {}
+                            return parse_kiro_home(p, limit=limit), {}
+                        if hdr.get("type") == "session" and "version" in hdr:
+                            return _parse_dir_files(p, ("sessions",), ("*.jsonl",), parse_pi_session, limit=limit), {}
                         if "description" in hdr or "working_dir" in hdr:
-                            return [parse_goose_session(f) for f in sorted((p / "sessions").rglob("*.jsonl")) if f.is_file()], {}
+                            return _parse_dir_files(p, ("sessions",), ("*.jsonl",), parse_goose_session, limit=limit), {}
+                except (OSError, json.JSONDecodeError):
+                    pass
+            sample_js = next((f for f in sorted((p / "sessions").rglob("*.json")) if f.is_file() and f.name != "config.json"), None)
+            if sample_js is not None:
+                try:
+                    jhdr = json.loads(sample_js.read_text(encoding="utf-8-sig", errors="replace"))
+                    if isinstance(jhdr, dict):
+                        if str(jhdr.get("schema") or "").startswith("warp.oz.") or "blocks" in jhdr:
+                            return parse_warp_oz_home(p, limit=limit), {}
+                        if "history" in jhdr and "sessionId" in jhdr:
+                            return _parse_dir_files(p, ("sessions",), ("*.json",), parse_continue_session, exclude_names={"config.json"}, limit=limit), {}
+                        if "conversation_id" in jhdr:
+                            return parse_kiro_home(p, limit=limit), {}
                 except (OSError, json.JSONDecodeError):
                     pass
             return parse_codex_home(p, section_filter=section_filter, project_filter=project_filter, limit=limit), {}
         if (p / "projects").is_dir():
-            return parse_claude_code_dir(p), {}
+            # Distinguish WorkBuddy `projects/*/*.jsonl` (`session-meta`) from Claude Code `projects/*/*.jsonl`
+            sample_pj = next((f for f in sorted((p / "projects").rglob("*.jsonl")) if f.is_file()), None)
+            if sample_pj is not None:
+                try:
+                    fl = next((l for l in sample_pj.read_text(encoding="utf-8-sig", errors="replace").splitlines() if l.strip()), "{}")
+                    if json.loads(fl).get("type") in {"session-meta", "workbuddy_session_meta"}:
+                        return parse_workbuddy_home(p, limit=limit), {}
+                except (OSError, json.JSONDecodeError):
+                    pass
+            return parse_claude_code_dir(p, limit=limit, on_progress=on_progress), {}
         if (p / "api_conversation_history.json").is_file():
             return [parse_cline_roo_task(p)], {}
+        if any(p.glob(".aider.chat.history*.md")):
+            return _parse_dir_files(p, (), (".aider.chat.history*.md",), parse_aider_history, limit=limit), {}
+        if (p / "warp.sqlite").is_file() or p.name == "dev.warp.Warp-Stable" or p.name == ".warp":
+            return parse_warp_oz_home(p, limit=limit), {}
         if any(p.glob("*.jsonl")):
+            sample_root_jl = next((f for f in sorted(p.glob("*.jsonl")) if f.is_file()), None)
+            if sample_root_jl is not None:
+                try:
+                    fl = next((l for l in sample_root_jl.read_text(encoding="utf-8-sig", errors="replace").splitlines() if l.strip()), "{}")
+                    if json.loads(fl).get("type") == "session":
+                        return _parse_dir_files(p, (), ("*.jsonl",), parse_pi_session, limit=limit), {}
+                except (OSError, json.JSONDecodeError):
+                    pass
             return parse_dsh_directory(p), {}
         raise ValueError(f"cannot auto-detect harness source format for directory: {p}")
 

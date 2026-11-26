@@ -16,7 +16,9 @@ losses for anything retained only in `portable.json`.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
+import sys
 import time
 import uuid
 from datetime import UTC, datetime
@@ -78,17 +80,34 @@ def _links(nodes: tuple[MessageNode, ...]) -> tuple[str, ...]:
     return tuple(out)
 
 
-# ── 1. Tencent WorkBuddy (`~/.workbuddy/workbuddy.db` + `sessions/*.jsonl`) ──
+# ── 1. Tencent WorkBuddy (`~/.workbuddy/workbuddy.db` + `projects/*/*.jsonl` + `sessions/*.jsonl`) ──
+
+_WB_USER_QUERY_RE = re.compile(r"<user_query>([\s\S]*?)</user_query>")
+_WB_SYS_REMINDER_RE = re.compile(r"<system-reminder\b[^>]*>[\s\S]*?</system-reminder>\s*")
+
+
+def _clean_workbuddy_user_text(text: str) -> tuple[str, bool]:
+    """Extract clean user query from WorkBuddy `<user_query>` / `<system-reminder>` wrappers.
+
+    Returns `(cleaned_text, is_compaction_summary)`.
+    """
+    if "<cb_summary>" in text and "<user_query>" not in text:
+        return text.strip(), True
+    m = _WB_USER_QUERY_RE.search(text)
+    if m:
+        return m.group(1).strip(), False
+    cleaned = _WB_SYS_REMINDER_RE.sub("", text).strip()
+    return cleaned, False
 
 
 def parse_workbuddy_session(path: str | Path) -> ConversationGraph:
-    """Read a WorkBuddy JSONL/JSON session file."""
+    """Read a WorkBuddy JSONL/JSON session file (both native `projects/<cwd>/<id>.jsonl` and `sessions/<id>.jsonl`)."""
     p = Path(path).expanduser()
     text = p.read_text(encoding="utf-8-sig", errors="replace")
     raw_items: list[dict[str, Any]] = []
     meta: dict[str, Any] = {"source_file": p.name}
     sid = p.stem
-    title = p.stem
+    title = ""
     workspace: str | None = None
     records: list[dict[str, Any]] = []
 
@@ -96,11 +115,15 @@ def parse_workbuddy_session(path: str | Path) -> ConversationGraph:
         for idx, ln in enumerate(text.splitlines()):
             if not ln.strip():
                 continue
-            r = json.loads(ln)
+            try:
+                r = json.loads(ln)
+            except json.JSONDecodeError:
+                continue
             if not isinstance(r, dict):
                 continue
             records.append(r)
-            if r.get("type") == "workbuddy_session_meta":
+            rtype = str(r.get("type") or "")
+            if rtype == "workbuddy_session_meta":
                 sid = str(r.get("id") or sid)
                 title = str(r.get("custom_title") or r.get("title") or title)
                 workspace = r.get("cwd") or workspace
@@ -112,17 +135,73 @@ def parse_workbuddy_session(path: str | Path) -> ConversationGraph:
                 if r.get("group_id") and not meta.get("section_id"):
                     meta["section_id"] = r["group_id"]
                 continue
-            role = str(r.get("role") or r.get("type") or "")
+            if rtype == "session-meta":
+                sid = str(r.get("sessionId") or r.get("id") or sid)
+                workspace = r.get("cwd") or workspace
+                continue
+            if rtype == "ai-title":
+                if r.get("aiTitle") and not title:
+                    title = str(r["aiTitle"])
+                workspace = r.get("cwd") or workspace
+                continue
+            if rtype == "function_call":
+                workspace = r.get("cwd") or workspace
+                cname = str(r.get("name") or "tool")
+                cid = str(r.get("callId") or r.get("id") or f"wb-tc-{idx}")
+                raw_items.append({
+                    "node_id": str(r.get("id") or cid),
+                    "role": "tool_call",
+                    "text": f"tool:{cname}",
+                    "timestamp": r.get("timestamp"),
+                    "content": {"call_id": cid, "name": cname, "arguments": r.get("arguments", {})},
+                    "raw_record": r,
+                    "event_type": "tool_use",
+                })
+                continue
+            if rtype == "function_call_output":
+                workspace = r.get("cwd") or workspace
+                cid = str(r.get("callId") or "")
+                out_str = content_text(r.get("output", r.get("content", "")))
+                raw_items.append({
+                    "node_id": str(r.get("id") or f"wb-tr-{idx}"),
+                    "role": "tool_result",
+                    "text": out_str,
+                    "timestamp": r.get("timestamp"),
+                    "content": {"call_id": cid, "output": out_str},
+                    "raw_record": r,
+                    "event_type": "tool_result",
+                })
+                continue
+
+            role = str(r.get("role") or (rtype if rtype in {"user", "assistant", "system", "tool_call", "tool_result"} else ""))
             if role in {"user", "assistant", "system", "tool_call", "tool_result"}:
+                workspace = r.get("cwd") or workspace
+                if isinstance(r.get("sessionId"), str) and r["sessionId"]:
+                    sid = r["sessionId"]
                 c = r.get("content", r.get("text", ""))
+                extracted = content_text(c)
+                ev_type = str(r.get("event_type") or ("tool_use" if role == "tool_call" else "message"))
+                if role == "user":
+                    cleaned, is_compaction = _clean_workbuddy_user_text(extracted)
+                    if is_compaction:
+                        role = "system"
+                        ev_type = "compaction"
+                        extracted = cleaned
+                    elif cleaned:
+                        extracted = cleaned
+                    else:
+                        # Pure empty system-reminder wrapper without user query
+                        continue
+                if not extracted.strip() and role in {"user", "assistant"}:
+                    continue
                 raw_items.append({
                     "node_id": str(r.get("id") or f"wb-{idx}"),
                     "role": role,
-                    "text": content_text(c),
+                    "text": extracted,
                     "timestamp": r.get("timestamp") or r.get("created_at"),
                     "content": c,
                     "raw_record": r,
-                    "event_type": str(r.get("event_type") or ("tool_use" if role == "tool_call" else "message")),
+                    "event_type": ev_type,
                     "parent_tool_use_id": r.get("parent_tool_use_id"),
                 })
     else:
@@ -141,6 +220,11 @@ def parse_workbuddy_session(path: str | Path) -> ConversationGraph:
                     raw_items.append({"node_id": str(m.get("id") or f"wb-{idx}"), "role": str(m.get("role") or "user"), "text": content_text(c), "timestamp": m.get("timestamp"), "content": c, "raw_record": m})
 
     nodes, roots, active = _chain(raw_items)
+    if not title:
+        first_u = next((n.text for n in nodes if n.role == "user" and n.text.strip()), "")
+        title = first_u.splitlines()[0][:80].strip() if first_u else sid
+    if workspace and not meta.get("project_name"):
+        meta["project_name"] = Path(workspace).name or None
     return ConversationGraph(
         source_format="workbuddy_session",
         source_id=sid,
@@ -157,76 +241,247 @@ def parse_workbuddy_session(path: str | Path) -> ConversationGraph:
 
 
 def parse_workbuddy_home(wb_home: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
-    """Read WorkBuddy `~/.workbuddy` (`workbuddy.db` + `sessions/`)."""
+    """Read WorkBuddy `~/.workbuddy` (`workbuddy.db` + `projects/<cwd>/<id>.jsonl` + `sessions/`)."""
     root = Path(wb_home).expanduser()
-    graphs: list[ConversationGraph] = []
-    seen: set[str] = set()
+    file_by_sid: dict[str, Path] = {}
 
-    # 1. Read session files under sessions/
+    # 1. Discover transcript files across both `projects/*/*.jsonl` (real WorkBuddy) and `sessions/*`
+    pdir = root / "projects"
+    if pdir.is_dir():
+        for fp in sorted(pdir.rglob("*.jsonl"), key=lambda x: x.stat().st_mtime, reverse=True):
+            if fp.is_file():
+                file_by_sid.setdefault(fp.stem, fp)
     sdir = root / "sessions"
     if sdir.is_dir():
-        for fp in sorted(list(sdir.glob("*.jsonl")) + list(sdir.glob("*.json"))):
+        for fp in sorted(list(sdir.glob("*.jsonl")) + list(sdir.glob("*.json")), key=lambda x: x.stat().st_mtime, reverse=True):
             if fp.is_file():
-                g = parse_workbuddy_session(fp)
-                graphs.append(g)
-                seen.add(g.source_id)
-                if limit and len(graphs) >= limit:
-                    return graphs
+                file_by_sid.setdefault(fp.stem, fp)
 
-    # 2. Enrich or read metadata rows from workbuddy.db (strictly read-only!)
+    # 2. Read metadata rows from `workbuddy.db` (strictly read-only!) and join onto transcripts
+    db_rows: list[dict[str, Any]] = []
+    spaces: dict[str, str] = {}
     db = root / "workbuddy.db"
     if db.is_file():
         try:
             conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
-            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            spaces: dict[str, str] = {}
-            if "spaces" in tables:
-                for r in conn.execute("SELECT id, name FROM spaces"):
-                    spaces[str(r["id"])] = str(r["name"] or "")
-            if "sessions" in tables:
-                for r in conn.execute("SELECT * FROM sessions WHERE deleted_at IS NULL"):
-                    d = dict(r)
-                    sid = str(d.get("id") or "")
-                    if not sid or sid in seen:
-                        continue
-                    graphs.append(
-                        ConversationGraph(
-                            source_format="workbuddy_sqlite",
-                            source_id=sid,
-                            title=str(d.get("custom_title") or d.get("title") or sid),
-                            workspace=d.get("cwd"),
-                            nodes=(),
-                            root_ids=(),
-                            active_node_id=None,
-                            metadata={
-                                "project_id": d.get("project_id") or d.get("space_id"),
-                                "project_name": spaces.get(str(d.get("space_id") or "")) or None,
-                                "section_id": d.get("group_id"),
-                                "section_name": d.get("group_title"),
-                                "model": d.get("model"),
-                                "mode": d.get("mode"),
-                                "source_file": db.name,
-                            },
-                            raw_source={"session_row": d},
-                            app_mode="desktop-app",
-                        )
-                    )
-                    seen.add(sid)
-                    if limit and len(graphs) >= limit:
-                        break
-            conn.close()
+            try:
+                tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                if "spaces" in tables:
+                    for r in conn.execute("SELECT id, name FROM spaces"):
+                        spaces[str(r["id"])] = str(r["name"] or "")
+                if "sessions" in tables:
+                    for r in conn.execute("SELECT * FROM sessions WHERE deleted_at IS NULL ORDER BY updated_at DESC"):
+                        db_rows.append(dict(r))
+            finally:
+                conn.close()
         except sqlite3.Error:
             pass
+
+    graphs: list[ConversationGraph] = []
+    seen: set[str] = set()
+
+    for d in db_rows:
+        sid = str(d.get("id") or "")
+        if not sid or sid in seen:
+            continue
+        seen.add(sid)
+        db_cwd = str(d.get("cwd") or "").strip() or None
+        db_title = str(d.get("custom_title") or d.get("title") or "").strip()
+        space_name = spaces.get(str(d.get("space_id") or "")) or None
+        fp = file_by_sid.get(sid)
+        if fp is not None:
+            g = parse_workbuddy_session(fp)
+            merged_meta = dict(g.metadata)
+            ws = g.workspace or db_cwd
+            merged_meta.update(
+                {
+                    "project_id": d.get("project_id") or d.get("space_id") or merged_meta.get("project_id"),
+                    "project_name": space_name or merged_meta.get("project_name") or (Path(ws).name if ws else None),
+                    "section_id": d.get("group_id") or merged_meta.get("section_id"),
+                    "section_name": d.get("group_title") or merged_meta.get("section_name"),
+                    "model": d.get("model") or merged_meta.get("model"),
+                    "mode": d.get("mode") or merged_meta.get("mode"),
+                }
+            )
+            graphs.append(
+                ConversationGraph(
+                    source_format=g.source_format,
+                    source_id=sid,
+                    title=db_title or g.title or sid,
+                    workspace=ws,
+                    nodes=g.nodes,
+                    root_ids=g.root_ids,
+                    active_node_id=g.active_node_id,
+                    metadata=merged_meta,
+                    raw_source=g.raw_source,
+                    links=g.links,
+                    app_mode="desktop-app",
+                )
+            )
+        else:
+            graphs.append(
+                ConversationGraph(
+                    source_format="workbuddy_sqlite",
+                    source_id=sid,
+                    title=db_title or sid,
+                    workspace=db_cwd,
+                    nodes=(),
+                    root_ids=(),
+                    active_node_id=None,
+                    metadata={
+                        "project_id": d.get("project_id") or d.get("space_id"),
+                        "project_name": space_name or (Path(db_cwd).name if db_cwd else None),
+                        "section_id": d.get("group_id"),
+                        "section_name": d.get("group_title"),
+                        "model": d.get("model"),
+                        "mode": d.get("mode"),
+                        "source_file": db.name,
+                    },
+                    raw_source={"session_row": d},
+                    app_mode="desktop-app",
+                )
+            )
+        if limit and len(graphs) >= limit:
+            return graphs
+
+    # 3. Any standalone session files not yet indexed in workbuddy.db
+    for sid, fp in file_by_sid.items():
+        if sid in seen:
+            continue
+        g = parse_workbuddy_session(fp)
+        if g.source_id not in seen:
+            seen.add(g.source_id)
+            graphs.append(g)
+            if limit and len(graphs) >= limit:
+                break
     return graphs
 
 
+def workbuddy_project_dir_name(cwd: str | Path) -> str:
+    """Encode a workspace path using WorkBuddy's `projects/<encoded-cwd>` convention."""
+    resolved = str(Path(cwd).expanduser().resolve())
+    return re.sub(r"[^A-Za-z0-9._-]", "-", resolved).strip("-") or "workspace"
+
+
+def merge_workbuddy_sessions_batch(
+    db_path: str | Path,
+    entries: list[dict[str, Any]],
+    *,
+    on_collision: str = "refuse",
+) -> list[dict[str, Any]]:
+    """Merge migrated sessions into WorkBuddy `workbuddy.db` (`sessions` + `workspaces` tables)."""
+    db = Path(db_path).expanduser()
+    db.parent.mkdir(parents=True, exist_ok=True)
+    now_ms = int(time.time() * 1000)
+    conn = sqlite3.connect(str(db), timeout=20.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS sessions (
+                id TEXT PRIMARY KEY,
+                cwd TEXT NOT NULL,
+                user_id TEXT NOT NULL DEFAULT 'local-user',
+                title TEXT,
+                custom_title TEXT,
+                status TEXT NOT NULL DEFAULT 'completed',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                last_activity_at INTEGER,
+                deleted_at INTEGER,
+                is_playground INTEGER NOT NULL DEFAULT 0,
+                source_mode TEXT,
+                mode TEXT,
+                model TEXT,
+                permission_mode TEXT,
+                project_id TEXT,
+                transport TEXT NOT NULL DEFAULT 'local',
+                group_id TEXT,
+                group_title TEXT,
+                unread INTEGER NOT NULL DEFAULT 0,
+                space_id TEXT
+            );
+            CREATE TABLE IF NOT EXISTS workspaces (
+                path TEXT PRIMARY KEY,
+                last_opened_at INTEGER NOT NULL
+            );
+            """
+        )
+        cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(sessions)")}
+        ws_cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(workspaces)")}
+        default_uid = "local-user"
+        if "user_id" in cols:
+            urow = conn.execute("SELECT user_id FROM sessions WHERE user_id IS NOT NULL AND user_id != '' LIMIT 1").fetchone()
+            if urow and urow[0]:
+                default_uid = str(urow[0])
+        existing_ids = {str(r[0]) for r in conn.execute("SELECT id FROM sessions")}
+        results: list[dict[str, Any]] = []
+        for item in entries:
+            sid = str(item.get("id") or uuid.uuid4())
+            if sid in existing_ids:
+                if on_collision == "refuse":
+                    raise FileExistsError(f"workbuddy session already exists in workbuddy.db: {sid}")
+                if on_collision == "skip":
+                    results.append({"session_id": sid, "action": "skipped"})
+                    continue
+                if on_collision == "rename":
+                    sid = str(uuid.uuid4())
+            cwd_val = str(item.get("cwd") or "")
+            title_val = str(item.get("title") or sid)
+            candidate_vals: dict[str, Any] = {
+                "id": sid,
+                "cwd": cwd_val,
+                "user_id": default_uid,
+                "title": title_val,
+                "custom_title": str(item.get("custom_title") or title_val),
+                "status": "completed",
+                "created_at": now_ms,
+                "updated_at": now_ms,
+                "last_activity_at": now_ms,
+                "deleted_at": None,
+                "is_playground": 0,
+                "source_mode": "craft",
+                "mode": str(item.get("mode") or "craft"),
+                "model": str(item.get("model") or "auto"),
+                "permission_mode": "fullAccess",
+                "project_id": item.get("project_id"),
+                "transport": "local",
+                "group_id": item.get("group_id"),
+                "group_title": item.get("group_title"),
+                "unread": 0,
+                "space_id": item.get("space_id"),
+            }
+            insert_cols = [c for c in candidate_vals if c in cols]
+            placeholders = ", ".join("?" for _ in insert_cols)
+            conn.execute(
+                f"INSERT OR REPLACE INTO sessions ({', '.join(insert_cols)}) VALUES ({placeholders})",
+                tuple(candidate_vals[c] for c in insert_cols),
+            )
+            if cwd_val and {"path", "last_opened_at"}.issubset(ws_cols):
+                conn.execute(
+                    "INSERT OR REPLACE INTO workspaces (path, last_opened_at) VALUES (?, ?)",
+                    (cwd_val, now_ms),
+                )
+            existing_ids.add(sid)
+            results.append({"session_id": sid, "action": "merged"})
+        conn.commit()
+        try:
+            conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except sqlite3.Error:
+            pass
+        return results
+    finally:
+        conn.close()
+
+
 def build_workbuddy_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Project ConversationGraph into WorkBuddy `sessions/<id>.jsonl` with space/group metadata."""
+    """Project ConversationGraph into real WorkBuddy JSONL (`session-meta` + `ai-title` + `message`) + metadata."""
     sessions: list[dict[str, Any]] = []
     losses: list[dict[str, Any]] = []
     paths = graph.branch_paths()
     resolved_cwd = str(Path(graph.workspace or cwd).expanduser().resolve())
+    now_ms = int(time.time() * 1000)
     now_iso = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     for branch_index, path in enumerate(paths, 1):
         turns, merged, _ = _coalesce_alternating_turns(path)
@@ -239,6 +494,7 @@ def build_workbuddy_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tu
                 "type": "workbuddy_session_meta",
                 "schema": "workbuddy.session.v1",
                 "id": sid,
+                "sessionId": sid,
                 "title": title,
                 "custom_title": title,
                 "cwd": resolved_cwd,
@@ -248,17 +504,38 @@ def build_workbuddy_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tu
                 "group_title": graph.metadata.get("section_name"),
                 "parent_session_id": graph.metadata.get("parent_session_id"),
                 "model": graph.metadata.get("model") or "auto",
-                "mode": "agent",
+                "mode": "craft",
                 "created_at": now_iso,
-            }
+            },
+            {
+                "type": "session-meta",
+                "id": str(uuid.uuid4()),
+                "sessionId": sid,
+                "cwd": resolved_cwd,
+                "timestamp": now_ms,
+                "meta": {"importedBy": "nexus-memory"},
+            },
+            {
+                "type": "ai-title",
+                "id": str(uuid.uuid4()),
+                "sessionId": sid,
+                "cwd": resolved_cwd,
+                "aiTitle": title,
+                "timestamp": now_ms,
+            },
         ]
         source_node_ids: list[str] = []
         for idx, t in enumerate(turns):
+            body = "\n\n".join(t["texts"])
+            ctype = "input_text" if t["role"] == "user" else "output_text"
             records.append({
-                "id": f"wbm-{idx}",
+                "id": str(uuid.uuid4()),
+                "type": "message",
+                "sessionId": sid,
+                "cwd": resolved_cwd,
                 "role": t["role"],
-                "content": "\n\n".join(t["texts"]),
-                "timestamp": t["timestamp"] if isinstance(t["timestamp"], str) else now_iso,
+                "content": [{"type": ctype, "text": body}],
+                "timestamp": now_ms + idx + 1,
             })
             source_node_ids.extend(t["source_node_ids"])
         sessions.append({
@@ -850,20 +1127,27 @@ def merge_t3code_thread_into_statev2(
     return merge_t3code_threads_batch(db_path, [payload], on_collision=on_collision)[0]
 
 
-def parse_t3code_source(path: str | Path) -> list[ConversationGraph]:
+def parse_t3code_source(
+    path: str | Path,
+    *,
+    limit: int | None = None,
+    include_subagents: bool = True,
+) -> list[ConversationGraph]:
     """Read T3 Code `statev2.sqlite` (v2 `orchestration_v2_projection_*` or legacy tables) or thread JSON."""
     p = Path(path).expanduser()
     if p.is_dir():
         db = p / "userdata" / "statev2.sqlite"
         if db.is_file():
-            return parse_t3code_source(db)
+            return parse_t3code_source(db, limit=limit, include_subagents=include_subagents)
         out: list[ConversationGraph] = []
-        for fp in sorted(p.rglob("*.json")):
+        for fp in sorted(p.rglob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
             if fp.name != "settings.json":
                 try:
                     out.extend(parse_t3code_source(fp))
                 except (OSError, json.JSONDecodeError, ValueError):
                     continue
+                if limit and len(out) >= limit:
+                    return out[:limit]
         return out
 
     if p.suffix in {".sqlite", ".db"}:
@@ -898,6 +1182,10 @@ def parse_t3code_source(path: str | Path) -> list[ConversationGraph]:
                         tp = json.loads(td.get("payload_json") or "{}")
                     except json.JSONDecodeError:
                         tp = {}
+                    lineage = tp.get("lineage") if isinstance(tp.get("lineage"), dict) else {}
+                    parent_tid = lineage.get("parentThreadId")
+                    if not include_subagents and parent_tid:
+                        continue
                     proj = projects_by_id.get(str(td.get("project_id") or ""), {})
                     raw_items = []
                     for idx, m in enumerate(msg_by_tid.get(tid, [])):
@@ -914,7 +1202,7 @@ def parse_t3code_source(path: str | Path) -> list[ConversationGraph]:
                             }
                         )
                     nodes, roots, active = _chain(raw_items)
-                    lineage = tp.get("lineage") if isinstance(tp.get("lineage"), dict) else {}
+                    tags = tp.get("tags") if isinstance(tp.get("tags"), list) else []
                     graphs.append(
                         ConversationGraph(
                             source_format="t3code_thread",
@@ -927,7 +1215,10 @@ def parse_t3code_source(path: str | Path) -> list[ConversationGraph]:
                             metadata={
                                 "project_id": td.get("project_id"),
                                 "project_name": proj.get("title"),
-                                "parent_session_id": lineage.get("parentThreadId"),
+                                "section_name": str(tags[0]) if tags else None,
+                                "parent_session_id": parent_tid,
+                                "root_session_id": lineage.get("rootThreadId") or tid,
+                                "nesting_depth": 1 if parent_tid else 0,
                                 "provider": td.get("provider_instance_id") or td.get("default_provider"),
                                 "source_file": p.name,
                             },
@@ -936,6 +1227,8 @@ def parse_t3code_source(path: str | Path) -> list[ConversationGraph]:
                             app_mode="desktop-app",
                         )
                     )
+                    if limit and len(graphs) >= limit:
+                        break
                 return graphs
             if "threads" in tables:
                 msg_by_tid = {}
@@ -1245,7 +1538,197 @@ def build_warp_oz_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tupl
     return sessions, losses
 
 
-# ── 7. Windsurf Cascade (`~/.codeium/windsurf/cascade/<id>.json`) ────────────
+def _scan_dir_sessions(
+    root: Path,
+    subdirs: tuple[str, ...],
+    patterns: tuple[str, ...],
+    parser_fn: Any,
+    *,
+    exclude_names: set[str] | None = None,
+    limit: int | None = None,
+) -> list[ConversationGraph]:
+    skip = exclude_names or set()
+    candidates: list[Path] = []
+    seen_paths: set[Path] = set()
+    bases = [root / sub for sub in subdirs if (root / sub).is_dir()]
+    if not bases:
+        bases = [root]
+    for base in bases:
+        for pat in patterns:
+            for fp in base.rglob(pat):
+                if fp.is_file() and fp.name not in skip and fp not in seen_paths:
+                    seen_paths.add(fp)
+                    candidates.append(fp)
+    candidates.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    out: list[ConversationGraph] = []
+    for fp in candidates:
+        try:
+            out.append(parser_fn(fp))
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+        if limit and len(out) >= limit:
+            break
+    return out
+
+
+def parse_kiro_home(path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
+    p = Path(path).expanduser()
+    if p.is_file():
+        return [parse_kiro_session(p)]
+    return _scan_dir_sessions(p, ("sessions",), ("*.jsonl", "*.json"), parse_kiro_session, exclude_names={"mcp.json", "settings.json"}, limit=limit)
+
+
+def parse_amp_home(path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
+    p = Path(path).expanduser()
+    if p.is_file():
+        return [parse_amp_thread(p)]
+    return _scan_dir_sessions(p, ("threads",), ("*.json",), parse_amp_thread, exclude_names={"settings.json"}, limit=limit)
+
+
+def parse_trae_home(path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
+    p = Path(path).expanduser()
+    if p.is_file():
+        return [parse_trae_trajectory(p)]
+    return _scan_dir_sessions(p, ("trajectories",), ("*.json",), parse_trae_trajectory, exclude_names={"mcp.json", "settings.json"}, limit=limit)
+
+
+def parse_warp_sqlite(db_path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
+    """Read real Warp `warp.sqlite` (`agent_conversations` + `ai_queries`, strictly read-only & token-redacted)."""
+    p = Path(db_path).expanduser()
+    if not p.is_file():
+        return []
+    graphs: list[ConversationGraph] = []
+    conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "agent_conversations" not in tables:
+            return []
+        queries_by_cid: dict[str, list[dict[str, Any]]] = {}
+        if "ai_queries" in tables:
+            for qr in conn.execute(
+                "SELECT exchange_id, conversation_id, start_ts, input, working_directory, model_id FROM ai_queries ORDER BY start_ts ASC, id ASC"
+            ):
+                qd = dict(qr)
+                queries_by_cid.setdefault(str(qd.get("conversation_id") or ""), []).append(qd)
+
+        sql = "SELECT conversation_id, summary, last_modified_at FROM agent_conversations ORDER BY last_modified_at DESC"
+        if limit and limit > 0:
+            sql += f" LIMIT {int(limit)}"
+        for cr in conn.execute(sql):
+            cid = str(cr["conversation_id"] or "")
+            if not cid:
+                continue
+            try:
+                summary_obj = json.loads(cr["summary"] or "{}") if isinstance(cr["summary"], str) else {}
+            except json.JSONDecodeError:
+                summary_obj = {}
+            if not isinstance(summary_obj, dict):
+                summary_obj = {}
+            title = str(summary_obj.get("title") or summary_obj.get("initial_query") or cid)[:160]
+            ws = summary_obj.get("initial_working_directory")
+            raw_items: list[dict[str, Any]] = []
+            model_id = None
+            for idx, q in enumerate(queries_by_cid.get(cid, [])):
+                ws = ws or q.get("working_directory")
+                model_id = model_id or q.get("model_id")
+                try:
+                    inp_arr = json.loads(q.get("input") or "[]")
+                except json.JSONDecodeError:
+                    inp_arr = []
+                if isinstance(inp_arr, list):
+                    for sub_i, part in enumerate(inp_arr):
+                        if not isinstance(part, dict):
+                            continue
+                        if isinstance(part.get("Query"), dict):
+                            qtxt = str(part["Query"].get("text") or "").strip()
+                            if qtxt:
+                                raw_items.append({
+                                    "node_id": f"{q.get('exchange_id') or idx}-q-{sub_i}",
+                                    "role": "user",
+                                    "text": qtxt,
+                                    "timestamp": q.get("start_ts"),
+                                    "content": qtxt,
+                                    "raw_record": {"exchange_id": q.get("exchange_id"), "query": qtxt},
+                                })
+                        elif isinstance(part.get("ActionResult"), dict):
+                            ar = part["ActionResult"]
+                            out_txt = content_text(ar.get("result", ""))
+                            if out_txt.strip():
+                                raw_items.append({
+                                    "node_id": str(ar.get("id") or f"{idx}-ar-{sub_i}"),
+                                    "role": "tool_result",
+                                    "text": out_txt[:4000],
+                                    "timestamp": q.get("start_ts"),
+                                    "content": {"call_id": str(ar.get("id") or ""), "output": out_txt[:4000]},
+                                    "raw_record": {"exchange_id": q.get("exchange_id")},
+                                    "event_type": "tool_result",
+                                })
+            if not raw_items and summary_obj.get("initial_query"):
+                iq = str(summary_obj["initial_query"]).strip()
+                if iq:
+                    raw_items.append({"node_id": f"{cid}-init", "role": "user", "text": iq, "timestamp": cr["last_modified_at"], "content": iq, "raw_record": summary_obj})
+            nodes, roots, active = _chain(raw_items)
+            graphs.append(
+                ConversationGraph(
+                    source_format="warp_oz_session",
+                    source_id=cid,
+                    title=title,
+                    workspace=str(ws) if isinstance(ws, str) and ws else None,
+                    nodes=nodes,
+                    root_ids=roots,
+                    active_node_id=active,
+                    metadata={
+                        "source_file": p.name,
+                        "agent_mode": "oz",
+                        "model": model_id,
+                        "project_name": Path(str(ws)).name if isinstance(ws, str) and ws not in {"", "/"} else None,
+                        "last_modified_time": str(cr["last_modified_at"] or ""),
+                    },
+                    raw_source={"summary": summary_obj},  # Never copy `server_conversation_token`!
+                    links=_links(nodes),
+                    app_mode="terminal-agent",
+                )
+            )
+    finally:
+        conn.close()
+    return graphs
+
+
+def parse_warp_oz_home(path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
+    p = Path(path).expanduser()
+    if p.is_file():
+        if p.suffix in {".sqlite", ".db"}:
+            return parse_warp_sqlite(p, limit=limit)
+        return [parse_warp_oz_session(p)]
+    graphs = _scan_dir_sessions(p, ("sessions",), ("*.json",), parse_warp_oz_session, exclude_names={"mcp.json", ".mcp.json"}, limit=limit)
+    if limit and len(graphs) >= limit:
+        return graphs[:limit]
+    rem = (limit - len(graphs)) if limit else None
+    candidate_dbs = [p / "warp.sqlite"]
+    if sys.platform == "darwin":
+        candidate_dbs.append(
+            Path.home()
+            / "Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Stable/warp.sqlite"
+        )
+    for db_cand in candidate_dbs:
+        if db_cand.is_file():
+            seen = {g.source_id for g in graphs}
+            for g in parse_warp_sqlite(db_cand, limit=rem):
+                if g.source_id not in seen:
+                    seen.add(g.source_id)
+                    graphs.append(g)
+                    if limit and len(graphs) >= limit:
+                        return graphs[:limit]
+            break
+    return graphs
+
+
+def parse_windsurf_home(path: str | Path, *, limit: int | None = None) -> list[ConversationGraph]:
+    p = Path(path).expanduser()
+    if p.is_file():
+        return [parse_windsurf_session(p)]
+    return _scan_dir_sessions(p, ("cascade",), ("*.json",), parse_windsurf_session, exclude_names={"mcp_config.json"}, limit=limit)
 
 
 def parse_windsurf_session(path: str | Path) -> ConversationGraph:

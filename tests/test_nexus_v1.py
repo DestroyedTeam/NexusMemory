@@ -1332,6 +1332,290 @@ class NexusV1EndToEndTests(unittest.TestCase):
                 srv.shutdown()
                 srv.server_close()
 
+    def test_workbuddy_native_project_jsonl_and_db_bidirectional_roundtrip(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            fake_home = tp / "home"
+            wb_root = fake_home / ".workbuddy"
+            proj_dir = wb_root / "projects" / "Users-dev-WorkBuddy-2026-11-13"
+            proj_dir.mkdir(parents=True)
+
+            sid = "6cb79654-fe04-4805-98fb-e4cb44984238"
+            ws_path = str(tp / "wb-workspace")
+            jl_records = [
+                {"type": "session-meta", "id": "m0", "sessionId": sid, "timestamp": 1794573670000, "meta": {}},
+                {"type": "ai-title", "id": "m1", "sessionId": sid, "aiTitle": "AI Title Fallback", "cwd": ws_path, "timestamp": 1794573670100},
+                {
+                    "type": "message",
+                    "id": "u1",
+                    "sessionId": sid,
+                    "cwd": ws_path,
+                    "role": "user",
+                    "timestamp": 1794573671000,
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": '<system-reminder data-role="user-context">\nOS: darwin\n</system-reminder>\n<user_query>请把三国小镇架构迁移到 T3 Code</user_query>',
+                        }
+                    ],
+                },
+                {
+                    "type": "function_call",
+                    "id": "fc1",
+                    "callId": "call_01",
+                    "name": "Bash",
+                    "arguments": {"command": "ls"},
+                    "sessionId": sid,
+                    "cwd": ws_path,
+                    "timestamp": 1794573672000,
+                },
+                {
+                    "type": "function_call_output",
+                    "id": "fco1",
+                    "callId": "call_01",
+                    "output": "README.md",
+                    "sessionId": sid,
+                    "cwd": ws_path,
+                    "timestamp": 1794573673000,
+                },
+                {
+                    "type": "message",
+                    "id": "a1",
+                    "sessionId": sid,
+                    "cwd": ws_path,
+                    "role": "assistant",
+                    "timestamp": 1794573674000,
+                    "content": [{"type": "output_text", "text": "已完成三国小镇会话与工具记录解析。"}],
+                },
+            ]
+            (proj_dir / f"{sid}.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in jl_records) + "\n", encoding="utf-8")
+
+            conn = sqlite3.connect(wb_root / "workbuddy.db")
+            conn.execute(
+                """
+                CREATE TABLE sessions (
+                    id TEXT PRIMARY KEY, cwd TEXT NOT NULL, user_id TEXT NOT NULL, title TEXT, custom_title TEXT,
+                    status TEXT NOT NULL DEFAULT 'completed', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+                    deleted_at INTEGER, mode TEXT, model TEXT, project_id TEXT, group_id TEXT, group_title TEXT, space_id TEXT
+                )
+                """
+            )
+            conn.execute("CREATE TABLE workspaces (path TEXT PRIMARY KEY, last_opened_at INTEGER NOT NULL)")
+            conn.execute(
+                "INSERT INTO sessions VALUES (?, ?, 'uid-real-1', '三国小镇', '三国小镇·精校', 'completed', 1794573670000, 1794573675000, NULL, 'craft', 'deepseek-v4', NULL, 'grp-1', 'Game Dev', NULL)",
+                (sid, ws_path),
+            )
+            conn.commit()
+            conn.close()
+
+            disc = discover_harnesses(home=fake_home)
+            wb_disc = next(h for h in disc["harnesses"] if h["id"] == "workbuddy")
+            self.assertEqual(wb_disc["session_file_count"], 1)
+
+            graphs, _ = load_any_source(wb_root, source_format="workbuddy")
+            self.assertEqual(len(graphs), 1)
+            self.assertEqual(graphs[0].title, "三国小镇·精校")
+            self.assertEqual(graphs[0].metadata.get("section_name"), "Game Dev")
+            user_nodes = [n for n in graphs[0].nodes if n.role == "user"]
+            self.assertEqual(len(user_nodes), 1)
+            self.assertEqual(user_nodes[0].text, "请把三国小镇架构迁移到 T3 Code")
+            self.assertNotIn("<system-reminder", user_nodes[0].text)
+
+            # Apply a new session into this existing WorkBuddy home -> verify DB merge + rollback
+            _, pre_sha = compute_tree_sha256(wb_root)
+            seed = ConversationGraph(
+                source_format="codex",
+                source_id="cx-to-wb",
+                title="Imported Into WorkBuddy",
+                workspace=ws_path,
+                nodes=(
+                    MessageNode("1", None, ("2",), "user", "First prompt", "2026-11-26T00:00:00Z", "First prompt", {}),
+                    MessageNode("2", "1", (), "assistant", "First reply", "2026-11-26T00:00:02Z", "First reply", {}),
+                ),
+                root_ids=("1",),
+                active_node_id="2",
+                metadata={"section_name": "Imported Group"},
+                raw_source={},
+            )
+            bdir = tp / "wb-out-bundle"
+            write_bundle([seed], out=bdir, cwd=ws_path, target="workbuddy")
+            tx = apply_bundle(bdir, target_root=wb_root, apply=True)
+            self.assertTrue(tx["post_write_verification"]["ok"], tx)
+
+            reloaded, _ = load_any_source(wb_root, source_format="workbuddy")
+            self.assertEqual(len(reloaded), 2)
+            self.assertIn("Imported Into WorkBuddy", {g.title for g in reloaded})
+
+            rb = rollback_transaction(tx["journal_dir"])
+            self.assertTrue(rb["ok"], rb)
+            self.assertEqual(compute_tree_sha256(wb_root)[1], pre_sha)
+
+    def test_claude_desktop_3p_short_uuid_dir_auto_claude_join_and_subagent_hierarchy(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            fake_home = Path(td) / "home"
+            c3p = fake_home / "Library" / "Application Support" / "Claude-3p"
+            lam_org = c3p / "local-agent-mode-sessions" / "dev1" / "org1"
+            ccs_org = c3p / "claude-code-sessions" / "dev1" / "org1"
+            cc_proj_root = fake_home / ".claude" / "projects"
+            lam_org.mkdir(parents=True)
+            ccs_org.mkdir(parents=True)
+
+            # 1. Short 8-char UUID companion directory (`1443e853/audit.jsonl`) paired with `local_1443e853-...json`
+            short_dir = lam_org / "1443e853"
+            short_dir.mkdir()
+            (lam_org / "local_1443e853-66cc-4431-b36b-f01029556fc8.json").write_text(
+                json.dumps(
+                    {
+                        "sessionId": "local_1443e853-66cc-4431-b36b-f01029556fc8",
+                        "title": "Cowork Short Folder Session",
+                        "processName": "claude-vm",
+                        "cwd": str(fake_home / "demo"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (short_dir / "audit.jsonl").write_text(
+                json.dumps({"type": "user", "uuid": "u1", "message": {"role": "user", "content": "Short folder question"}})
+                + "\n"
+                + json.dumps({"type": "assistant", "uuid": "a1", "message": {"role": "assistant", "content": "Short folder answer"}})
+                + "\n",
+                encoding="utf-8",
+            )
+
+            # 2. Claude 3P Code top-level + `spawnedFrom` subagent auto-joined to `<home>/.claude/projects` without explicit `claude_dir`
+            ws = fake_home / "MyRepo"
+            ws.mkdir(parents=True)
+            enc_dir = cc_proj_root / project_directory_name(ws)
+            enc_dir.mkdir(parents=True)
+            for cli_sid, u_txt, a_txt in (
+                ("cli-top-1", "Parent prompt", "Parent answer"),
+                ("cli-sub-1", "Delegated subagent prompt", "Delegated subagent answer"),
+            ):
+                (enc_dir / f"{cli_sid}.jsonl").write_text(
+                    json.dumps({"type": "user", "uuid": "u", "sessionId": cli_sid, "cwd": str(ws), "message": {"role": "user", "content": u_txt}})
+                    + "\n"
+                    + json.dumps({"type": "assistant", "uuid": "a", "sessionId": cli_sid, "cwd": str(ws), "message": {"role": "assistant", "content": a_txt}})
+                    + "\n",
+                    encoding="utf-8",
+                )
+            (ccs_org / "00000000.profile-origin.json").write_text(json.dumps({"mode": "local"}), encoding="utf-8")
+            (ccs_org / "local_parent-uuid.json").write_text(
+                json.dumps({"sessionId": "local_parent-uuid", "cliSessionId": "cli-top-1", "title": "Top 3P Code", "cwd": str(ws), "lastActivityAt": 200}),
+                encoding="utf-8",
+            )
+            (ccs_org / "local_child-uuid.json").write_text(
+                json.dumps(
+                    {
+                        "sessionId": "local_child-uuid",
+                        "cliSessionId": "cli-sub-1",
+                        "title": "Child 3P Subagent",
+                        "cwd": str(ws),
+                        "lastActivityAt": 210,
+                        "spawnedFrom": {"sessionId": "local_parent-uuid", "name": "codex-subagent"},
+                        "startChain": {"firstSessionId": "local_parent-uuid", "depth": 1},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            disc = discover_harnesses(home=fake_home, platform="darwin")
+            c3p_disc = next(h for h in disc["harnesses"] if h["id"] == "claude-desktop-3p-code")
+            self.assertEqual(c3p_disc["session_file_count"], 1)
+            self.assertEqual(c3p_disc["subagent_count"], 1)
+
+            cowork_graphs, _ = load_any_source(c3p, source_format="claude-desktop-3p-cowork")
+            self.assertEqual(len(cowork_graphs), 1)
+            self.assertEqual(len(cowork_graphs[0].nodes), 2)
+
+            code_top, _ = load_any_source(c3p, source_format="claude-desktop-3p-code", include_subagents=False)
+            self.assertEqual([g.source_id for g in code_top], ["cli-top-1"])
+            self.assertEqual(len(code_top[0].nodes), 2)
+            self.assertEqual(code_top[0].metadata.get("child_subagent_count"), 1)
+
+            code_all, _ = load_any_source(c3p, source_format="claude-desktop-3p-code", include_subagents=True)
+            self.assertEqual([g.source_id for g in code_all], ["cli-top-1", "cli-sub-1"])
+            self.assertEqual(code_all[1].metadata.get("parent_session_id"), "cli-top-1")
+
+    def test_warp_sqlite_opencode_count_and_all_25_target_directory_swaps(self) -> None:
+        from nexus_memory.bundle import SUPPORTED_TARGETS
+
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            fake_home = tp / "home"
+            # 1. OpenCode split storage count must reflect `storage/session` (1) rather than `part` files (5)
+            oc_store = fake_home / ".local" / "share" / "opencode" / "storage"
+            (oc_store / "session" / "global").mkdir(parents=True)
+            (oc_store / "part" / "m1").mkdir(parents=True)
+            (oc_store / "session" / "global" / "s1.json").write_text(json.dumps({"id": "s1", "title": "OC"}), encoding="utf-8")
+            for i in range(4):
+                (oc_store / "part" / "m1" / f"p{i}.json").write_text(json.dumps({"type": "text", "text": "x"}), encoding="utf-8")
+            disc = discover_harnesses(home=fake_home, platform="linux")
+            oc_disc = next(h for h in disc["harnesses"] if h["id"] == "opencode")
+            self.assertEqual(oc_disc["session_file_count"], 1)
+
+            # 2. Warp SQLite reader must extract queries and NEVER copy `server_conversation_token`
+            wdb = tp / "warp.sqlite"
+            wcon = sqlite3.connect(wdb)
+            wcon.execute("CREATE TABLE agent_conversations (id INTEGER PRIMARY KEY, conversation_id TEXT, conversation_data TEXT, last_modified_at TEXT, summary TEXT)")
+            wcon.execute("CREATE TABLE ai_queries (id INTEGER PRIMARY KEY, exchange_id TEXT, conversation_id TEXT, start_ts TEXT, input TEXT, working_directory TEXT, output_status TEXT, model_id TEXT)")
+            wcon.execute(
+                "INSERT INTO agent_conversations VALUES (1, 'warp-c1', ?, '2026-11-26 10:00:00', ?)",
+                (
+                    json.dumps({"server_conversation_token": "SUPER_SECRET_WARP_TOKEN_999"}),
+                    json.dumps({"title": "Warp Fan Speed", "initial_query": "Check fan speed", "initial_working_directory": str(tp)}),
+                ),
+            )
+            wcon.execute(
+                "INSERT INTO ai_queries VALUES (1, 'ex-1', 'warp-c1', '2026-11-26 10:00:01', ?, ?, 'ok', 'claude-4-opus')",
+                (json.dumps([{"Query": {"text": "How to reset macOS fan speed?"}}]), str(tp)),
+            )
+            wcon.commit()
+            wcon.close()
+
+            w_graphs, _ = load_any_source(wdb, source_format="warp-oz")
+            self.assertEqual(len(w_graphs), 1)
+            self.assertEqual(w_graphs[0].nodes[0].text, "How to reset macOS fan speed?")
+            self.assertNotIn("SUPER_SECRET_WARP_TOKEN_999", json.dumps(w_graphs[0].to_dict()))
+
+            # 3. All 25 targets directory-level explicit & auto-detect swap round-trip
+            seed = ConversationGraph(
+                source_format="seed",
+                source_id="swap-1",
+                title="Directory Swap Verification",
+                workspace=str(tp / "ws"),
+                nodes=(
+                    MessageNode("1", None, ("2",), "user", "Swap user message", "2026-11-26T00:00:00Z", "Swap user message", {}),
+                    MessageNode("2", "1", (), "assistant", "Swap assistant reply", "2026-11-26T00:00:01Z", "Swap assistant reply", {}),
+                ),
+                root_ids=("1",),
+                active_node_id="2",
+                metadata={},
+                raw_source={},
+            )
+            for idx, dst in enumerate(SUPPORTED_TARGETS):
+                bdir = tp / f"sw-b-{idx}-{dst}"
+                write_bundle([seed], out=bdir, cwd=tp / "ws", target=dst)
+                self.assertTrue(verify_bundle(bdir)["ok"], dst)
+                if dst == "portable":
+                    rel_p, _ = load_any_source(bdir, source_format="portable")
+                    self.assertEqual(len(rel_p), 1)
+                    continue
+                troot = tp / f"sw-t-{idx}-{dst}"
+                croot = (tp / f"sw-cc-{idx}-{dst}") if dst in {"claude-desktop-3p-code", "claude-desktop-3p-all"} else None
+                troot.mkdir()
+                if croot:
+                    croot.mkdir()
+                _, pre_sha = compute_tree_sha256(troot)
+                tx = apply_bundle(bdir, target_root=troot, claude_dir=croot, apply=True)
+                self.assertTrue(tx["post_write_verification"]["ok"], dst)
+                rel_exp, _ = load_any_source(troot, source_format=dst, claude_dir=croot)
+                self.assertGreaterEqual(len(rel_exp), 1, f"{dst} explicit dir reload empty")
+                rel_auto, _ = load_any_source(troot, claude_dir=croot)
+                self.assertGreaterEqual(len(rel_auto), 1, f"{dst} auto dir reload empty")
+                rb = rollback_transaction(tx["journal_dir"])
+                self.assertTrue(rb["ok"], dst)
+                self.assertEqual(compute_tree_sha256(troot)[1], pre_sha, dst)
+
 
 if __name__ == "__main__":
     unittest.main()

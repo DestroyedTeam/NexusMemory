@@ -296,8 +296,14 @@ def _plan_apply_operations(
             dst = ensure_within_root(target_root / fname, target_root)
             ops.append((src, dst, "aider-history"))
         elif lane == "workbuddy":
-            dst = ensure_within_root(target_root / "sessions" / Path(rel).name, target_root)
-            ops.append((src, dst, "workbuddy-session"))
+            from .harnesses_extended import workbuddy_project_dir_name
+
+            wb_cwd = str(sess.get("cwd") or "")
+            wb_proj_key = workbuddy_project_dir_name(wb_cwd) if wb_cwd else "workspace"
+            proj_dst = ensure_within_root(target_root / "projects" / wb_proj_key / Path(rel).name, target_root)
+            ops.append((src, proj_dst, "workbuddy-project-session"))
+            db_dst = ensure_within_root(target_root / "workbuddy.db", target_root)
+            ops.append((src, db_dst, "workbuddy-db-merge"))
         elif lane == "t3code":
             db_dst = ensure_within_root(target_root / "userdata" / "statev2.sqlite", target_root)
             ops.append((src, db_dst, "t3code-statev2-merge"))
@@ -442,7 +448,7 @@ def apply_bundle(
         final_dst = dst
         action = "create"
         if dst.exists():
-            if kind in {"codex-session-index-merge", "gemini-projects-merge", "cursor-vscdb-merge", "t3code-statev2-merge"}:
+            if kind in {"codex-session-index-merge", "gemini-projects-merge", "cursor-vscdb-merge", "t3code-statev2-merge", "workbuddy-db-merge"}:
                 action = "merge_existing"
             elif kind == "gemini-project-root":
                 action = "skip_existing"
@@ -543,10 +549,13 @@ def apply_bundle(
     done_ops = 0
 
     t3_groups: dict[str, list[dict[str, Any]]] = {}
+    wb_groups: dict[str, list[dict[str, Any]]] = {}
     other_ops: list[dict[str, Any]] = []
     for op in active_ops:
         if op["kind"] == "t3code-statev2-merge":
             t3_groups.setdefault(str(op["dst"]), []).append(op)
+        elif op["kind"] == "workbuddy-db-merge":
+            wb_groups.setdefault(str(op["dst"]), []).append(op)
         else:
             other_ops.append(op)
 
@@ -574,6 +583,32 @@ def apply_bundle(
             for op, meta in zip(group_ops, metas):
                 written_files.append({**op, "t3code_thread_id": meta.get("thread_id"), "written_sha256": db_sha})
             done_ops += len(group_ops)
+
+    # Batch-merge WorkBuddy sessions into workbuddy.db
+    if wb_groups:
+        from .harnesses_extended import merge_workbuddy_sessions_batch
+
+        for dst_str, group_ops in wb_groups.items():
+            dst = Path(dst_str)
+            ensure_private_dir(dst.parent)
+            wb_entries: list[dict[str, Any]] = []
+            for op in group_ops:
+                first_line = next(
+                    (l for l in Path(op["src"]).read_text(encoding="utf-8-sig", errors="replace").splitlines() if l.strip()),
+                    "{}",
+                )
+                try:
+                    hdr = json.loads(first_line)
+                except json.JSONDecodeError:
+                    hdr = {}
+                wb_entries.append(hdr if isinstance(hdr, dict) else {})
+            wb_metas = merge_workbuddy_sessions_batch(dst, wb_entries, on_collision=on_collision)
+            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            for op, meta in zip(group_ops, wb_metas):
+                written_files.append({**op, "workbuddy_session_id": meta.get("session_id"), "written_sha256": db_sha})
+            done_ops += len(group_ops)
+            if on_progress is not None:
+                on_progress("apply", done_ops, max(total_ops, 1), dst.name)
 
     for op in other_ops:
         src = Path(op["src"])
