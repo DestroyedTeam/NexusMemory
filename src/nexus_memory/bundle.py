@@ -45,6 +45,7 @@ from .harnesses_extended import (
     build_t3code_sessions,
     build_trae_sessions,
     build_warp_oz_sessions,
+    build_windsurf_sessions,
     build_workbuddy_sessions,
 )
 from .model import ConversationGraph, FidelityReport, ResourceBundle
@@ -83,6 +84,7 @@ SUPPORTED_TARGETS = (
     "amp",
     "trae",
     "warp-oz",
+    "windsurf",
     "portable",
 )
 
@@ -158,6 +160,7 @@ def _compute_fidelity(
         "amp": "Sourcegraph Amp `threads/<id>.json` v1 thread schema.",
         "trae": "ByteDance Trae `trajectories/<id>.json` trajectory schema.",
         "warp-oz": "Warp / Oz Agent `sessions/<id>.json` block schema.",
+        "windsurf": "Windsurf Cascade `cascade/<id>.json` bidirectional session schema + skills/MCP.",
         "portable": "Lossless canonical v2 archive with SHA-256 assets and hierarchy (round-trip verified).",
     }
 
@@ -432,6 +435,13 @@ def _plan(
             sessions, graph_losses = build_warp_oz_sessions(graph, cwd=target_cwd)
             for session in sessions:
                 session["target_relative_path"] = (Path("warp_oz_sessions") / f"{session['session_id']}.json").as_posix()
+                session["source_id"] = graph.source_id
+                session["writer_kind"] = "json-payload"
+                native_sessions.append(session)
+        elif target == "windsurf":
+            sessions, graph_losses = build_windsurf_sessions(graph, cwd=target_cwd)
+            for session in sessions:
+                session["target_relative_path"] = (Path("windsurf_sessions") / f"{session['session_id']}.json").as_posix()
                 session["source_id"] = graph.source_id
                 session["writer_kind"] = "json-payload"
                 native_sessions.append(session)

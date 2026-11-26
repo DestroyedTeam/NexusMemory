@@ -6,7 +6,7 @@ Nexus Memory migrates AI agent **Projects**, **Section Groups** (e.g. Codex `Des
 
 ---
 
-## 1. Supported Harnesses & Bidirectional Matrix (25 Harnesses / Lanes · 22 Full Bidirectional)
+## 1. Supported Harnesses & Bidirectional Matrix (25 Harnesses / Lanes · 23 Full Bidirectional)
 
 Run `nexus-memory matrix` for the machine-readable matrix (`E1` Docs → `E2` Schema Audit → `E3` Unit Fixtures → `E4` Real CLI / Isolated Runtime → `E5` Real User-Session Live Continuation):
 
@@ -31,10 +31,10 @@ Run `nexus-memory matrix` for the machine-readable matrix (`E1` Docs → `E2` Sc
 | **Goose** (`goose`) | `cli` | **E3** | Yes | Yes | **Yes** | `sessions/<id>.jsonl` header + turns + skills/extensions |
 | **Continue / Zed (Z Code / ACP)** (`continue`, `zed`) | `ide-ext` | **E3** | Yes | Yes | **Yes** | `continue` (`sessions/*.json`) + `zed` (`threads/*.json`) read/write |
 | **Aider** (`aider`) | `cli` | **E3** | Yes | Yes | **Yes** | `.aider.chat.history.md` markdown turns read + write |
-| **ChatGPT Export (ZIP / JSON)** (`chatgpt-export`) | `web-export` | **E3** | Yes | No | Read-only | Offline web export (no local writable store); full mapping DAG, fork points, interruptions, ZIP binary assets (SHA-256) |
-| **Codex App Snapshot** (`codex-app`) | `desktop` | **E3** | Yes | No | Read-only | Snapshot JSON export preserving sidebar Sections separately from Projects |
-| **Windsurf** (`windsurf`) | `ide-ext` | **E2** | No | No | Resources | Skills, `mcp_config.json`, `.windsurfrules` (Cascade history is proprietary) |
-| **Anthropic Hosted Cloud** (`claude-cloud-hosted`) | `hosted` | **E1** | No | No | Out of scope | Requires `claude.ai` account auth; explicitly excluded from API-key/3P gateway targets |
+| **ChatGPT Export (ZIP / JSON)** (`chatgpt-export`) | `web-export` | **E3** | Yes | No | Export archive | Offline web export (no local writable store); full mapping DAG, fork points, interruptions, ZIP binary assets (SHA-256) |
+| **Codex App** (`codex-app`) | `desktop` | **E5** | Yes | Yes | **Yes** | Full bidirectional read+write via shared `~/.codex` store & snapshot JSON preserving sidebar Sections separately from Projects |
+| **Windsurf** (`windsurf`) | `ide-ext` | **E3** | Yes | Yes | **Yes** | Bidirectional `~/.codeium/windsurf/cascade/<id>.json` (`windsurf.cascade.v1`) + Skills, `mcp_config.json`, `.windsurfrules` |
+| **Anthropic Hosted Cloud** (`claude-cloud-hosted`) | `hosted` | **E1** | No | No | Cloud-hosted | Requires `claude.ai` account auth; explicitly excluded from local API-key/3P gateway targets |
 
 > **Lossless Portable Archive (`--to portable`):** Every migration bundle also writes `portable.json` (v2 canonical DAG + hierarchy + SHA-256 `assets/` + sanitized `resources/`) and `HANDOFF_REPORT.md`, so nothing native-unsupported (sidebar sections, multi-branch forks, tool metadata, images) is ever silently dropped.
 
@@ -46,8 +46,8 @@ Run `nexus-memory matrix` for the machine-readable matrix (`E1` Docs → `E2` Sc
    - Filter a specific Codex sidebar section (`--section "Destruction Era"`) or project (`--project "..."`) directly from `~/.codex` (`state_5.sqlite` + `.jsonl.zst`) or a ChatGPT export ZIP, and project into `claude-code` or `claude-desktop-3p-all` (all 3 Claude Desktop 3P lanes staged cleanly without conflation).
 2. **Claude Code ↔ Codex Bidirectional Handoff:**
    - Move active coding sessions between Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` + merged `session_index.jsonl`) without triggering API `400 Invalid Params`.
-3. **Antigravity → Claude Code / Codex / Gemini CLI (Read-Only Export):**
-   - Safely extract a single Antigravity `transcript.jsonl` (never modifying `~/.gemini/antigravity`) and resume the exact context inside Claude Code or Codex.
+3. **Antigravity ↔ Claude Code / Codex / Gemini CLI Bidirectional Handoff:**
+   - Extract or write Antigravity `brain/<conv-id>/.system_generated/logs/transcript.jsonl` + `metadata.json` (with `0600` pre-apply backup & exact SHA-256 rollback) and resume the exact context across Harnesses.
 4. **Cross-CLI / IDE Portability (`OpenCode` / `Pi` / `Cursor` / `Cline` / `Goose` / `Continue` / `Zed` / `Aider` / `DSH`):**
    - Migrate sessions, Skills (copy-mode safe across macOS/Windows/Antigravity), and secret-stripped MCP server templates (`${ENV_VAR}`) across all supported tools.
 

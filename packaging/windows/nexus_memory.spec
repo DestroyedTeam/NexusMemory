@@ -14,7 +14,7 @@ from pathlib import Path
 REPO_ROOT = Path(SPECPATH).resolve().parents[1]
 
 a = Analysis(
-    [str(REPO_ROOT / "src" / "nexus_memory" / "desktop_ui.py")],
+    [str(REPO_ROOT / "packaging" / "windows" / "win_entry.py")],
     pathex=[str(REPO_ROOT / "src")],
     binaries=[],
     datas=[],

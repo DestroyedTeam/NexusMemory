@@ -40,12 +40,14 @@ from .harnesses_extended import (
     build_t3code_sessions,
     build_trae_sessions,
     build_warp_oz_sessions,
+    build_windsurf_sessions,
     build_workbuddy_sessions,
     parse_amp_thread,
     parse_kiro_session,
     parse_t3code_source,
     parse_trae_trajectory,
     parse_warp_oz_session,
+    parse_windsurf_session,
     parse_workbuddy_home,
     parse_workbuddy_session,
 )
@@ -1041,6 +1043,8 @@ def load_any_source(
         return [parse_trae_trajectory(p)], {}
     if fmt in {"warp-oz", "warp", "oz"}:
         return [parse_warp_oz_session(p)], {}
+    if fmt == "windsurf":
+        return [parse_windsurf_session(p)], {}
     if fmt == "opencode":
         return (parse_opencode_storage_dir(p, limit=limit) if p.is_dir() else [parse_opencode_session(p)]), {}
     if fmt == "pi":
@@ -1160,6 +1164,8 @@ def load_any_source(
             return [parse_trae_trajectory(p)], {}
         if schema.startswith("warp.oz.") or ("blocks" in raw and "working_directory" in raw):
             return [parse_warp_oz_session(p)], {}
+        if schema.startswith("windsurf.cascade.") or ("cascadeId" in raw and "steps" in raw):
+            return [parse_windsurf_session(p)], {}
         if "v" in raw and "env" in raw and "messages" in raw and str(raw.get("id", "")).startswith("T-"):
             return [parse_amp_thread(p)], {}
         if "conversation_id" in raw and ("history" in raw or "messages" in raw):

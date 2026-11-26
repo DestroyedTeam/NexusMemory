@@ -884,11 +884,12 @@ class NexusV1EndToEndTests(unittest.TestCase):
             "amp",
             "trae",
             "warp-oz",
+            "windsurf",
             "claude-desktop-3p-chat",
             "claude-desktop-3p-cowork",
             "claude-desktop-3p-code",
         ]
-        self.assertGreaterEqual(len(ring_targets), 22)
+        self.assertGreaterEqual(len(ring_targets), 23)
 
         with tempfile.TemporaryDirectory() as tmp:
             t = Path(tmp)
@@ -937,7 +938,7 @@ class NexusV1EndToEndTests(unittest.TestCase):
                     reloaded, _ = load_any_source(pi_f)
                 elif target == "aider":
                     reloaded, _ = load_any_source(troot / ".aider.chat.history.md")
-                elif target in {"gemini-cli", "continue", "zed", "amp", "trae", "warp-oz", "t3code"}:
+                elif target in {"gemini-cli", "continue", "zed", "amp", "trae", "warp-oz", "windsurf", "t3code"}:
                     jf = next(p for p in troot.rglob("*.json") if p.name != "projects.json")
                     reloaded, _ = load_any_source(jf)
                 elif target in {"goose", "kiro", "workbuddy"}:

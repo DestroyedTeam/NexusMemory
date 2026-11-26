@@ -63,21 +63,31 @@ jobs:
           python -m pip install --upgrade pip pyinstaller
           python -m PyInstaller --clean --noconfirm packaging/windows/nexus_memory.spec
           python -c @"
-          import json, subprocess, urllib.request
-          r1 = subprocess.run(['dist/NexusMemory.exe', '--self-test'], capture_output=True, text=True, timeout=30, check=True)
-          assert json.loads(r1.stdout)['self_test'] == 'ok'
-          r2 = subprocess.run(['dist/NexusMemory.exe', '--cli', 'matrix', '--from', 'codex-cli', '--to', 'antigravity'], capture_output=True, text=True, timeout=30, check=True)
-          assert json.loads(r2.stdout)['overall_mode'] == 'native_projection_plus_lossless_sidecar'
-          p = subprocess.Popen(['dist/NexusMemory.exe', '--server-only'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-          try:
-              info = json.loads(p.stdout.readline())
-              assert info['ready'] is True
-              with urllib.request.urlopen(info['url'] + 'api/health', timeout=10) as r:
-                  assert r.status == 200
-              print('WINDOWS_RELEASE_SMOKE_OK')
-          finally:
-              p.terminate()
-              p.wait(timeout=5)
+          import json, subprocess, tempfile, time, urllib.request
+          from pathlib import Path
+          with tempfile.TemporaryDirectory() as td:
+              t = Path(td)
+              st_out = t / 'selftest.json'
+              subprocess.run(['dist/NexusMemory.exe', '--self-test', '--out-file', str(st_out)], timeout=30, check=True)
+              assert json.loads(st_out.read_text(encoding='utf-8'))['self_test'] == 'ok'
+              mat_out = t / 'matrix.json'
+              subprocess.run(['dist/NexusMemory.exe', '--out-file', str(mat_out), '--cli', 'matrix', '--from', 'codex-cli', '--to', 'antigravity'], timeout=30, check=True)
+              assert json.loads(mat_out.read_text(encoding='utf-8'))['overall_mode'] == 'native_projection_plus_lossless_sidecar'
+              ready_f = t / 'ready.json'
+              p = subprocess.Popen(['dist/NexusMemory.exe', '--server-only', '--ready-file', str(ready_f)])
+              try:
+                  deadline = time.time() + 20
+                  while time.time() < deadline and not ready_f.is_file():
+                      time.sleep(0.2)
+                  assert ready_f.is_file(), 'Windows server failed to emit ready.json'
+                  info = json.loads(ready_f.read_text(encoding='utf-8'))
+                  assert info['ready'] is True
+                  with urllib.request.urlopen(info['url'] + 'api/health', timeout=10) as r:
+                      assert r.status == 200
+                  print('WINDOWS_RELEASE_SMOKE_OK')
+              finally:
+                  p.terminate()
+                  p.wait(timeout=5)
           "@
           New-Item -ItemType Directory -Force -Path release-assets | Out-Null
           Copy-Item "dist/NexusMemory.exe" "release-assets/NexusMemory-Windows-x64.exe"

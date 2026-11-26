@@ -312,6 +312,9 @@ def _plan_apply_operations(
         elif lane == "warp-oz":
             dst = ensure_within_root(target_root / "sessions" / Path(rel).name, target_root)
             ops.append((src, dst, "warp-oz-session"))
+        elif lane == "windsurf":
+            dst = ensure_within_root(target_root / "cascade" / Path(rel).name, target_root)
+            ops.append((src, dst, "windsurf-cascade"))
 
     # Companion index / registry files for codex & gemini-cli
     if lane == "codex":

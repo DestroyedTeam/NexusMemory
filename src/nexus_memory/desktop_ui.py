@@ -98,6 +98,7 @@ def _default_target_roots() -> dict[str, dict[str, str]]:
         "amp": (str(home / ".local" / "share" / "amp"), ""),
         "trae": (str(home / ".trae"), ""),
         "warp-oz": (str(home / ".warp"), ""),
+        "windsurf": (str(home / ".codeium" / "windsurf"), ""),
         "dsh": (str(home / ".dsh"), ""),
         "cline-roo": (str(home / ".cline"), ""),
         "goose": (str(home / ".local" / "share" / "goose"), ""),
@@ -658,12 +659,12 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
           <!-- TARGET ICON GRID (IDENTICAL VISUAL STYLE!) -->
           <div class="card-hd" style="margin-top:16px;margin-bottom:8px;">
             <div>
-              <div class="card-title"><span class="step-tag" style="background:var(--target-soft);color:var(--accent-2);">TO</span> 选择目标 Harness（22 款全双向 + 3P 全通道 + 无损归档）</div>
+              <div class="card-title"><span class="step-tag" style="background:var(--target-soft);color:var(--accent-2);">TO</span> 选择目标 Harness（23 款全双向 + 3P 全通道 + 无损归档）</div>
             </div>
             <div class="picker-toolbar">
               <div class="seg">
                 <button class="active" id="dst-filter-top" onclick="setDstFilter('popular', this)">主流常用</button>
-                <button id="dst-filter-all" onclick="setDstFilter('all', this)">全部 24 目标</button>
+                <button id="dst-filter-all" onclick="setDstFilter('all', this)">全部 25 目标</button>
               </div>
               <input type="text" class="mini-search" id="dst-search" placeholder="搜索目标…" oninput="renderTargetGrid()" />
             </div>
@@ -838,7 +839,7 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
           <div class="card-hd">
             <div>
               <div class="card-title">25 个 AI Harness / Lane 互转能力矩阵</div>
-              <div class="card-desc">20 个全双向 Read+Write + 4 个严格只读保护 + 完整实测证据等级（E3–E5）</div>
+              <div class="card-desc">全部 23 个本地 AI Harness 均已开放全双向 Read + Write（含 Codex / Antigravity / Cursor / Windsurf / Claude 3P / WorkBuddy / T3 Code）</div>
             </div>
             <input type="text" id="matrix-search" placeholder="搜索 Harness…" style="width:190px;height:32px;" oninput="renderMatrix()" />
           </div>
@@ -932,8 +933,9 @@ const HARNESS_CATALOG = [
   { id:"goose", discoverId:"goose", fmt:"goose", name:"Block Goose", sub:"Session JSONL", ev:"E3", read:true, write:true, pop:false, color:"linear-gradient(135deg,#64748B,#334155)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="#fff" stroke-width="2"/><path d="M12 12h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>` },
   { id:"continue", discoverId:"continue", fmt:"continue", name:"Continue IDE", sub:"Session JSON", ev:"E3", read:true, write:true, pop:false, color:"linear-gradient(135deg,#0EA5E9,#4F46E5)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M7 6l10 6-10 6V6z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>` },
   { id:"aider", discoverId:"aider", fmt:"aider", name:"Aider", sub:"Markdown History", ev:"E3", read:true, write:true, pop:false, color:"linear-gradient(135deg,#10B981,#047857)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 19L12 5l7 14M8.5 13.5h7" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-  { id:"chatgpt-export", discoverId:"", fmt:"chatgpt", name:"ChatGPT ZIP", sub:"只读导出包 · 含附件", ev:"E3", read:true, write:false, pop:true, color:"linear-gradient(135deg,#10A37F,#0D8A6B)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="#fff" stroke-width="2"/><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="1.6"/></svg>` },
+  { id:"chatgpt-export", discoverId:"", fmt:"chatgpt", name:"ChatGPT ZIP", sub:"离线导出包 · 含附件", ev:"E3", read:true, write:false, pop:true, color:"linear-gradient(135deg,#10A37F,#0D8A6B)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="#fff" stroke-width="2"/><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="1.6"/></svg>` },
   { id:"cursor", discoverId:"cursor", fmt:"cursor", name:"Cursor", sub:"全双向 state.vscdb", ev:"E4", read:true, write:true, pop:true, color:"linear-gradient(135deg,#475569,#1E293B)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 4l14 7-6 2-2 6L5 4z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>` },
+  { id:"windsurf", discoverId:"windsurf", fmt:"windsurf", name:"Windsurf", sub:"全双向 Cascade JSON", ev:"E3", read:true, write:true, pop:true, color:"linear-gradient(135deg,#06B6D4,#0891B2)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 16c3-6 7-10 14-11-2 6-5 10-10 13" stroke="#fff" stroke-width="2.1" stroke-linecap="round"/></svg>` },
   { id:"portable", discoverId:"", fmt:"portable", name:"无损通用归档", sub:"portable.json v2", ev:"E4", read:true, write:true, pop:true, color:"linear-gradient(135deg,#38BDF8,#818CF8)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4v10l-8 4-8-4V7z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>` }
 ];
 
@@ -1149,7 +1151,7 @@ function renderSourceGrid() {
     return `<button class="h-card ${h.id === state.srcId ? "sel-src" : ""}" onclick="selectSource('${h.id}')">
       <div class="h-icon" style="background:${h.color};">${h.svg}</div>
       <div class="h-body">
-        <div class="h-top"><span class="h-title">${esc(h.name)}</span><span class="h-dot ${dotCls}" title="${!h.write ? "只读保护" : (detected ? "本机已发现" : "可手动指定路径")}"></span></div>
+        <div class="h-top"><span class="h-title">${esc(h.name)}</span><span class="h-dot ${dotCls}" title="${!h.write ? "离线导出包" : (detected ? "本机已发现" : "可手动指定路径")}"></span></div>
         <div class="h-sub">${esc(sub)}</div>
       </div>
     </button>`;
@@ -1478,7 +1480,7 @@ async function loadDiscover() {
         <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-2);">${esc(h.root_path)}</td>
         <td style="font-variant-numeric:tabular-nums;">${h.session_file_count}</td>
         <td style="font-variant-numeric:tabular-nums;">${h.skill_count}</td>
-        <td style="display:flex;gap:6px;">${cat && h.detected ? `<button class="btn-ghost" style="height:26px;font-size:11px;" onclick="pickFromDiscover('${cat.id}','src')">设为来源</button>${cat.write ? `<button class="btn-ghost" style="height:26px;font-size:11px;" onclick="pickFromDiscover('${cat.id}','dst')">设为目标</button>` : ""}` : `<span style="color:var(--text-3);font-size:11px;">${h.detected ? "只读" : "未安装"}</span>`}</td>
+        <td style="display:flex;gap:6px;">${cat && h.detected ? `<button class="btn-ghost" style="height:26px;font-size:11px;" onclick="pickFromDiscover('${cat.id}','src')">设为来源</button>${cat.write ? `<button class="btn-ghost" style="height:26px;font-size:11px;" onclick="pickFromDiscover('${cat.id}','dst')">设为目标</button>` : ""}` : `<span style="color:var(--text-3);font-size:11px;">${h.detected ? "仅探测" : "未安装"}</span>`}</td>
       </tr>`;
     }).join("");
   } catch (e) { console.error(e); }
@@ -1506,7 +1508,7 @@ function renderMatrix() {
       <td><b>${esc(h.display_name)}</b><br/><span style="color:var(--text-3);font-size:11px;">${esc(h.id)}</span></td>
       <td><span class="badge ${h.evidence_level === "E5" ? "ok" : (h.evidence_level === "E4" ? "info" : "warn")}">${esc(h.evidence_level)}</span></td>
       <td>${h.read_supported ? "✓" : "—"}</td>
-      <td>${h.write_supported ? "✓" : "只读"}</td>
+      <td>${h.write_supported ? "✓" : (h.id === "claude-cloud-hosted" ? "云端托管" : "导出包")}</td>
       <td>${h.native_branch_dag ? "<b style='color:var(--accent)'>原生 DAG</b>" : "拆分+侧车"}</td>
       <td style="font-size:11.5px;color:var(--text-2);max-width:260px;">${esc(h.notes || "")}</td>
     </tr>
@@ -1718,26 +1720,58 @@ def _open_standalone_window(url: str) -> None:
     webbrowser.open(url)
 
 
+def _safe_emit(text: str, *, out_file: str | None = None) -> None:
+    """Safely emit output even in Windows GUI (`console=False`) mode where `sys.stdout` can be None."""
+    if out_file:
+        Path(out_file).expanduser().write_text(text + "\n", encoding="utf-8")
+    if sys.stdout is not None:
+        try:
+            print(text, flush=True)
+        except OSError:
+            pass
+
+
+def _pop_flag_value(args: list[str], flag: str) -> str | None:
+    if flag in args:
+        idx = args.index(flag)
+        if idx + 1 < len(args):
+            val = args[idx + 1]
+            del args[idx : idx + 2]
+            return val
+    return None
+
+
 def launch_desktop(argv: list[str] | None = None) -> int:
-    """Unified entrypoint for `--server-only` (used by native macOS Swift WKWebView host) or standalone GUI."""
+    """Unified entrypoint for `--server-only` (macOS Swift WKWebView host) or standalone GUI (Windows .exe)."""
     args = list(sys.argv[1:] if argv is None else argv)
+    out_file = _pop_flag_value(args, "--out-file")
+    ready_file = _pop_flag_value(args, "--ready-file")
+
     if args and args[0] == "--self-test":
-        print(json.dumps({"app": "Nexus Memory Desktop", "version": __version__, "self_test": "ok"}, ensure_ascii=False))
+        payload = json.dumps({"app": "Nexus Memory Desktop", "version": __version__, "self_test": "ok"}, ensure_ascii=False)
+        _safe_emit(payload, out_file=out_file)
         return 0
     if args and args[0] == "--cli":
+        import contextlib
+        import io
         from .cli import main as cli_main
+
+        if out_file or sys.stdout is None:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = cli_main(args[1:])
+            _safe_emit(buf.getvalue().rstrip("\n"), out_file=out_file)
+            return rc
         return cli_main(args[1:])
 
     server_only = "--server-only" in args
-    port = 0
-    if "--port" in args:
-        idx = args.index("--port")
-        if idx + 1 < len(args):
-            port = int(args[idx + 1])
+    port_str = _pop_flag_value(args, "--port")
+    port = int(port_str) if port_str else 0
 
     srv, url, _ = start_desktop_server(port=port)
     if server_only:
-        print(json.dumps({"ready": True, "url": url, "version": __version__}), flush=True)
+        ready_json = json.dumps({"ready": True, "url": url, "version": __version__}, ensure_ascii=False)
+        _safe_emit(ready_json, out_file=ready_file or out_file)
         try:
             srv.serve_forever()
         except KeyboardInterrupt:
@@ -1748,7 +1782,7 @@ def launch_desktop(argv: list[str] | None = None) -> int:
 
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     _open_standalone_window(url)
-    print(f"Nexus Memory Desktop running at {url} (Press Ctrl+C to quit)")
+    _safe_emit(f"Nexus Memory Desktop running at {url} (Press Ctrl+C to quit)")
     try:
         threading.Event().wait()
     except KeyboardInterrupt:

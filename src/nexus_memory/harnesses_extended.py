@@ -562,3 +562,40 @@ def build_warp_oz_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tupl
     if len(paths) > 1:
         losses.append({"feature": "branch_topology", "disposition": "one_warp_oz_session_per_leaf_path; exact graph in portable.json"})
     return sessions, losses
+
+
+# ── 7. Windsurf Cascade (`~/.codeium/windsurf/cascade/<id>.json`) ────────────
+
+
+def parse_windsurf_session(path: str | Path) -> ConversationGraph:
+    p = Path(path).expanduser()
+    data = json.loads(p.read_text(encoding="utf-8-sig"))
+    sid = str(data.get("cascadeId") or data.get("id") or p.stem)
+    raw_items: list[dict[str, Any]] = []
+    for idx, step in enumerate(data.get("steps", data.get("messages", []))):
+        if not isinstance(step, dict):
+            continue
+        role = str(step.get("role") or ("user" if step.get("type") == "user_input" else "assistant"))
+        c = step.get("content", step.get("text", ""))
+        raw_items.append({"node_id": str(step.get("id") or f"ws-{idx}"), "role": role, "text": content_text(c), "timestamp": step.get("timestamp"), "content": c, "raw_record": step})
+    nodes, roots, active = _chain(raw_items)
+    return ConversationGraph(source_format="windsurf_cascade", source_id=sid, title=str(data.get("title") or sid), workspace=data.get("workspace") or data.get("cwd"), nodes=nodes, root_ids=roots, active_node_id=active, metadata={"source_file": p.name}, raw_source=data, links=_links(nodes), app_mode="ide-extension")
+
+
+def build_windsurf_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    sessions: list[dict[str, Any]] = []
+    losses: list[dict[str, Any]] = []
+    paths = graph.branch_paths()
+    resolved_cwd = str(Path(graph.workspace or cwd).expanduser().resolve())
+    now_iso = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    for branch_index, path in enumerate(paths, 1):
+        turns, _, _ = _coalesce_alternating_turns(path)
+        sid = f"ws-{uuid.uuid4().hex[:12]}"
+        title = graph.title or f"Imported {graph.source_format} {graph.source_id}"
+        steps = [{"id": str(uuid.uuid4()), "type": "user_input" if t["role"] == "user" else "planner_response", "role": t["role"], "text": "\n\n".join(t["texts"]), "timestamp": t["timestamp"] if isinstance(t["timestamp"], str) else now_iso} for t in turns]
+        source_node_ids = [nid for t in turns for nid in t["source_node_ids"]]
+        payload = {"schema": "windsurf.cascade.v1", "cascadeId": sid, "title": title, "workspace": resolved_cwd, "steps": steps}
+        sessions.append({"session_id": sid, "branch_index": branch_index, "title": title, "cwd": resolved_cwd, "source_node_ids": source_node_ids, "payload": payload})
+    if len(paths) > 1:
+        losses.append({"feature": "branch_topology", "disposition": "one_windsurf_cascade_per_leaf_path; exact graph in portable.json"})
+    return sessions, losses

@@ -280,6 +280,7 @@ def make_viewer_handler(bundle_dir: str | Path) -> type[BaseHTTPRequestHandler]:
                 f"</a>"
             )
 
+        items_str = "".join(items_html) or "<div class='empty-state'>无会话</div>"
         right_html = _render_conversation_turns(active_conv) if active_conv else "<div class='empty-state'>当前迁移包中暂无会话记录。</div>"
         return (
             f"<div class='stats'>"
@@ -290,7 +291,7 @@ def make_viewer_handler(bundle_dir: str | Path) -> type[BaseHTTPRequestHandler]:
             f"</div>"
             f"<div class='split'>"
             f"<aside class='pane'><div class='pane-hd'><span>会话列表（点击切换）</span><span class='badge'>{len(convs)}</span></div>"
-            f"<div class='sess-list'>{''.join(items_html) or '<div class=\"empty-state\">无会话</div>'}</div></aside>"
+            f"<div class='sess-list'>{items_str}</div></aside>"
             f"<section class='pane'><div class='conv-pane'>{right_html}</div></section>"
             f"</div>"
         )

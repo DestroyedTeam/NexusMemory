@@ -1,6 +1,6 @@
 ---
 name: nexus-memory
-description: Deterministic, zero-AI-guesswork migration of AI agent Projects, Section Groups, Session DAGs, attachments, Skills, and secret-stripped MCP configs across Harnesses (ChatGPT, Codex, Claude Code CLI, Claude Desktop 3P Chat/Cowork/Code, OpenCode, Cursor, DSH, Cline/Roo, Gemini CLI, Antigravity, Pi, Goose, Aider, Continue, Zed).
+description: Deterministic, zero-AI-guesswork migration of AI agent Projects, Section Groups, Session DAGs, attachments, Skills, and secret-stripped MCP configs across Harnesses (ChatGPT, Codex, Claude Code CLI, Claude Desktop 3P Chat/Cowork/Code, OpenCode, Cursor, Windsurf, DSH, Cline/Roo, Gemini CLI, Antigravity, Pi, Goose, Aider, Continue, Zed, WorkBuddy, T3 Code, Kiro, Amp, Trae, Warp/Oz).
 ---
 
 # Nexus Memory Agent Skill
@@ -67,4 +67,4 @@ scripts/run_nexus.sh viewer /tmp/destruction-era-3p-bundle --port 8765
 - `claude-desktop-3p-cowork`: Claude Desktop 3P Cowork lane
 - `claude-desktop-3p-code`: Claude Desktop 3P Code lane (dual-key staged index + transcript)
 - `claude-desktop-3p-all`: Stage all three Claude Desktop 3P lanes separately in one bundle
-- `codex`, `antigravity`, `cursor`, `opencode`, `pi` (native multi-branch DAG), `dsh` (V4), `gemini-cli`, `cline-roo`, `goose`, `continue`, `zed`, `aider`, `workbuddy`, `t3code`, `kiro`, `amp`, `trae`, `warp-oz`, `portable` (lossless canonical v2 archive)
+- `codex`, `antigravity`, `cursor`, `windsurf`, `opencode`, `pi` (native multi-branch DAG), `dsh` (V4), `gemini-cli`, `cline-roo`, `goose`, `continue`, `zed`, `aider`, `workbuddy`, `t3code`, `kiro`, `amp`, `trae`, `warp-oz`, `portable` (lossless canonical v2 archive)
