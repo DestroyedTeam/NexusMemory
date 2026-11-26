@@ -1266,7 +1266,8 @@ class NexusV1EndToEndTests(unittest.TestCase):
             sconn = sqlite3.connect(t3_home / "userdata" / "statev2.sqlite")
             try:
                 proj_roots = {r[0] for r in sconn.execute("SELECT workspace_root FROM projection_projects")}
-                self.assertEqual(proj_roots, {"/Users/dev/AlphaProj", "/Users/dev/BetaProj"})
+                expected_roots = {str(Path("/Users/dev/AlphaProj").resolve()), str(Path("/Users/dev/BetaProj").resolve())}
+                self.assertEqual(proj_roots, expected_roots)
 
                 by_title = {}
                 for title, tid, pjson in sconn.execute(
