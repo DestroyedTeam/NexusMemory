@@ -1,6 +1,6 @@
 [project]
 name = "nexus-memory"
-version = "1.0.0"
+version = "0.0.1"
 description = "Local-first, deterministic, loss-aware portability across AI agent Harnesses (Projects, Section Groups, Session DAGs, Assets, Skills, and sanitized MCP configs)"
 readme = "README.md"
 requires-python = ">=3.11"

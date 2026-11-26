@@ -588,18 +588,20 @@ class NexusV1EndToEndTests(unittest.TestCase):
         # CLI matrix exit 0
         self.assertEqual(cli_main(["matrix", "--from", "chatgpt-export", "--to", "claude-code"]), 0)
 
+        from nexus_memory import __version__ as expected_version
+
         # Agent Skill wrapper smoke test
         skill_script = REPO_ROOT / "skills/nexus-memory/scripts/run_nexus.sh"
         self.assertTrue((REPO_ROOT / "skills/nexus-memory/SKILL.md").is_file())
         if sys.platform != "win32":
             proc = subprocess.run([str(skill_script), "--version"], capture_output=True, text=True, check=False)
             self.assertEqual(proc.returncode, 0, proc.stderr)
-            self.assertIn("1.0.0", proc.stdout)
+            self.assertIn(expected_version, proc.stdout)
         else:
             env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")}
             proc = subprocess.run([sys.executable, "-m", "nexus_memory", "--version"], env=env, capture_output=True, text=True, check=False)
             self.assertEqual(proc.returncode, 0, proc.stderr)
-            self.assertIn("1.0.0", proc.stdout)
+            self.assertIn(expected_version, proc.stdout)
 
         # macOS .app bundle smoke test (built in dist/Nexus Memory.app)
         app_bin = REPO_ROOT / "dist/Nexus Memory.app/Contents/MacOS/nexus-memory-app"
@@ -608,7 +610,7 @@ class NexusV1EndToEndTests(unittest.TestCase):
             self.assertEqual(ap.returncode, 0, ap.stderr)
             info = json.loads(ap.stdout)
             self.assertEqual(info["self_test"], "ok")
-            self.assertEqual(info["version"], "1.0.0")
+            self.assertEqual(info["version"], expected_version)
 
     def test_anti_invalid_params_claude_coalescing_and_codex_tool_pairing(self) -> None:
         # Build a deliberately hostile conversation: leading assistant, consecutive assistant/user turns,

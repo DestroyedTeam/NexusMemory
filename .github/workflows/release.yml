@@ -1,4 +1,4 @@
-name: Release (macOS .app + Windows .exe + Agent Skill)
+name: Release (macOS .app + Windows .exe + Debian .deb + Agent Skill)
 
 on:
   push:
@@ -100,6 +100,30 @@ jobs:
           name: windows-bundle
           path: release-assets/*
 
+  build-deb:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build & verify universal Debian/Ubuntu .deb package
+        run: |
+          python packaging/linux/build_deb.py
+          mkdir -p release-assets
+          DEB=$(ls dist/nexus-memory_*_all.deb)
+          dpkg-deb --info "$DEB"
+          sudo dpkg -i "$DEB"
+          nexus-memory --version
+          nexus-memory-desktop --self-test
+          cp "$DEB" release-assets/
+          (cd release-assets && sha256sum nexus-memory_*_all.deb > SHA256SUMS-linux.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb-bundle
+          path: release-assets/*
+
   build-skill:
     needs: verify
     runs-on: ubuntu-latest
@@ -120,7 +144,7 @@ jobs:
           path: release-assets/*
 
   publish:
-    needs: [build-macos, build-windows, build-skill]
+    needs: [build-macos, build-windows, build-deb, build-skill]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -141,5 +165,6 @@ jobs:
             artifacts/Nexus-Memory-macOS-arm64.zip
             artifacts/NexusMemory-Windows-x64.exe
             artifacts/NexusMemory-Windows-x64.zip
+            artifacts/nexus-memory_*_all.deb
             artifacts/nexus-memory-skill.zip
             artifacts/SHA256SUMS.txt

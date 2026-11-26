@@ -33,10 +33,44 @@ jobs:
       - name: Compile check (warnings as errors)
         run: python -W error -m compileall -q src tests
 
-      - name: Run full 22-Harness test suite
+      - name: Run full 23-Harness test suite
         env:
           PYTHONPATH: src
         run: python -m pytest -q -p no:cacheprovider tests
+
+      - name: Build & install-test universal Debian .deb package
+        if: runner.os == 'Linux' && matrix.python-version == '3.12'
+        run: |
+          python packaging/linux/build_deb.py
+          DEB=$(ls dist/nexus-memory_*_all.deb)
+          dpkg-deb --info "$DEB"
+          dpkg-deb --contents "$DEB"
+          sudo dpkg -i "$DEB"
+          nexus-memory --version
+          nexus-memory matrix --from codex-cli --to antigravity
+          nexus-memory-desktop --self-test
+          python -c '
+          import json, subprocess, tempfile, time, urllib.request
+          from pathlib import Path
+          with tempfile.TemporaryDirectory() as td:
+              ready_f = Path(td) / "ready.json"
+              p = subprocess.Popen(["nexus-memory-desktop", "--server-only", "--ready-file", str(ready_f)])
+              try:
+                  deadline = time.time() + 15
+                  while time.time() < deadline and not ready_f.is_file():
+                      time.sleep(0.2)
+                  assert ready_f.is_file(), "Debian server failed to emit ready.json"
+                  info = json.loads(ready_f.read_text(encoding="utf-8"))
+                  assert info["ready"] is True, info
+                  with urllib.request.urlopen(info["url"] + "api/health", timeout=10) as r:
+                      assert r.status == 200 and json.loads(r.read().decode("utf-8"))["ok"] is True
+                  with urllib.request.urlopen(info["url"], timeout=10) as r:
+                      assert r.status == 200 and "Nexus Memory" in r.read().decode("utf-8")
+                  print("DEBIAN_DEB_LIVE_UI_SERVER_OK:", info["url"])
+              finally:
+                  p.terminate()
+                  p.wait(timeout=5)
+          '
 
       - name: Build & verify native macOS Nexus Memory.app
         if: runner.os == 'macOS' && matrix.python-version == '3.12'

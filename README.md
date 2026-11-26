@@ -114,17 +114,23 @@ PYTHONPATH=src python3 -m nexus_memory viewer /tmp/de-bundle --port 8765
 
 Copy [skills/nexus-memory/](skills/nexus-memory/) (`SKILL.md` + `scripts/run_nexus.sh`) into `~/.claude/skills/nexus-memory`, `~/.codex/skills/nexus-memory`, or `~/.agents/skills/nexus-memory` (copy mode).
 
-### C. macOS App (`dist/Nexus Memory.app`) & Windows `.exe` (`packaging/windows/`)
+### C. macOS `.app`, Windows `.exe`, & Debian/Ubuntu `.deb`
 
 ```bash
-# Rebuild & verify macOS app bundle (ad-hoc signed, bundles src/nexus_memory)
+# macOS: Rebuild & verify native app bundle (ad-hoc signed, bundles src/nexus_memory)
 python3 packaging/macos/build_macos_app.py
 codesign --verify --deep --strict "dist/Nexus Memory.app"
 "dist/Nexus Memory.app/Contents/MacOS/nexus-memory-app" --self-test
 open "dist/Nexus Memory.app"
+
+# Linux (Debian 12/13, Ubuntu, etc. — universal amd64/arm64 .deb)
+python3 packaging/linux/build_deb.py
+sudo apt install ./dist/nexus-memory_0.0.1_all.deb
+nexus-memory --version
+nexus-memory-desktop
 ```
 
-Windows standalone `.exe` packaging specs live in [packaging/windows/nexus_memory.spec](packaging/windows/nexus_memory.spec) and [packaging/windows/build_windows.ps1](packaging/windows/build_windows.ps1) *(native `.exe` build/execution requires a Windows host)*.
+Windows standalone `.exe` packaging specs live in [packaging/windows/nexus_memory.spec](packaging/windows/nexus_memory.spec) and [packaging/windows/build_windows.ps1](packaging/windows/build_windows.ps1), with prebuilt binaries published on GitHub Releases.
 
 ---
 

@@ -414,13 +414,17 @@ def build_macos_app(repo_root: Path, out_dir: Path, *, adhoc_sign: bool = True) 
         bin_path.write_text(bin_script, encoding="utf-8")
     bin_path.chmod(bin_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
+    # Read canonical version from src/nexus_memory/__init__.py
+    sys.path.insert(0, str(repo_root / "src"))
+    from nexus_memory import __version__ as app_version
+
     # 5. Write Info.plist
     plist_data = {
         "CFBundleName": "Nexus Memory",
         "CFBundleDisplayName": "Nexus Memory",
         "CFBundleIdentifier": "io.nexusmemory.desktop",
-        "CFBundleVersion": "1.0.0",
-        "CFBundleShortVersionString": "1.0.0",
+        "CFBundleVersion": app_version,
+        "CFBundleShortVersionString": app_version,
         "CFBundlePackageType": "APPL",
         "CFBundleExecutable": "nexus-memory-app",
         "LSMinimumSystemVersion": "13.0",

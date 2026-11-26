@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1706,7 +1707,7 @@ def start_desktop_server(port: int = 0) -> tuple[ThreadingHTTPServer, str, str]:
 
 
 def _open_standalone_window(url: str) -> None:
-    """Open URL in chromeless app mode (Edge/Chrome `--app=`) on Windows/Linux, else system browser."""
+    """Open URL in chromeless app mode (Edge/Chrome/Chromium `--app=`) on Windows/Linux, else system browser."""
     if sys.platform == "win32":
         candidates = [
             Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Microsoft/Edge/Application/msedge.exe",
@@ -1716,6 +1717,16 @@ def _open_standalone_window(url: str) -> None:
         for exe in candidates:
             if exe.is_file():
                 subprocess.Popen([str(exe), f"--app={url}", "--window-size=1260,820"])
+                return
+    elif sys.platform.startswith("linux"):
+        for browser in ("chromium", "chromium-browser", "google-chrome", "microsoft-edge", "brave-browser"):
+            found = shutil.which(browser)
+            if found:
+                subprocess.Popen(
+                    [found, f"--app={url}", "--window-size=1260,820"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
                 return
     webbrowser.open(url)
 
