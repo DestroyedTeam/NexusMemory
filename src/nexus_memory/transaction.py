@@ -97,8 +97,8 @@ def verify_bundle(bundle_dir: str | Path) -> dict[str, Any]:
             except json.JSONDecodeError as exc:
                 errors.append(f"corrupt JSON in {rel}: {exc.msg}")
 
-        # Verify companion sidecar / index / split files if present
-        for extra_key in ("sidecar_relative_path", "index_relative_path"):
+        # Verify companion sidecar / index / UI files if present
+        for extra_key in ("sidecar_relative_path", "index_relative_path", "ui_messages_relative_path"):
             extra_rel = sess.get(extra_key)
             if extra_rel:
                 try:
@@ -265,6 +265,8 @@ def _plan_apply_operations(
             else:
                 dst = ensure_within_root(target_root / "storage" / "session" / Path(rel).name, target_root)
                 ops.append((src, dst, "opencode-session"))
+            db_dst = ensure_within_root(target_root / "opencode.db", target_root)
+            ops.append((src, db_dst, "opencode-db-merge"))
         elif lane == "pi":
             parts = Path(rel).parts
             project_key = parts[1] if len(parts) >= 2 else "default"
@@ -281,15 +283,28 @@ def _plan_apply_operations(
             sid = sess.get("session_id") or Path(rel).parent.name
             dst = ensure_within_root(target_root / "tasks" / sid / "api_conversation_history.json", target_root)
             ops.append((src, dst, "cline-roo-task"))
+            data_api_dst = ensure_within_root(target_root / "data" / "tasks" / sid / "api_conversation_history.json", target_root)
+            ops.append((src, data_api_dst, "cline-roo-task"))
+            ui_rel = sess.get("ui_messages_relative_path")
+            if ui_rel:
+                ui_src = ensure_within_root(bundle_root / ui_rel, bundle_root)
+                data_ui_dst = ensure_within_root(target_root / "data" / "tasks" / sid / "ui_messages.json", target_root)
+                ops.append((ui_src, data_ui_dst, "cline-ui-messages"))
+            db_dst = ensure_within_root(target_root / "data" / "db" / "sessions.db", target_root)
+            ops.append((src, db_dst, "cline-db-merge"))
         elif lane == "goose":
             dst = ensure_within_root(target_root / "sessions" / Path(rel).name, target_root)
             ops.append((src, dst, "goose-session"))
+            db_dst = ensure_within_root(target_root / "sessions" / "sessions.db", target_root)
+            ops.append((src, db_dst, "goose-db-merge"))
         elif lane == "continue":
             dst = ensure_within_root(target_root / "sessions" / Path(rel).name, target_root)
             ops.append((src, dst, "continue-session"))
         elif lane == "zed":
             dst = ensure_within_root(target_root / "threads" / Path(rel).name, target_root)
             ops.append((src, dst, "zed-thread"))
+            db_dst = ensure_within_root(target_root / "threads" / "threads.db", target_root)
+            ops.append((src, db_dst, "zed-threads-db-merge"))
         elif lane == "aider":
             total_aider = len(manifest.get("target_sessions", []))
             fname = ".aider.chat.history.md" if total_aider == 1 else f".aider.chat.history.{sess.get('session_id', 'imported')}.md"
@@ -310,6 +325,8 @@ def _plan_apply_operations(
         elif lane == "kiro":
             dst = ensure_within_root(target_root / "sessions" / "cli" / Path(rel).name, target_root)
             ops.append((src, dst, "kiro-session"))
+            db_dst = ensure_within_root(target_root / "data.sqlite3", target_root)
+            ops.append((src, db_dst, "kiro-db-merge"))
         elif lane == "amp":
             dst = ensure_within_root(target_root / "threads" / Path(rel).name, target_root)
             ops.append((src, dst, "amp-thread"))
@@ -323,11 +340,15 @@ def _plan_apply_operations(
             dst = ensure_within_root(target_root / "cascade" / Path(rel).name, target_root)
             ops.append((src, dst, "windsurf-cascade"))
 
-    # Companion index / registry files for codex & gemini-cli
+    # Companion index / registry files for codex, continue, & gemini-cli
     if lane == "codex":
         codex_idx = bundle_root / "codex_sessions" / "session_index.jsonl"
         if codex_idx.is_file():
             ops.append((codex_idx, ensure_within_root(target_root / "session_index.jsonl", target_root), "codex-session-index-merge"))
+    elif lane == "continue":
+        cont_idx = bundle_root / "continue_sessions" / "sessions.json"
+        if cont_idx.is_file():
+            ops.append((cont_idx, ensure_within_root(target_root / "sessions" / "sessions.json", target_root), "continue-sessions-index-merge"))
     elif lane == "gemini-cli":
         g_tmp = bundle_root / "gemini_sessions" / "tmp"
         if g_tmp.is_dir():
@@ -357,7 +378,7 @@ def _expand_sqlite_companions(paths: list[Path], root: Path) -> list[Path]:
     for p in paths:
         for cand in (
             [p, p.with_name(p.name + "-wal"), p.with_name(p.name + "-shm")]
-            if p.suffix in {".sqlite", ".db", ".vscdb"}
+            if p.suffix in {".sqlite", ".sqlite3", ".db", ".vscdb"}
             else [p]
         ):
             try:
@@ -448,7 +469,19 @@ def apply_bundle(
         final_dst = dst
         action = "create"
         if dst.exists():
-            if kind in {"codex-session-index-merge", "gemini-projects-merge", "cursor-vscdb-merge", "t3code-statev2-merge", "workbuddy-db-merge"}:
+            if kind in {
+                "codex-session-index-merge",
+                "continue-sessions-index-merge",
+                "gemini-projects-merge",
+                "cursor-vscdb-merge",
+                "t3code-statev2-merge",
+                "workbuddy-db-merge",
+                "opencode-db-merge",
+                "goose-db-merge",
+                "cline-db-merge",
+                "zed-threads-db-merge",
+                "kiro-db-merge",
+            }:
                 action = "merge_existing"
             elif kind == "gemini-project-root":
                 action = "skip_existing"
@@ -550,14 +583,119 @@ def apply_bundle(
 
     t3_groups: dict[str, list[dict[str, Any]]] = {}
     wb_groups: dict[str, list[dict[str, Any]]] = {}
+    oc_groups: dict[str, list[dict[str, Any]]] = {}
+    goose_groups: dict[str, list[dict[str, Any]]] = {}
+    cline_groups: dict[str, list[dict[str, Any]]] = {}
+    zed_groups: dict[str, list[dict[str, Any]]] = {}
+    kiro_groups: dict[str, list[dict[str, Any]]] = {}
     other_ops: list[dict[str, Any]] = []
     for op in active_ops:
-        if op["kind"] == "t3code-statev2-merge":
+        k = op["kind"]
+        if k == "t3code-statev2-merge":
             t3_groups.setdefault(str(op["dst"]), []).append(op)
-        elif op["kind"] == "workbuddy-db-merge":
+        elif k == "workbuddy-db-merge":
             wb_groups.setdefault(str(op["dst"]), []).append(op)
+        elif k == "opencode-db-merge":
+            oc_groups.setdefault(str(op["dst"]), []).append(op)
+        elif k == "goose-db-merge":
+            goose_groups.setdefault(str(op["dst"]), []).append(op)
+        elif k == "cline-db-merge":
+            cline_groups.setdefault(str(op["dst"]), []).append(op)
+        elif k == "zed-threads-db-merge":
+            zed_groups.setdefault(str(op["dst"]), []).append(op)
+        elif k == "kiro-db-merge":
+            kiro_groups.setdefault(str(op["dst"]), []).append(op)
         else:
             other_ops.append(op)
+
+    # Execute other_ops before DB merges that reference task paths (e.g. cline-db-merge)
+    for op in other_ops:
+        src = Path(op["src"])
+        dst = Path(op["dst"])
+        if op["action"] == "merge_existing" and op["kind"] == "codex-session-index-merge":
+            existing_lines = [l for l in dst.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
+            existing_ids: set[str] = set()
+            for ln in existing_lines:
+                try:
+                    obj = json.loads(ln)
+                    if isinstance(obj, dict) and obj.get("id"):
+                        existing_ids.add(str(obj["id"]))
+                except json.JSONDecodeError:
+                    continue
+            new_lines = list(existing_lines)
+            for ln in src.read_text(encoding="utf-8").splitlines():
+                if not ln.strip():
+                    continue
+                try:
+                    obj = json.loads(ln)
+                    if isinstance(obj, dict) and str(obj.get("id") or "") not in existing_ids:
+                        new_lines.append(ln.strip())
+                except json.JSONDecodeError:
+                    continue
+            atomic_write_bytes(dst, ("\n".join(new_lines) + "\n").encode("utf-8"), mode=0o600)
+        elif op["action"] == "merge_existing" and op["kind"] == "continue-sessions-index-merge":
+            try:
+                cur_arr = json.loads(dst.read_text(encoding="utf-8-sig"))
+                if not isinstance(cur_arr, list):
+                    cur_arr = []
+            except (json.JSONDecodeError, OSError):
+                cur_arr = []
+            add_arr = json.loads(src.read_text(encoding="utf-8-sig"))
+            seen_cids = {str(item.get("sessionId")) for item in cur_arr if isinstance(item, dict) and item.get("sessionId")}
+            merged_arr = list(cur_arr)
+            for item in add_arr if isinstance(add_arr, list) else []:
+                if isinstance(item, dict) and str(item.get("sessionId") or "") not in seen_cids:
+                    merged_arr.append(item)
+                    if item.get("sessionId"):
+                        seen_cids.add(str(item["sessionId"]))
+            atomic_write_json(dst, merged_arr, mode=0o600)
+        elif op["kind"] == "cursor-vscdb-merge":
+            payload = json.loads(src.read_text(encoding="utf-8-sig"))
+            ensure_private_dir(dst.parent)
+            conn = sqlite3.connect(dst)
+            try:
+                conn.execute("CREATE TABLE IF NOT EXISTS cursorDiskKV (key TEXT PRIMARY KEY, value TEXT)")
+                ckey = str(payload["composer_key"])
+                existing = conn.execute("SELECT 1 FROM cursorDiskKV WHERE key = ?", (ckey,)).fetchone()
+                if existing and on_collision == "refuse":
+                    raise FileExistsError(f"cursor composer key already exists in state.vscdb: {ckey}")
+                if not existing or on_collision != "skip":
+                    conn.execute(
+                        "INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)",
+                        (ckey, json.dumps(payload["composer"], ensure_ascii=False)),
+                    )
+                    for bkey, bval in (payload.get("bubbles") or {}).items():
+                        conn.execute(
+                            "INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)",
+                            (str(bkey), json.dumps(bval, ensure_ascii=False)),
+                        )
+                conn.commit()
+            finally:
+                conn.close()
+            try:
+                dst.chmod(0o600)
+            except OSError:
+                pass
+        elif op["action"] == "merge_existing" and op["kind"] == "gemini-projects-merge":
+            try:
+                cur_obj = json.loads(dst.read_text(encoding="utf-8-sig"))
+                if not isinstance(cur_obj, dict):
+                    cur_obj = {"projects": {}}
+            except (json.JSONDecodeError, OSError):
+                cur_obj = {"projects": {}}
+            add_obj = json.loads(src.read_text(encoding="utf-8-sig"))
+            projs = dict(cur_obj.get("projects") or {})
+            for k, v in (add_obj.get("projects") or {}).items():
+                projs.setdefault(k, v)
+            cur_obj["projects"] = projs
+            atomic_write_json(dst, cur_obj, mode=0o600)
+        else:
+            data = src.read_bytes()
+            atomic_write_bytes(dst, data, mode=0o600)
+        written_files.append({**op, "written_sha256": hashlib.sha256(dst.read_bytes()).hexdigest()})
+        done_ops += 1
+        if on_progress is not None:
+            on_progress("apply", done_ops, max(total_ops, 1), dst.name)
 
     # Batch-merge T3 Code threads per statev2.sqlite (single SQLite transaction, parent-before-child ordering)
     if t3_groups:
@@ -610,77 +748,118 @@ def apply_bundle(
             if on_progress is not None:
                 on_progress("apply", done_ops, max(total_ops, 1), dst.name)
 
-    for op in other_ops:
-        src = Path(op["src"])
-        dst = Path(op["dst"])
-        if op["action"] == "merge_existing" and op["kind"] == "codex-session-index-merge":
-            existing_lines = [l for l in dst.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
-            existing_ids: set[str] = set()
-            for ln in existing_lines:
-                try:
-                    obj = json.loads(ln)
-                    if isinstance(obj, dict) and obj.get("id"):
-                        existing_ids.add(str(obj["id"]))
-                except json.JSONDecodeError:
-                    continue
-            new_lines = list(existing_lines)
-            for ln in src.read_text(encoding="utf-8").splitlines():
-                if not ln.strip():
-                    continue
-                try:
-                    obj = json.loads(ln)
-                    if isinstance(obj, dict) and str(obj.get("id") or "") not in existing_ids:
-                        new_lines.append(ln.strip())
-                except json.JSONDecodeError:
-                    continue
-            atomic_write_bytes(dst, ("\n".join(new_lines) + "\n").encode("utf-8"), mode=0o600)
-        elif op["kind"] == "cursor-vscdb-merge":
-            payload = json.loads(src.read_text(encoding="utf-8-sig"))
+    # Batch-merge OpenCode sessions into opencode.db (v2.4 session_v2 + v1 compatible)
+    if oc_groups:
+        from .ecosystem import merge_opencode_sessions_batch
+
+        for dst_str, group_ops in oc_groups.items():
+            dst = Path(dst_str)
             ensure_private_dir(dst.parent)
-            conn = sqlite3.connect(dst)
-            try:
-                conn.execute("CREATE TABLE IF NOT EXISTS cursorDiskKV (key TEXT PRIMARY KEY, value TEXT)")
-                ckey = str(payload["composer_key"])
-                existing = conn.execute("SELECT 1 FROM cursorDiskKV WHERE key = ?", (ckey,)).fetchone()
-                if existing and on_collision == "refuse":
-                    raise FileExistsError(f"cursor composer key already exists in state.vscdb: {ckey}")
-                if not existing or on_collision != "skip":
-                    conn.execute(
-                        "INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)",
-                        (ckey, json.dumps(payload["composer"], ensure_ascii=False)),
-                    )
-                    for bkey, bval in (payload.get("bubbles") or {}).items():
-                        conn.execute(
-                            "INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)",
-                            (str(bkey), json.dumps(bval, ensure_ascii=False)),
-                        )
-                conn.commit()
-            finally:
-                conn.close()
-            try:
-                dst.chmod(0o600)
-            except OSError:
-                pass
-        elif op["action"] == "merge_existing" and op["kind"] == "gemini-projects-merge":
-            try:
-                cur_obj = json.loads(dst.read_text(encoding="utf-8-sig"))
-                if not isinstance(cur_obj, dict):
-                    cur_obj = {"projects": {}}
-            except (json.JSONDecodeError, OSError):
-                cur_obj = {"projects": {}}
-            add_obj = json.loads(src.read_text(encoding="utf-8-sig"))
-            projs = dict(cur_obj.get("projects") or {})
-            for k, v in (add_obj.get("projects") or {}).items():
-                projs.setdefault(k, v)
-            cur_obj["projects"] = projs
-            atomic_write_json(dst, cur_obj, mode=0o600)
-        else:
-            data = src.read_bytes()
-            atomic_write_bytes(dst, data, mode=0o600)
-        written_files.append({**op, "written_sha256": hashlib.sha256(dst.read_bytes()).hexdigest()})
-        done_ops += 1
-        if on_progress is not None:
-            on_progress("apply", done_ops, max(total_ops, 1), dst.name)
+            payloads = [json.loads(Path(op["src"]).read_text(encoding="utf-8-sig")) for op in group_ops]
+            oc_metas = merge_opencode_sessions_batch(dst, payloads, on_collision=on_collision)
+            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            for op, meta in zip(group_ops, oc_metas):
+                written_files.append({**op, "opencode_session_id": meta.get("session_id"), "written_sha256": db_sha})
+            done_ops += len(group_ops)
+            if on_progress is not None:
+                on_progress("apply", done_ops, max(total_ops, 1), dst.name)
+
+    # Batch-merge Block Goose sessions into sessions/sessions.db
+    if goose_groups:
+        from .ecosystem import merge_goose_sessions_batch
+
+        for dst_str, group_ops in goose_groups.items():
+            dst = Path(dst_str)
+            ensure_private_dir(dst.parent)
+            g_entries = []
+            for op in group_ops:
+                recs = [json.loads(l) for l in Path(op["src"]).read_text(encoding="utf-8-sig").splitlines() if l.strip()]
+                hdr = recs[0] if recs and isinstance(recs[0], dict) and "role" not in recs[0] else {}
+                g_entries.append({
+                    "session_id": hdr.get("id") or Path(op["src"]).stem,
+                    "title": hdr.get("description") or Path(op["src"]).stem,
+                    "cwd": hdr.get("working_dir") or "",
+                    "records": recs,
+                })
+            g_metas = merge_goose_sessions_batch(dst, g_entries, on_collision=on_collision)
+            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            for op, meta in zip(group_ops, g_metas):
+                written_files.append({**op, "goose_session_id": meta.get("session_id"), "written_sha256": db_sha})
+            done_ops += len(group_ops)
+            if on_progress is not None:
+                on_progress("apply", done_ops, max(total_ops, 1), dst.name)
+
+    # Batch-merge Cline CLI sessions into data/db/sessions.db
+    if cline_groups:
+        from .ecosystem import merge_cline_sessions_batch
+
+        sess_by_id = {
+            str(s.get("session_id")): s for s in manifest.get("target_sessions", []) if isinstance(s, dict)
+        }
+        for dst_str, group_ops in cline_groups.items():
+            dst = Path(dst_str)
+            ensure_private_dir(dst.parent)
+            c_entries = []
+            for op in group_ops:
+                sid = Path(op["src"]).parent.name
+                meta_s = sess_by_id.get(sid, {})
+                api_path = troot / "data" / "tasks" / sid / "api_conversation_history.json"
+                ui_path = troot / "data" / "tasks" / sid / "ui_messages.json"
+                c_entries.append({
+                    "session_id": sid,
+                    "title": meta_s.get("title") or sid,
+                    "cwd": meta_s.get("cwd") or str(troot),
+                    "api_history_path": str(api_path),
+                    "ui_messages_path": str(ui_path) if ui_path.is_file() else "",
+                })
+            c_metas = merge_cline_sessions_batch(dst, c_entries, on_collision=on_collision)
+            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            for op, meta in zip(group_ops, c_metas):
+                written_files.append({**op, "cline_session_id": meta.get("session_id"), "written_sha256": db_sha})
+            done_ops += len(group_ops)
+            if on_progress is not None:
+                on_progress("apply", done_ops, max(total_ops, 1), dst.name)
+
+    # Batch-merge Zed threads into threads/threads.db
+    if zed_groups:
+        from .ecosystem import merge_zed_threads_batch
+
+        for dst_str, group_ops in zed_groups.items():
+            dst = Path(dst_str)
+            ensure_private_dir(dst.parent)
+            payloads = [json.loads(Path(op["src"]).read_text(encoding="utf-8-sig")) for op in group_ops]
+            z_metas = merge_zed_threads_batch(dst, payloads, on_collision=on_collision)
+            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            for op, meta in zip(group_ops, z_metas):
+                written_files.append({**op, "zed_thread_id": meta.get("thread_id"), "written_sha256": db_sha})
+            done_ops += len(group_ops)
+            if on_progress is not None:
+                on_progress("apply", done_ops, max(total_ops, 1), dst.name)
+
+    # Batch-merge AWS Kiro sessions into data.sqlite3
+    if kiro_groups:
+        from .harnesses_extended import merge_kiro_sessions_batch
+
+        for dst_str, group_ops in kiro_groups.items():
+            dst = Path(dst_str)
+            ensure_private_dir(dst.parent)
+            k_entries = []
+            for op in group_ops:
+                recs = [json.loads(l) for l in Path(op["src"]).read_text(encoding="utf-8-sig").splitlines() if l.strip()]
+                hdr = recs[0] if recs and isinstance(recs[0], dict) and recs[0].get("type") == "kiro_session_meta" else {}
+                k_entries.append({
+                    "session_id": hdr.get("conversation_id") or Path(op["src"]).stem,
+                    "title": hdr.get("title") or Path(op["src"]).stem,
+                    "cwd": hdr.get("cwd") or str(troot),
+                    "records": recs,
+                })
+            k_metas = merge_kiro_sessions_batch(dst, k_entries, on_collision=on_collision)
+            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            for op, meta in zip(group_ops, k_metas):
+                written_files.append({**op, "kiro_conversation_id": meta.get("session_id"), "written_sha256": db_sha})
+            done_ops += len(group_ops)
+            if on_progress is not None:
+                on_progress("apply", done_ops, max(total_ops, 1), dst.name)
 
     # Refresh final SHA-256 on shared merge targets (e.g. multiple sessions merged into one SQLite DB)
     final_hash_cache: dict[str, str] = {}

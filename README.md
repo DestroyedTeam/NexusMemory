@@ -17,20 +17,20 @@ Run `nexus-memory matrix` for the machine-readable matrix (`E1` Docs → `E2` Sc
 | **Google Antigravity** (`antigravity`) | `ide-ext` | **E5** | Yes | Yes | **Yes** | Full bidirectional `brain/<conv-id>/.system_generated/logs/transcript.jsonl` + `transcript_full.jsonl` + `metadata.json` (protected by `0600` backup & pristine rollback); live continuation into Claude & Codex verified; copy-mode skills |
 | **Claude Desktop 3P — Chat / Cowork / Code** (`claude-desktop-3p-*`) | `desktop-3p` | **E4** | Yes | Yes | **Yes** | Strictly separated 3 lanes aligned to `Claude.app 7.37095.0`; Code lane dual-key verified (`cliSessionId` + `encodedProjectDir`) |
 | **Cursor** (`cursor`) | `ide-ext` | **E4** | Yes | Yes | **Yes** | Bidirectional SQLite `state.vscdb` (`cursorDiskKV`: `composerData:*` + `bubbleId:*`) with collision protection & pristine rollback |
-| **Tencent WorkBuddy** (`workbuddy`) | `desktop-app` | **E4** | Yes | Yes | **Yes** | Grounded in real `~/.workbuddy/workbuddy.db` (`sessions`, `spaces`, `group_title`) + `sessions/<id>.jsonl` + skills/MCP |
-| **T3 Code** (`t3code`) | `desktop-app` | **E3** | Yes | Yes | **Yes** | Reads `~/.t3/userdata/statev2.sqlite` & thread JSON; writes v2 threads preserving project/section/`parentThreadId` |
-| **OpenCode** (`opencode`) | `cli` | **E4** | Yes | Yes | **Yes** | Both combined JSON and real split `storage/{session,message,part}` + sanitized `opencode.json` MCP + skills |
-| **Pi Coding Agent** (`pi`) | `cli` | **E4** | Yes | Yes | **Yes** | Native single-file tree-DAG JSONL (`id`/`parentId`) preserving multi-branch topology without splitting |
-| **Gemini CLI** (`gemini-cli`) | `cli` | **E4** | Yes | Yes | **Yes** | `tmp/<slug>/chats/session-*.json` + `.project_root` + lossless `projects.json` merge; verified with real `gemini 0.33.1 --list-sessions` |
-| **AWS Kiro** (`kiro`) | `cli` / `ide` | **E3** | Yes | Yes | **Yes** | `~/.kiro/sessions/cli/<id>.jsonl` & `/chat save` JSON + steering/MCP |
+| **Tencent WorkBuddy** (`workbuddy`) | `desktop-app` | **E5** | Yes | Yes | **Yes** | Real `~/.workbuddy/workbuddy.db` + `projects/<encoded-cwd>/<id>.jsonl` (`<user_query>` unwrapping) + skills/MCP |
+| **T3 Code** (`t3code`) | `desktop-app` | **E5** | Yes | Yes | **Yes** | Real `t3 doctor` + `t3 serve` verified: `statev2.sqlite` projections, `orchestration_events`, tags & `lineage` |
+| **OpenCode** (`opencode`) | `cli` | **E5** | Yes | Yes | **Yes** | Real `opencode 2.4.1` (`session list` + `export`) verified: `opencode.db` v1/v2 (`session_v2`) + split `storage/` + MCP/skills |
+| **Pi Coding Agent** (`pi`) | `cli` | **E5** | Yes | Yes | **Yes** | Real `pi 0.73.0 --export` verified: native tree-DAG JSONL (`id`/`parentId`) preserving multi-branch topology |
+| **Gemini CLI** (`gemini-cli`) | `cli` | **E5** | Yes | Yes | **Yes** | Real `gemini 0.33.1 --list-sessions` verified: `tmp/<slug>/chats/session-*.json` + `.project_root` + lossless `projects.json` merge |
+| **AWS Kiro** (`kiro`) | `cli` / `ide` | **E4** | Yes | Yes | **Yes** | Aligned to `kiro-cli 3.6.2` & `Kiro.app 1.5.49`: `data.sqlite3` (`conversations_v2`) + `sessions/cli/<id>.jsonl` + steering/MCP |
 | **Sourcegraph Amp** (`amp`) | `cli` | **E3** | Yes | Yes | **Yes** | `~/.local/share/amp/threads/<id>.json` thread JSON |
 | **ByteDance Trae / Trae Agent** (`trae`) | `ide-ext` | **E3** | Yes | Yes | **Yes** | Trae trajectory JSON preserving workspace & alternating turns |
-| **Warp / Oz Agent** (`warp-oz`) | `terminal` | **E3** | Yes | Yes | **Yes** | Warp/Oz block session exchange JSON |
+| **Warp / Oz Agent** (`warp-oz`) | `terminal` | **E4** | Yes | Yes | **Yes** | Real `warp.sqlite` (`agent_conversations` + `ai_queries`, token-redacted) + `~/.warp/sessions/*.json` |
 | **DeepSeek Harness (DSH)** (`dsh`) | `cli` | **E3** | Yes | Yes | **Yes** | Reader enforces V4 authority over stale V2 logs; writer emits V4 JSONL |
-| **Cline / Roo Code** (`cline-roo`) | `ide-ext` | **E3** | Yes | Yes | **Yes** | `tasks/<id>/api_conversation_history.json` (strict alternating turns) + skills + MCP |
-| **Goose** (`goose`) | `cli` | **E3** | Yes | Yes | **Yes** | `sessions/<id>.jsonl` header + turns + skills/extensions |
-| **Continue / Zed (Z Code / ACP)** (`continue`, `zed`) | `ide-ext` | **E3** | Yes | Yes | **Yes** | `continue` (`sessions/*.json`) + `zed` (`threads/*.json`) read/write |
-| **Aider** (`aider`) | `cli` | **E3** | Yes | Yes | **Yes** | `.aider.chat.history.md` markdown turns read + write |
+| **Cline / Roo Code** (`cline-roo`) | `ide-ext` | **E4** | Yes | Yes | **Yes** | Real `cline 3.0.75 history --json` verified: `data/db/sessions.db` + `data/tasks/<id>/{api_conversation_history,ui_messages}.json` + legacy `tasks/` |
+| **Goose** (`goose`) | `cli` | **E4** | Yes | Yes | **Yes** | Real `goose 1.61.1 session list & export` verified: `sessions/sessions.db` (schema v18) + legacy `.jsonl` |
+| **Continue / Zed (Z Code / ACP)** (`continue`, `zed`) | `ide-ext` | **E4** | Yes | Yes | **Yes** | Real `cn 1.5.47 ls --json` & `Zed 1.30.2`: Continue `sessions.json` + `<id>.json` and Zed `threads/threads.db` (`json`/`zstd`) + JSON |
+| **Aider** (`aider`) | `cli` | **E4** | Yes | Yes | **Yes** | Verified alongside `aider 0.86.2`: `.aider.chat.history.md` markdown turns read + write |
 | **ChatGPT Export (ZIP / JSON)** (`chatgpt-export`) | `web-export` | **E3** | Yes | No | Export archive | Offline web export (no local writable store); full mapping DAG, fork points, interruptions, ZIP binary assets (SHA-256) |
 | **Codex App** (`codex-app`) | `desktop` | **E5** | Yes | Yes | **Yes** | Full bidirectional read+write via shared `~/.codex` store & snapshot JSON preserving sidebar Sections separately from Projects |
 | **Windsurf** (`windsurf`) | `ide-ext` | **E3** | Yes | Yes | **Yes** | Bidirectional `~/.codeium/windsurf/cascade/<id>.json` (`windsurf.cascade.v1`) + Skills, `mcp_config.json`, `.windsurfrules` |
@@ -125,7 +125,7 @@ open "dist/Nexus Memory.app"
 
 # Linux (Debian 12/13, Ubuntu, etc. — universal amd64/arm64 .deb)
 python3 packaging/linux/build_deb.py
-sudo apt install ./dist/nexus-memory_0.0.1_all.deb
+sudo apt install ./dist/nexus-memory_0.0.2_all.deb
 nexus-memory --version
 nexus-memory-desktop
 ```

@@ -65,6 +65,21 @@ def discover_harnesses(
         if plat == "darwin"
         else (hroot / "AppData/Roaming/Cursor" if plat == "win32" else hroot / ".config/Cursor")
     )
+    zed_threads_dir = (
+        hroot / "Library/Application Support/Zed/threads"
+        if plat == "darwin" and (hroot / "Library/Application Support/Zed").exists()
+        else hroot / ".local/share/zed/threads"
+    )
+    zed_root = (
+        hroot / "Library/Application Support/Zed"
+        if plat == "darwin" and (hroot / "Library/Application Support/Zed").exists()
+        else hroot / ".config/zed"
+    )
+    kiro_cli_db = (
+        hroot / "Library/Application Support/kiro-cli/data.sqlite3"
+        if plat == "darwin"
+        else (hroot / "AppData/Local/kiro-cli/data.sqlite3" if plat == "win32" else hroot / ".local/share/kiro-cli/data.sqlite3")
+    )
 
     probes: list[dict[str, Any]] = [
         {
@@ -214,8 +229,8 @@ def discover_harnesses(
         {
             "id": "zed",
             "display_name": "Zed / ACP",
-            "root": hroot / ".config/zed",
-            "session_dir": hroot / ".local/share/zed/threads",
+            "root": zed_root,
+            "session_dir": zed_threads_dir,
             "session_glob": "*.json",
             "skills_dir": hroot / ".config/zed/skills",
             "mcp_config": hroot / ".config/zed/settings.json",
@@ -228,6 +243,7 @@ def discover_harnesses(
             "session_glob": "*.jsonl",
             "skills_dir": hroot / ".kiro/skills",
             "mcp_config": hroot / ".kiro/settings/mcp.json",
+            "extra_db": kiro_cli_db,
         },
         {
             "id": "workbuddy",
@@ -332,11 +348,186 @@ def discover_harnesses(
             else:
                 sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
         elif item["id"] == "opencode":
+            oc_top_ids: set[str] = set()
+            oc_sub_ids: set[str] = set()
+            oc_db = root_p / "opencode.db"
+            if oc_db.is_file():
+                present = True
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(f"file:{oc_db}?mode=ro", uri=True)
+                    try:
+                        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                        stbl = "session_v2" if "session_v2" in tables else ("session" if "session" in tables else None)
+                        if stbl:
+                            for sid, pid in con.execute(f'SELECT id, parent_id FROM "{stbl}"'):
+                                if not sid:
+                                    continue
+                                if pid:
+                                    oc_sub_ids.add(str(sid))
+                                else:
+                                    oc_top_ids.add(str(sid))
+                    finally:
+                        con.close()
+                except Exception:
+                    pass
             split_sess_dir = root_p / "storage" / "session"
             if split_sess_dir.is_dir():
-                sess_count = _count_files(split_sess_dir, "*.json")
-            else:
-                sess_count = _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
+                for fp in split_sess_dir.rglob("*.json"):
+                    if fp.is_file() and fp.stem not in oc_top_ids and fp.stem not in oc_sub_ids:
+                        oc_top_ids.add(fp.stem)
+            elif not oc_top_ids and not oc_sub_ids and sess_p.is_dir():
+                sess_count = _count_files(sess_p, item["session_glob"])
+            sess_count = len(oc_top_ids) if (oc_top_ids or oc_sub_ids or split_sess_dir.is_dir() or oc_db.is_file()) else (
+                _count_files(sess_p, item["session_glob"]) if sess_p.is_dir() else 0
+            )
+            subagent_count = len(oc_sub_ids)
+        elif item["id"] == "goose":
+            g_ids: set[str] = set()
+            g_sub_ids: set[str] = set()
+            if sess_p.is_dir():
+                for fp in sess_p.rglob("*.jsonl"):
+                    if fp.is_file():
+                        g_ids.add(fp.stem)
+            g_db = sess_p / "sessions.db"
+            if g_db.is_file():
+                present = True
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(f"file:{g_db}?mode=ro", uri=True)
+                    try:
+                        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                        if "sessions" in tables:
+                            cols = {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
+                            sql = "SELECT id, parent_session_id FROM sessions" if "parent_session_id" in cols else "SELECT id, NULL FROM sessions"
+                            for sid, pid in con.execute(sql):
+                                if not sid:
+                                    continue
+                                if pid:
+                                    g_sub_ids.add(str(sid))
+                                else:
+                                    g_ids.add(str(sid))
+                    finally:
+                        con.close()
+                except Exception:
+                    pass
+            sess_count = len(g_ids)
+            subagent_count = len(g_sub_ids)
+        elif item["id"] == "continue":
+            sess_count = 0
+            if sess_p.is_dir():
+                sess_count = sum(
+                    1
+                    for fp in sess_p.rglob("*.json")
+                    if fp.is_file() and fp.name not in {"sessions.json", "config.json"}
+                )
+        elif item["id"] == "cline":
+            cl_ids: set[str] = set()
+            cl_sub_ids: set[str] = set()
+            for tdir in (sess_p, root_p / "data" / "tasks"):
+                if tdir.is_dir():
+                    present = True
+                    for fp in tdir.rglob("api_conversation_history.json"):
+                        if fp.is_file():
+                            cl_ids.add(fp.parent.name)
+            cl_db = root_p / "data" / "db" / "sessions.db"
+            if cl_db.is_file():
+                present = True
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(f"file:{cl_db}?mode=ro", uri=True)
+                    try:
+                        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                        if "sessions" in tables:
+                            for sid, is_sub in con.execute("SELECT session_id, is_subagent FROM sessions"):
+                                if not sid:
+                                    continue
+                                if is_sub:
+                                    cl_sub_ids.add(str(sid))
+                                else:
+                                    cl_ids.add(str(sid))
+                    finally:
+                        con.close()
+                except Exception:
+                    pass
+            sess_count = len(cl_ids)
+            subagent_count = len(cl_sub_ids)
+        elif item["id"] == "zed":
+            zed_ids: set[str] = set()
+            zed_sub_ids: set[str] = set()
+            if sess_p.is_dir():
+                for fp in sess_p.rglob("*.json"):
+                    if fp.is_file() and fp.name != "settings.json":
+                        zed_ids.add(fp.stem)
+                zdb = sess_p / "threads.db"
+                if zdb.is_file():
+                    present = True
+                    try:
+                        import sqlite3
+                        con = sqlite3.connect(f"file:{zdb}?mode=ro", uri=True)
+                        try:
+                            tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                            if "threads" in tables:
+                                cols = {r[1] for r in con.execute("PRAGMA table_info(threads)")}
+                                sql = "SELECT id, parent_id FROM threads" if "parent_id" in cols else "SELECT id, NULL FROM threads"
+                                for tid, pid in con.execute(sql):
+                                    if not tid:
+                                        continue
+                                    if pid:
+                                        zed_sub_ids.add(str(tid))
+                                    else:
+                                        zed_ids.add(str(tid))
+                        finally:
+                            con.close()
+                    except Exception:
+                        pass
+            sess_count = len(zed_ids)
+            subagent_count = len(zed_sub_ids)
+        elif item["id"] == "kiro":
+            kiro_ids: set[str] = set()
+            if sess_p.is_dir():
+                for fp in list(sess_p.rglob("*.jsonl")) + list(sess_p.rglob("*.json")):
+                    if fp.is_file() and fp.name not in {"mcp.json", "settings.json", "cli.json"}:
+                        kiro_ids.add(fp.stem)
+            for kdb in [item.get("extra_db"), root_p / "data.sqlite3"]:
+                if isinstance(kdb, Path) and kdb.is_file():
+                    present = True
+                    try:
+                        import sqlite3
+                        con = sqlite3.connect(f"file:{kdb}?mode=ro", uri=True)
+                        try:
+                            tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                            if "conversations_v2" in tables:
+                                for (cid,) in con.execute("SELECT conversation_id FROM conversations_v2"):
+                                    if cid:
+                                        kiro_ids.add(str(cid))
+                            if "conversations" in tables:
+                                for (ckey,) in con.execute("SELECT key FROM conversations"):
+                                    if ckey:
+                                        kiro_ids.add(str(ckey))
+                        finally:
+                            con.close()
+                    except Exception:
+                        pass
+            sess_count = len(kiro_ids)
+        elif item["id"] == "cursor":
+            sess_count = 0
+            vscdb = sess_p / "state.vscdb"
+            if vscdb.is_file():
+                present = True
+                try:
+                    import sqlite3
+                    con = sqlite3.connect(f"file:{vscdb}?mode=ro", uri=True)
+                    try:
+                        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                        kvt = "cursorDiskKV" if "cursorDiskKV" in tables else ("ItemTable" if "ItemTable" in tables else None)
+                        if kvt:
+                            row = con.execute(f"SELECT COUNT(*) FROM {kvt} WHERE key LIKE 'composerData:%'").fetchone()
+                            sess_count = int(row[0]) if row else 0
+                    finally:
+                        con.close()
+                except Exception:
+                    sess_count = 1
         elif item["id"] == "workbuddy":
             wb_ids: set[str] = set()
             if sess_p.is_dir():

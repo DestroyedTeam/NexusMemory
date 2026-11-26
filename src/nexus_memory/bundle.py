@@ -362,8 +362,11 @@ def _plan(
                 session["target_relative_path"] = (
                     Path("cline_tasks") / session["session_id"] / "api_conversation_history.json"
                 ).as_posix()
+                session["ui_messages_relative_path"] = (
+                    Path("cline_tasks") / session["session_id"] / "ui_messages.json"
+                ).as_posix()
                 session["source_id"] = graph.source_id
-                session["writer_kind"] = "json-payload"
+                session["writer_kind"] = "cline-roo-task"
                 native_sessions.append(session)
         elif target == "goose":
             sessions, graph_losses = build_goose_sessions(graph, cwd=target_cwd)
@@ -499,6 +502,7 @@ def _plan(
                 **({"lane": item["lane"]} if "lane" in item else {}),
                 **({"sidecar_relative_path": item["sidecar_relative_path"]} if "sidecar_relative_path" in item else {}),
                 **({"index_relative_path": item["index_relative_path"]} if "index_relative_path" in item else {}),
+                **({"ui_messages_relative_path": item["ui_messages_relative_path"]} if "ui_messages_relative_path" in item else {}),
                 **({"encoded_project_dir": item["encoded_project_dir"]} if "encoded_project_dir" in item else {}),
                 **({"rollout_rel_subpath": item["rollout_rel_subpath"]} if "rollout_rel_subpath" in item else {}),
                 **({"split_relative_paths": item["split_relative_paths"]} if "split_relative_paths" in item else {}),
@@ -665,6 +669,7 @@ def write_bundle(
 
         # Write target-specific staged files
         codex_index_entries: list[dict[str, Any]] = []
+        continue_index_entries: list[dict[str, Any]] = []
         gemini_projects: dict[str, str] = {}
         total_ns = len(native_sessions)
         for ns_idx, session in enumerate(native_sessions, 1):
@@ -690,6 +695,12 @@ def write_bundle(
                 for rel_k, obj in (session.get("split_files") or {}).items():
                     sdst = ensure_within_root(output / "opencode_sessions" / rel_k, output)
                     atomic_write_json(sdst, obj, mode=0o600)
+            elif wkind == "cline-roo-task":
+                dst = ensure_within_root(output / session["target_relative_path"], output)
+                atomic_write_json(dst, session["payload"], mode=0o600)
+                if session.get("ui_messages_relative_path"):
+                    udst = ensure_within_root(output / session["ui_messages_relative_path"], output)
+                    atomic_write_json(udst, session.get("ui_messages", []), mode=0o600)
             elif wkind == "gemini-cli-session":
                 dst = ensure_within_root(output / session["target_relative_path"], output)
                 atomic_write_json(dst, session["payload"], mode=0o600)
@@ -702,6 +713,8 @@ def write_bundle(
             elif wkind == "json-payload":
                 dst = ensure_within_root(output / session["target_relative_path"], output)
                 atomic_write_json(dst, session["payload"], mode=0o600)
+                if target == "continue" and isinstance(session.get("session_index_entry"), dict):
+                    continue_index_entries.append(session["session_index_entry"])
             elif wkind == "text-payload":
                 dst = ensure_within_root(output / session["target_relative_path"], output)
                 atomic_write_bytes(dst, str(session.get("markdown") or "").encode("utf-8"), mode=0o600)
@@ -724,6 +737,9 @@ def write_bundle(
         if codex_index_entries:
             idx_dst = ensure_within_root(output / "codex_sessions" / "session_index.jsonl", output)
             atomic_write_bytes(idx_dst, encode_jsonl(codex_index_entries), mode=0o600)
+        if continue_index_entries:
+            cidx_dst = ensure_within_root(output / "continue_sessions" / "sessions.json", output)
+            atomic_write_json(cidx_dst, continue_index_entries, mode=0o600)
         if gemini_projects:
             gp_dst = ensure_within_root(output / "gemini_sessions" / "projects.json", output)
             atomic_write_json(gp_dst, {"projects": gemini_projects}, mode=0o600)
