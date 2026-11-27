@@ -285,15 +285,20 @@ class DesktopGuiPlaywrightE2ETests(unittest.TestCase):
                     expect(page.locator("#apply-badge")).to_contain_text("↺ 已精确回滚至迁移前原状", timeout=15000)
                     self.assertEqual(sum(1 for p in t3_dsh.rglob("*") if p.is_file()), 0)
 
-                    # Manual Rollback Tab (`#nav-rollback`) for Hop 2 & Hop 1
+                    # Manual Rollback & Cleanup Tab (`#nav-rollback`) for Hop 2 & Hop 1
                     page.locator("#nav-rollback").click()
                     expect(page.locator("#tab-rollback")).to_be_visible()
+                    expect(page.locator("#st-rss-mb")).to_contain_text("MB", timeout=10000)
+                    page.locator("#btn-reclaim-memory").click()
+                    expect(page.locator("#cleanup-status-msg")).to_contain_text("GC 内存回收", timeout=10000)
                     for tx_path, target_dir in ((tx2_dir, t2_t3), (tx1_dir, t1_oc)):
                         page.locator("#rb-bundle").fill(tx_path)
-                        page.locator("#tab-rollback .btn-danger").click()
+                        page.locator("#btn-manual-rollback").click()
                         expect(page.locator("#rb-json")).to_contain_text(Path(tx_path).name, timeout=15000)
                         expect(page.locator("#rb-json")).to_contain_text('"ok": true')
                         self.assertEqual(sum(1 for p in target_dir.rglob("*") if p.is_file()), 0)
+                        page.locator("#btn-manual-cleanup-tx").click()
+                        expect(page.locator("#rb-json")).to_contain_text('"reclaimed_bytes"', timeout=10000)
 
                     context.close()
                     browser.close()

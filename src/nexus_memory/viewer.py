@@ -16,6 +16,7 @@ from __future__ import annotations
 import html
 import json
 import mimetypes
+import shutil
 import socketserver
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -173,7 +174,7 @@ def _render_page(title: str, body: str, active_nav: str = "overview") -> str:
     color:var(--text); line-height:1.58; min-height:100vh;
   }}
   header {{
-    background:rgba(13,18,30,0.92); backdrop-filter:blur(16px); border-bottom:1px solid var(--border);
+    background:#0D121E; border-bottom:1px solid var(--border);
     padding:13px 24px; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:10;
   }}
   header h1 {{ font-size:15.5px; font-weight:700; display:flex; align-items:center; gap:10px; }}
@@ -256,8 +257,12 @@ def make_viewer_handler(bundle_dir: str | Path) -> type[BaseHTTPRequestHandler]:
         portable = json.loads((root / "portable.json").read_text(encoding="utf-8"))
         return manifest, portable
 
-    def render_split_view(selected_sid: str | None = None) -> str:
-        manifest, portable = load_data()
+    def render_split_view(
+        selected_sid: str | None = None,
+        *,
+        preloaded: tuple[dict[str, Any], dict[str, Any]] | None = None,
+    ) -> str:
+        manifest, portable = preloaded if preloaded is not None else load_data()
         hier = portable.get("hierarchy", {})
         convs = portable.get("conversations", [])
         active_conv = None
@@ -335,13 +340,15 @@ def make_viewer_handler(bundle_dir: str | Path) -> type[BaseHTTPRequestHandler]:
 
             if path.startswith("/session/"):
                 sid = urllib.parse.unquote(path[len("/session/") :])
-                _, portable = load_data()
+                manifest, portable = load_data()
                 match = next((c for c in portable.get("conversations", []) if str(c.get("source_id")) == sid), None)
                 if match is None:
                     self._send_text("Session not found", status=404)
                     return
                 title, _ = redact_text(str(match.get("title") or sid))
-                self._send_html(_render_page(title, render_split_view(selected_sid=sid), active_nav="overview"))
+                self._send_html(
+                    _render_page(title, render_split_view(selected_sid=sid, preloaded=(manifest, portable)), active_nav="overview")
+                )
                 return
 
             if path == "/fidelity":
@@ -390,14 +397,15 @@ def make_viewer_handler(bundle_dir: str | Path) -> type[BaseHTTPRequestHandler]:
                     )
                     else "inline"
                 )
-                raw_bytes = resolved.read_bytes()
+                file_size = resolved.stat().st_size
                 self.send_response(200)
                 self.send_header("Content-Type", ctype)
-                self.send_header("Content-Length", str(len(raw_bytes)))
+                self.send_header("Content-Length", str(file_size))
                 self.send_header("Content-Disposition", f'{disposition}; filename="{safe_dl}"')
                 self._send_security_headers()
                 self.end_headers()
-                self.wfile.write(raw_bytes)
+                with resolved.open("rb") as fh:
+                    shutil.copyfileobj(fh, self.wfile, 65536)
                 return
 
             if path == "/api/manifest":

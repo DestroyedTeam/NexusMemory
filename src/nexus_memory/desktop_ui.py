@@ -35,6 +35,18 @@ from .chatgpt import filter_conversations
 from .claude_desktop_3p import default_claude_desktop_root
 from .discovery import discover_harnesses
 from .ecosystem import load_any_source
+from .lifecycle import (
+    DEFAULT_MAX_AGE_DAYS,
+    DEFAULT_MAX_KEEP_TRANSACTIONS,
+    DEFAULT_MAX_TOTAL_BACKUP_MB,
+    DEFAULT_SANDBOX_MAX_AGE_HOURS,
+    cleanup_transaction_backup,
+    delete_bundle_dir,
+    get_process_memory_mb,
+    prune_reclaimable_storage,
+    reclaim_memory,
+    scan_reclaimable_storage,
+)
 from .matrix import build_matrix_data
 from .resources import scan_resources
 from .security import redact_text
@@ -285,7 +297,6 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
   /* Left Sidebar */
   .sidebar {
     background: var(--sidebar);
-    backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
     border-right: 1px solid var(--border);
     padding: 36px 12px 14px;
     display: flex; flex-direction: column; gap: 16px; user-select: none;
@@ -378,7 +389,7 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
   }
 
   .glass {
-    background: var(--surface); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    background: var(--surface);
     border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow-card);
   }
   .card-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
@@ -535,7 +546,7 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
 
   /* Right Inspector Rail */
   .inspector {
-    background: var(--sidebar); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    background: var(--sidebar);
     border-left: 1px solid var(--border); padding: 18px 15px 15px;
     display: flex; flex-direction: column; gap: 13px; overflow-y: auto;
   }
@@ -659,6 +670,9 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
     background: linear-gradient(90deg, #0EA5E9 0%, #38BDF8 50%, #818CF8 100%);
     background-size: 200% 100%;
     transition: width 160ms ease-out;
+  }
+  .prog-panel:not(.hidden) .prog-fill,
+  .rail-prog:not(.hidden) .prog-fill {
     animation: progShimmer 1.4s linear infinite;
   }
   @keyframes progShimmer {
@@ -728,8 +742,8 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
         <span class="pill-cnt" id="cnt-matrix">25</span>
       </button>
       <button class="nav-btn" id="nav-rollback" onclick="switchTab('rollback', this)">
-        <span class="nav-btn-l"><span>🛡</span><span>历史回滚</span></span>
-        <span class="pill-cnt">SHA-256</span>
+        <span class="nav-btn-l"><span>🛡</span><span>回滚与清理</span></span>
+        <span class="pill-cnt" id="cnt-backups">0</span>
       </button>
     </nav>
 
@@ -995,6 +1009,17 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
             </div>
           </div>
 
+          <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+            <label class="switch-pill" style="height:34px;">
+              <input type="checkbox" id="apply-auto-prune" checked />
+              <span>🧹 自动清理旧备份（保留近 3 份）</span>
+            </label>
+            <label class="switch-pill" style="height:34px;">
+              <input type="checkbox" id="apply-cleanup-after-verify" />
+              <span>⚡ 写后校验通过立即自动清理本次备份</span>
+            </label>
+          </div>
+
           <div id="apply-success-box" class="resume-box hidden"></div>
         </section>
       </div>
@@ -1033,8 +1058,34 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
         </section>
       </div>
 
-      <!-- TAB 4: PAST ROLLBACKS -->
+      <!-- TAB 4: PAST ROLLBACKS & BACKUP STORAGE CLEANUP -->
       <div id="tab-rollback" class="hidden">
+        <section class="glass" style="margin-bottom:14px;">
+          <div class="card-hd">
+            <div>
+              <div class="card-title">🧹 备份存储回收与内存自动治理</div>
+              <div class="card-desc">高频迁移会产生 0600 原始备份与临时迁移包；验收无误后可一键清理，同时支持自动留存策略（默认保留近 3 份 / 7 天 / ≤512 MB）</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-ghost" onclick="loadStorage()">↻ 刷新扫描</button>
+              <button class="btn-sec" id="btn-reclaim-memory" style="padding:0 12px;" onclick="runStorageCleanup('reclaim_memory')">⚡ 回收引擎内存</button>
+              <button class="btn-sec" id="btn-prune-backups" style="padding:0 12px;" onclick="runStorageCleanup('prune')">🧹 清理过期备份与沙箱</button>
+              <button class="btn-danger" id="btn-prune-all" style="padding:0 12px;" onclick="runStorageCleanup('prune_all')">🗑 清理全部旧备份/迁移包</button>
+            </div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-v" id="st-bk-mb">0 MB</div><div class="kpi-l" id="st-bk-cnt">0 份事务备份</div></div>
+            <div class="kpi"><div class="kpi-v" id="st-bd-mb">0 MB</div><div class="kpi-l" id="st-bd-cnt">0 个本地迁移包</div></div>
+            <div class="kpi"><div class="kpi-v" id="st-sb-mb">0 MB</div><div class="kpi-l" id="st-sb-cnt">0 个沙箱残留</div></div>
+            <div class="kpi"><div class="kpi-v" id="st-rss-mb" style="color:var(--accent);">—</div><div class="kpi-l">引擎当前内存 RSS</div></div>
+          </div>
+          <div id="cleanup-status-msg" class="hidden" style="margin-bottom:10px;padding:9px 12px;border-radius:9px;background:var(--safe-soft);border:1px solid rgba(16,185,129,0.34);font-size:12px;"></div>
+          <table class="list-table">
+            <thead><tr><th>类型 / 标识</th><th>目标 / 路径</th><th>占用大小</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="storage-tbody"><tr><td colspan="5" style="color:var(--text-3);text-align:center;padding:18px;">正在扫描可回收备份与迁移包…</td></tr></tbody>
+          </table>
+        </section>
+
         <section class="glass">
           <div class="card-hd">
             <div>
@@ -1049,9 +1100,10 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
               <button class="btn-ghost" onclick="pickPath('rb-bundle', 'dir')">选择目录</button>
             </div>
           </div>
-          <div style="display:flex;gap:10px;margin-top:12px;">
-            <button class="btn-sec" style="padding:0 14px;" onclick="doManualVerify()">✓ 校验完整性与脱敏</button>
-            <button class="btn-danger" style="padding:0 14px;" onclick="doManualRollback()">↺ 按原始哈希一键回滚</button>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+            <button class="btn-sec" id="btn-manual-verify" style="padding:0 14px;" onclick="doManualVerify()">✓ 校验完整性与脱敏</button>
+            <button class="btn-danger" id="btn-manual-rollback" style="padding:0 14px;" onclick="doManualRollback()">↺ 按原始哈希一键回滚</button>
+            <button class="btn-ghost" id="btn-manual-cleanup-tx" style="padding:0 14px;" onclick="doManualCleanupTx()">🧹 确认验收并清理该备份</button>
           </div>
           <details class="raw" open>
             <summary style="cursor:pointer;">回执详情</summary>
@@ -1084,9 +1136,9 @@ DESKTOP_HTML = r"""<!DOCTYPE html>
     </div>
     <div class="tele-list">
       <div class="tele-row"><span>引擎</span><b style="color:var(--accent);">零 AI 确定性</b></div>
-      <div class="tele-row"><span>协议</span><b style="color:var(--safe);">零报错校验</b></div>
       <div class="tele-row"><span>密钥</span><b style="color:var(--safe);">${ENV_VAR}</b></div>
-      <div class="tele-row"><span>备份</span><b>0600 + SHA-256</b></div>
+      <div class="tele-row"><span>待清理</span><b id="rail-storage-mb" style="font-variant-numeric:tabular-nums;">0 MB</b></div>
+      <div class="tele-row"><span>内存 RSS</span><b id="rail-rss-mb" style="font-variant-numeric:tabular-nums;">—</b></div>
     </div>
 
     <div class="action-stack">
@@ -1706,13 +1758,18 @@ async function runNextStep() {
   if (state.step === 1) return doStep2Preview();
   if (state.step === 2) return doStep3Stage();
   if (state.step === 3) return doStep4Apply();
-  // Restart
+  // Restart & release browser-side preview memory
   state.step = 1;
   state.lastTxDir = null;
+  state.previewConvs = [];
+  document.getElementById("raw-json").textContent = "{}";
+  document.getElementById("preview-sess-list").innerHTML = `<div style="padding:26px 14px;text-align:center;color:var(--text-3);font-size:12px;">点击右侧「预演查看」后在此显示会话层级树</div>`;
+  document.getElementById("preview-reader").innerHTML = `<div style="padding:48px 18px;text-align:center;color:var(--text-3);font-size:12.5px;">选择左侧会话即可核对脱敏后的真实对话</div>`;
   document.getElementById("apply-success-box").classList.add("hidden");
   updateProgressUI();
   jumpStep(1);
-  setGuide("<b>已就绪：</b>请重新选择来源与目标，开启下一次迁移。", "");
+  setGuide("<b>已就绪：</b>已释放上一次预演缓存，请重新选择来源与目标，开启下一次迁移。", "");
+  loadStorage();
 }
 
 async function doStep2Preview() {
@@ -1775,15 +1832,19 @@ async function doStep4Apply() {
   const btn = document.getElementById("btn-main-cta");
   btn.disabled = true;
   try {
+    const autoPrune = document.getElementById("apply-auto-prune").checked;
+    const cleanupAfterVerify = document.getElementById("apply-cleanup-after-verify").checked;
     const res = await runAsyncJob("/api/jobs/apply", {
       bundle: state.lastBundlePath,
       target_root,
       claude_dir,
       on_collision: document.getElementById("apply-collision").value,
       include_skills: document.getElementById("apply-include-skills").checked,
+      auto_prune_keep: autoPrune ? 3 : 0,
+      cleanup_backup_after_verify: cleanupAfterVerify,
       apply: true
     }, "正在打包备份并批量迁入目标");
-    state.lastTxDir = res.journal_dir;
+    state.lastTxDir = res.backup_cleaned ? null : res.journal_dir;
     document.getElementById("rb-bundle").value = res.journal_dir;
     document.getElementById("apply-badge").textContent = res.post_write_verification.ok ? "✓ 已迁入并读回校验通过" : "⚠ 读回校验异常";
     document.getElementById("apply-badge").className = "badge " + (res.post_write_verification.ok ? "ok" : "err");
@@ -1797,37 +1858,69 @@ async function doStep4Apply() {
     else if (state.dstId === "t3code") resumeTip = `已批量写入 statev2.sqlite（含真实项目归属与子代理层级；若 T3 Code 正在运行，重启后即显示）`;
     else if (state.dstId === "cursor") resumeTip = `已写入 Cursor state.vscdb（重启 Cursor 即可看到）`;
 
+    const bkMb = ((res.backup_bytes || 0) / (1024 * 1024)).toFixed(2);
+    const prunedCnt = (res.auto_prune && res.auto_prune.pruned_transactions) ? res.auto_prune.pruned_transactions.length : 0;
+    const prunedNote = prunedCnt > 0 ? ` · 已自动淘汰 ${prunedCnt} 份过期备份` : "";
+    const bkStatusText = res.backup_cleaned
+      ? `校验通过并已自动清理本次备份（释放 ${bkMb} MB，保留轻量化审计回执）`
+      : `已创建 0600 备份（${bkMb} MB）${prunedNote} · 验收无误后请一键清理备份释放磁盘`;
+
     const sbox = document.getElementById("apply-success-box");
+    const cleanBtns = res.backup_cleaned
+      ? `<button class="btn-sec" style="padding:0 12px;" onclick="confirmCleanupCurrent(true, '${esc(res.journal_dir)}')">🗑 顺便清理本地迁移包</button>`
+      : `<button class="btn-sec" style="padding:0 12px;border-color:var(--safe);color:var(--safe);" onclick="confirmCleanupCurrent(false, '${esc(res.journal_dir)}')">✓ 验收无误 · 清理本次备份</button>
+         <button class="btn-ghost" style="padding:0 12px;" onclick="confirmCleanupCurrent(true, '${esc(res.journal_dir)}')">🗑 清理备份与迁移包</button>
+         <button class="btn-danger" style="padding:0 12px;" onclick="runCurrentRollback()">↺ 一键撤销并恢复原状</button>`;
+
     sbox.innerHTML = `
-      <b>✓ 迁移已生效（${res.written_files.length} 条记录 · 已创建 0600 备份）</b><br/>
+      <b>✓ 迁移已生效（${res.written_files.length} 条记录 · ${esc(bkStatusText)}）</b><br/>
       <span style="color:var(--text-2);font-size:11.5px;">事务日志：<code>${esc(res.journal_dir)}</code></span>
       <div class="resume-cmd">${esc(resumeTip)}</div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn-danger" style="padding:0 12px;" onclick="runCurrentRollback()">↺ 一键撤销并恢复原状</button>
+        ${cleanBtns}
         <button class="btn-sec" style="padding:0 12px;" onclick="openViewer()">离线浏览器 ↗</button>
       </div>
     `;
     sbox.classList.remove("hidden");
     state.step = 4;
-    setGuide(`<b>🎉 迁移完成！</b>已写入 <b>${esc(target_root)}</b> 并通过读回校验，随时可一键回滚。`, "ok");
+    setGuide(`<b>🎉 迁移完成！</b>已写入 <b>${esc(target_root)}</b> 并通过读回校验；验收确认无误后可直接点击「清理本次备份」释放空间。`, "ok");
     updateProgressUI();
+    loadStorage();
   } catch (e) {
     setGuide("<b>迁入失败：</b>" + esc(e.message), "err");
   } finally { btn.disabled = false; }
 }
 
+async function confirmCleanupCurrent(removeBundle, txDirOverride) {
+  const txDir = txDirOverride || state.lastTxDir || document.getElementById("rb-bundle").value.trim();
+  if (!txDir) return;
+  try {
+    const res = await api("/api/cleanup", { mode: "confirm_tx", tx_dir: txDir, remove_bundle: Boolean(removeBundle) });
+    state.lastTxDir = null;
+    if (removeBundle) state.lastBundlePath = null;
+    const sbox = document.getElementById("apply-success-box");
+    sbox.innerHTML = `<b>✓ 已确认验收并清理${removeBundle ? "备份与本地迁移包" : "本次写前备份"}</b>（释放 <b>${res.reclaimed_mb} MB</b> 磁盘空间，引擎内存 RSS：${res.memory ? res.memory.after_rss_mb : "—"} MB）`;
+    setGuide(`<b>🧹 清理完成：</b>已释放 <b>${res.reclaimed_mb} MB</b> 磁盘空间，目标软件中的会话数据不受任何影响。`, "ok");
+    updateProgressUI();
+    loadStorage();
+  } catch (e) {
+    setGuide("<b>清理备份失败：</b>" + esc(e.message), "err");
+  }
+}
+
 async function runCurrentRollback() {
   if (!state.lastTxDir) return;
   try {
-    const res = await api("/api/rollback", { tx_dir: state.lastTxDir });
+    const res = await api("/api/rollback", { tx_dir: state.lastTxDir, cleanup_backup: true });
     if (res.ok) {
       state.lastTxDir = null;
       state.step = 3;
       document.getElementById("apply-badge").textContent = "↺ 已精确回滚至迁移前原状";
       document.getElementById("apply-badge").className = "badge warn";
       document.getElementById("apply-success-box").classList.add("hidden");
-      setGuide(`<b>↺ 一键回滚成功！</b>目标目录已逐字节还原为迁移前的原始 SHA-256（<code>${esc(res.primary_restore.restored_tree_sha256.slice(0,16))}…</code>）。`, "ok");
+      setGuide(`<b>↺ 一键回滚成功！</b>目标目录已逐字节还原为迁移前的原始 SHA-256（<code>${esc(res.primary_restore.restored_tree_sha256.slice(0,16))}…</code>），已自动清理本次失效备份。`, "ok");
       updateProgressUI();
+      loadStorage();
     }
   } catch (e) {
     setGuide("<b>回滚失败：</b>" + esc(e.message), "err");
@@ -1855,7 +1948,121 @@ async function doManualRollback() {
   try {
     const res = await api("/api/rollback", { tx_dir: document.getElementById("rb-bundle").value.trim() });
     document.getElementById("rb-json").textContent = JSON.stringify(res, null, 2);
+    loadStorage();
   } catch (e) { document.getElementById("rb-json").textContent = JSON.stringify({ error: e.message }, null, 2); }
+}
+
+async function doManualCleanupTx() {
+  try {
+    const res = await api("/api/cleanup", { mode: "confirm_tx", tx_dir: document.getElementById("rb-bundle").value.trim(), remove_bundle: false });
+    document.getElementById("rb-json").textContent = JSON.stringify(res, null, 2);
+    loadStorage();
+  } catch (e) { document.getElementById("rb-json").textContent = JSON.stringify({ error: e.message }, null, 2); }
+}
+
+function fmtBytes(b) {
+  const n = Number(b || 0);
+  if (n >= 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+  if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(2) + " MB";
+  if (n >= 1024) return (n / 1024).toFixed(1) + " KB";
+  return n + " B";
+}
+
+async function loadStorage() {
+  try {
+    const inv = await api("/api/storage");
+    const s = inv.summary || {};
+    document.getElementById("cnt-backups").textContent = String((s.active_backup_count || 0) + (s.bundle_count || 0));
+    document.getElementById("st-bk-mb").textContent = fmtBytes(s.active_backup_bytes);
+    document.getElementById("st-bk-cnt").textContent = `${s.active_backup_count || 0} 份活跃备份`;
+    document.getElementById("st-bd-mb").textContent = fmtBytes(s.bundle_bytes);
+    document.getElementById("st-bd-cnt").textContent = `${s.bundle_count || 0} 个本地迁移包`;
+    document.getElementById("st-sb-mb").textContent = fmtBytes(s.sandbox_bytes);
+    document.getElementById("st-sb-cnt").textContent = `${s.sandbox_count || 0} 个沙箱残留`;
+    document.getElementById("st-rss-mb").textContent = `${s.process_rss_mb ?? "—"} MB`;
+    document.getElementById("rail-storage-mb").textContent = fmtBytes(s.total_reclaimable_bytes);
+    document.getElementById("rail-rss-mb").textContent = `${s.process_rss_mb ?? "—"} MB`;
+
+    const rows = [];
+    for (const t of (inv.transactions || [])) {
+      const badge = t.backup_cleaned
+        ? `<span class="badge ok">已清理备份</span>`
+        : (t.rolled_back ? `<span class="badge warn">已回滚</span>` : `<span class="badge info">活跃备份</span>`);
+      const acts = t.backup_exists
+        ? `<button class="btn-ghost" style="height:26px;font-size:11px;" onclick="cleanupOneTx('${esc(t.journal_dir)}', false)">清理备份</button>
+           <button class="btn-danger" style="height:26px;font-size:11px;padding:0 8px;" onclick="rollbackOneTx('${esc(t.journal_dir)}')">回滚</button>`
+        : `<span style="color:var(--text-3);font-size:11px;">仅留回执</span>`;
+      rows.push(`<tr>
+        <td><b>🛡 事务备份</b><br/><span style="color:var(--text-3);font-size:11px;font-family:var(--font-mono);">${esc(t.transaction_id)}</span></td>
+        <td style="font-size:11.5px;color:var(--text-2);max-width:260px;word-break:break-all;">${esc(t.target_lane || "—")}<br/><span style="font-family:var(--font-mono);font-size:10.5px;">${esc(t.target_root)}</span></td>
+        <td style="font-variant-numeric:tabular-nums;">${fmtBytes(t.backup_bytes)}</td>
+        <td>${badge}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">${acts}</td>
+      </tr>`);
+    }
+    for (const b of (inv.bundles || [])) {
+      rows.push(`<tr>
+        <td><b>📦 本地迁移包</b><br/><span style="color:var(--text-3);font-size:11px;">${esc(b.name)}</span></td>
+        <td style="font-size:11px;color:var(--text-2);font-family:var(--font-mono);max-width:260px;word-break:break-all;">${esc(b.path)}</td>
+        <td style="font-variant-numeric:tabular-nums;">${fmtBytes(b.size_bytes)}</td>
+        <td><span class="badge">${b.conversation_count || 0} 会话</span></td>
+        <td><button class="btn-danger" style="height:26px;font-size:11px;padding:0 8px;" onclick="deleteOneBundle('${esc(b.path)}')">删除迁移包</button></td>
+      </tr>`);
+    }
+    for (const sb of (inv.sandboxes || [])) {
+      rows.push(`<tr>
+        <td><b>🧪 沙箱临时目录</b><br/><span style="color:var(--text-3);font-size:11px;">${esc(sb.name)}</span></td>
+        <td style="font-size:11px;color:var(--text-2);font-family:var(--font-mono);max-width:260px;word-break:break-all;">${esc(sb.path)}</td>
+        <td style="font-variant-numeric:tabular-nums;">${fmtBytes(sb.size_bytes)}</td>
+        <td><span class="badge warn">临时测试</span></td>
+        <td><span style="color:var(--text-3);font-size:11px;">随「清理过期」回收</span></td>
+      </tr>`);
+    }
+    document.getElementById("storage-tbody").innerHTML = rows.length
+      ? rows.join("")
+      : `<tr><td colspan="5" style="color:var(--safe);text-align:center;padding:18px;">✓ 非常干净，当前没有残留的旧备份、迁移包或沙箱垃圾</td></tr>`;
+  } catch (e) { console.error(e); }
+}
+
+async function cleanupOneTx(txDir, removeBundle) {
+  try {
+    const res = await api("/api/cleanup", { mode: "confirm_tx", tx_dir: txDir, remove_bundle: Boolean(removeBundle) });
+    const box = document.getElementById("cleanup-status-msg");
+    box.textContent = `✓ 已清理备份 ${res.transaction_id}，释放 ${res.reclaimed_mb} MB 磁盘空间`;
+    box.classList.remove("hidden");
+    loadStorage();
+  } catch (e) { alert("清理失败：" + e.message); }
+}
+
+async function rollbackOneTx(txDir) {
+  document.getElementById("rb-bundle").value = txDir;
+  await doManualRollback();
+}
+
+async function deleteOneBundle(bundlePath) {
+  try {
+    const res = await api("/api/cleanup", { mode: "delete_bundle", bundle: bundlePath });
+    const box = document.getElementById("cleanup-status-msg");
+    box.textContent = `✓ 已删除本地迁移包，释放 ${res.reclaimed_mb} MB 磁盘空间`;
+    box.classList.remove("hidden");
+    if (state.lastBundlePath === bundlePath) state.lastBundlePath = null;
+    updateProgressUI();
+    loadStorage();
+  } catch (e) { alert("删除失败：" + e.message); }
+}
+
+async function runStorageCleanup(mode) {
+  try {
+    const res = await api("/api/cleanup", { mode });
+    const box = document.getElementById("cleanup-status-msg");
+    if (mode === "reclaim_memory") {
+      box.textContent = `⚡ 已执行全代 GC 内存回收：${res.before_rss_mb} MB → ${res.after_rss_mb} MB（回收对象 ${res.gc_collected} 个）`;
+    } else {
+      box.textContent = `🧹 清理完成：共释放 ${res.reclaimed_mb} MB（备份 ${(res.pruned_transactions || []).length} 份 · 沙箱 ${(res.pruned_sandboxes || []).length} 个 · 迁移包 ${(res.pruned_bundles || []).length} 个）`;
+    }
+    box.classList.remove("hidden");
+    loadStorage();
+  } catch (e) { alert("清理失败：" + e.message); }
 }
 
 async function loadDiscover() {
@@ -1925,6 +2132,7 @@ function renderMatrix() {
 
 loadDiscover();
 loadMatrix();
+loadStorage();
 updateProgressUI();
 </script>
 </body>
@@ -1944,9 +2152,42 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
         .replace("__TARGET_ROOTS_JSON__", target_roots_json)
         .encode("utf-8")
     )
-    viewer_servers: list[HTTPServer] = []
+    active_viewer: dict[str, HTTPServer | None] = {"server": None}
+    viewer_lock = threading.Lock()
+    tracked_roots: set[str] = set()
+    tracked_lock = threading.Lock()
     jobs: dict[str, dict[str, Any]] = {}
     jobs_lock = threading.Lock()
+
+    def _close_active_viewer() -> None:
+        with viewer_lock:
+            old = active_viewer["server"]
+            active_viewer["server"] = None
+        if old is not None:
+            try:
+                old.shutdown()
+            except Exception:
+                pass
+            try:
+                old.server_close()
+            except Exception:
+                pass
+
+    def _track_path(p: str | Path | None) -> None:
+        if not p:
+            return
+        try:
+            rp = str(Path(p).expanduser().resolve())
+        except OSError:
+            return
+        with tracked_lock:
+            if len(tracked_roots) > 64:
+                tracked_roots.clear()
+            tracked_roots.add(rp)
+
+    def _get_tracked_roots() -> list[str]:
+        with tracked_lock:
+            return sorted(tracked_roots)
 
     _PHASE_LABELS = {
         "init": "初始化",
@@ -1998,6 +2239,8 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
         convs_prev = _serialize_conversations_preview(graphs)
         if on_progress is not None:
             on_progress("render", 1, 1, f"已就绪 {len(convs_prev)} 条会话")
+        del graphs
+        reclaim_memory()
         return {"manifest": manifest, "conversations_preview": convs_prev}
 
     def _run_convert_work(body: dict[str, Any], on_progress: Any = None) -> dict[str, Any]:
@@ -2046,15 +2289,22 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
         vcheck = verify_bundle(out_p)
         if on_progress is not None:
             on_progress("verify", 1, 1, "迁移包校验通过" if vcheck.get("ok") else "迁移包校验异常")
+        written_str = str(out_p.resolve())
+        _track_path(written_str)
+        convs_prev = _serialize_conversations_preview(graphs)
+        del graphs, assets
+        reclaim_memory()
         return {
-            "written_to": str(out_p.resolve()),
+            "written_to": written_str,
             "manifest": manifest,
             "verify": vcheck,
-            "conversations_preview": _serialize_conversations_preview(graphs),
+            "conversations_preview": convs_prev,
         }
 
     def _run_apply_work(body: dict[str, Any], on_progress: Any = None) -> dict[str, Any]:
-        return apply_bundle(
+        raw_keep = body.get("auto_prune_keep", DEFAULT_MAX_KEEP_TRANSACTIONS)
+        keep_n = int(raw_keep) if raw_keep is not None else DEFAULT_MAX_KEEP_TRANSACTIONS
+        res = apply_bundle(
             str(body.get("bundle") or ""),
             target_root=str(body.get("target_root") or ""),
             claude_dir=body.get("claude_dir") or None,
@@ -2062,15 +2312,20 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
             include_skills=bool(body.get("include_skills", False)),
             apply=bool(body.get("apply", False)),
             on_progress=on_progress,
+            cleanup_backup_after_verify=bool(body.get("cleanup_backup_after_verify", False)),
+            auto_prune_keep=keep_n if keep_n > 0 else None,
         )
+        _track_path(body.get("bundle"))
+        _track_path(res.get("journal_dir"))
+        return res
 
     def _start_async_job(kind: str, body: dict[str, Any]) -> str:
         jid = secrets.token_hex(8)
         started_at = time.monotonic()
         with jobs_lock:
-            # Keep memory bounded (last 40 jobs)
-            if len(jobs) > 40:
-                for old_id in list(jobs.keys())[:-20]:
+            # Keep memory strictly bounded (at most 12 lightweight status entries)
+            if len(jobs) > 12:
+                for old_id in list(jobs.keys())[:-6]:
                     if jobs[old_id].get("status") != "running":
                         jobs.pop(old_id, None)
             jobs[jid] = {
@@ -2152,6 +2407,8 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
                             "error": str(exc),
                         }
                     )
+            finally:
+                reclaim_memory()
 
         threading.Thread(target=_worker, daemon=True).start()
         return jid
@@ -2203,15 +2460,28 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
                 if path == "/api/matrix":
                     self._send_json(HTTPStatus.OK, build_matrix_data())
                     return
+                if path == "/api/storage":
+                    self._send_json(HTTPStatus.OK, scan_reclaimable_storage(extra_roots=_get_tracked_roots()))
+                    return
                 if path.startswith("/api/jobs/"):
                     jid = urllib.parse.unquote(path.removeprefix("/api/jobs/").strip("/"))
                     with jobs_lock:
                         st = jobs.get(jid)
-                        snap = dict(st) if st is not None else None
+                        if st is not None:
+                            snap = dict(st)
+                            # Release bulky result payload from server RAM immediately upon delivery
+                            if st.get("status") in {"done", "error"} and st.get("result") is not None:
+                                st["result"] = None
+                                st["result_delivered"] = True
+                        else:
+                            snap = None
                     if snap is None:
                         self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
                     else:
                         self._send_json(HTTPStatus.OK, snap)
+                        if snap.get("status") in {"done", "error"} and snap.get("result") is not None:
+                            del snap
+                            reclaim_memory()
                     return
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
             except Exception as exc:
@@ -2258,7 +2528,60 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
                     return
 
                 if path == "/api/rollback":
-                    res = rollback_transaction(str(body.get("tx_dir") or ""))
+                    res = rollback_transaction(
+                        str(body.get("tx_dir") or ""),
+                        cleanup_backup=bool(body.get("cleanup_backup", False)),
+                    )
+                    self._send_json(HTTPStatus.OK, res)
+                    return
+
+                if path == "/api/cleanup":
+                    mode = str(body.get("mode") or "prune")
+                    if mode == "reclaim_memory":
+                        self._send_json(HTTPStatus.OK, reclaim_memory())
+                        return
+                    if mode == "confirm_tx":
+                        res = cleanup_transaction_backup(
+                            str(body.get("tx_dir") or ""),
+                            remove_bundle=bool(body.get("remove_bundle", False)),
+                            mark_confirmed=True,
+                            keep_receipt=True,
+                            dry_run=bool(body.get("dry_run", False)),
+                        )
+                        self._send_json(HTTPStatus.OK, res)
+                        return
+                    if mode == "delete_bundle":
+                        res = delete_bundle_dir(
+                            str(body.get("bundle") or ""),
+                            dry_run=bool(body.get("dry_run", False)),
+                        )
+                        self._send_json(HTTPStatus.OK, res)
+                        return
+                    if mode == "prune_all":
+                        res = prune_reclaimable_storage(
+                            extra_roots=_get_tracked_roots(),
+                            max_keep_transactions=0,
+                            max_age_days=0,
+                            max_total_backup_mb=0,
+                            clean_sandboxes=True,
+                            sandbox_max_age_hours=0,
+                            clean_bundles=True,
+                            bundle_max_keep=0,
+                            dry_run=bool(body.get("dry_run", False)),
+                        )
+                        self._send_json(HTTPStatus.OK, res)
+                        return
+                    res = prune_reclaimable_storage(
+                        extra_roots=_get_tracked_roots(),
+                        max_keep_transactions=int(body.get("keep", DEFAULT_MAX_KEEP_TRANSACTIONS)),
+                        max_age_days=float(body.get("max_age_days", DEFAULT_MAX_AGE_DAYS)),
+                        max_total_backup_mb=float(body.get("max_mb", DEFAULT_MAX_TOTAL_BACKUP_MB)),
+                        clean_sandboxes=bool(body.get("clean_sandboxes", True)),
+                        sandbox_max_age_hours=float(body.get("sandbox_max_age_hours", DEFAULT_SANDBOX_MAX_AGE_HOURS)),
+                        clean_bundles=bool(body.get("clean_bundles", False)),
+                        bundle_max_keep=int(body.get("keep_bundles", 2)),
+                        dry_run=bool(body.get("dry_run", False)),
+                    )
                     self._send_json(HTTPStatus.OK, res)
                     return
 
@@ -2266,9 +2589,12 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
                     bdir = Path(str(body.get("bundle") or "")).expanduser()
                     if not (bdir / "manifest.json").is_file():
                         raise ValueError("该目录还不是有效迁移包（缺少 manifest.json），请先执行第 3 步生成迁移包")
+                    # Close any previous viewer server cleanly so threads & RAM never accumulate
+                    _close_active_viewer()
                     vsrv = _LoopbackHTTPServer(("127.0.0.1", 0), make_viewer_handler(bdir))
                     vport = vsrv.server_address[1]
-                    viewer_servers.append(vsrv)
+                    with viewer_lock:
+                        active_viewer["server"] = vsrv
                     threading.Thread(target=vsrv.serve_forever, daemon=True).start()
                     url = f"http://127.0.0.1:{vport}/"
                     if os.environ.get("NEXUS_NO_BROWSER") != "1":
@@ -2280,6 +2606,7 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
             except Exception as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
 
+    Handler._close_active_viewer = staticmethod(_close_active_viewer)  # type: ignore[attr-defined]
     return Handler
 
 
@@ -2306,8 +2633,28 @@ class _LoopbackThreadingHTTPServer(ThreadingHTTPServer):
 def start_desktop_server(port: int = 0) -> tuple[ThreadingHTTPServer, str, str]:
     """Start the hardened 127.0.0.1 desktop API+UI server and return `(server, url, token)`."""
     token = secrets.token_urlsafe(24)
-    srv = _LoopbackThreadingHTTPServer(("127.0.0.1", port), make_desktop_handler(token))
+    handler_cls = make_desktop_handler(token)
+    srv = _LoopbackThreadingHTTPServer(("127.0.0.1", port), handler_cls)
     actual_port = srv.server_address[1]
+
+    # Gentle non-blocking startup auto-prune for expired temp sandboxes (>24h) and aged backups (>7d / >512 MB)
+    if os.environ.get("NEXUS_SKIP_STARTUP_PRUNE") != "1":
+        def _bg_startup_prune() -> None:
+            try:
+                prune_reclaimable_storage(
+                    max_keep_transactions=DEFAULT_MAX_KEEP_TRANSACTIONS,
+                    max_age_days=DEFAULT_MAX_AGE_DAYS,
+                    max_total_backup_mb=DEFAULT_MAX_TOTAL_BACKUP_MB,
+                    clean_sandboxes=True,
+                    sandbox_max_age_hours=DEFAULT_SANDBOX_MAX_AGE_HOURS,
+                    clean_bundles=False,
+                    dry_run=False,
+                )
+            except Exception:
+                pass
+
+        threading.Thread(target=_bg_startup_prune, daemon=True).start()
+
     return srv, f"http://127.0.0.1:{actual_port}/", token
 
 
@@ -2410,6 +2757,9 @@ def launch_desktop(argv: list[str] | None = None) -> int:
         except KeyboardInterrupt:
             pass
         finally:
+            close_fn = getattr(srv.RequestHandlerClass, "_close_active_viewer", None)
+            if callable(close_fn):
+                close_fn()
             srv.server_close()
         return 0
 
@@ -2421,6 +2771,9 @@ def launch_desktop(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        close_fn = getattr(srv.RequestHandlerClass, "_close_active_viewer", None)
+        if callable(close_fn):
+            close_fn()
         srv.shutdown()
         srv.server_close()
     return 0

@@ -101,10 +101,11 @@ PYTHONPATH=src python3 -m nexus_memory convert ~/.codex --from codex \
   --to claude-code --cwd /path/to/workspace --out /tmp/de-bundle --include-resources --write
 PYTHONPATH=src python3 -m nexus_memory verify /tmp/de-bundle
 
-# 5. Dry-run apply -> Transactional --apply -> Exact rollback if needed
+# 5. Dry-run apply -> Transactional --apply -> Exact rollback or post-verify backup cleanup
 PYTHONPATH=src python3 -m nexus_memory apply /tmp/de-bundle --target-root /tmp/isolated-claude
 PYTHONPATH=src python3 -m nexus_memory apply /tmp/de-bundle --target-root /tmp/isolated-claude --apply
-PYTHONPATH=src python3 -m nexus_memory rollback /tmp/de-bundle/.transactions/<tx-id>
+PYTHONPATH=src python3 -m nexus_memory rollback /tmp/de-bundle/.transactions/<tx-id> --cleanup-backup
+PYTHONPATH=src python3 -m nexus_memory cleanup --prune --keep 3 --max-age-days 7 --max-mb 512 --apply
 
 # 6. Hardened 127.0.0.1 offline bundle viewer
 PYTHONPATH=src python3 -m nexus_memory viewer /tmp/de-bundle --port 8765
@@ -125,7 +126,7 @@ open "dist/Nexus Memory.app"
 
 # Linux (Debian 12/13, Ubuntu, etc. — universal amd64/arm64 .deb)
 python3 packaging/linux/build_deb.py
-sudo apt install ./dist/nexus-memory_0.2.0_all.deb
+sudo apt install ./dist/nexus-memory_0.2.1_all.deb
 nexus-memory --version
 nexus-memory-desktop
 ```

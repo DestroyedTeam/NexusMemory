@@ -28,6 +28,16 @@ from .claude_code import TESTED_CLAUDE_CODE_VERSION
 from .claude_desktop_3p import DEFAULT_3P_DEVICE_ID, DEFAULT_3P_ORG_ID
 from .discovery import discover_harnesses
 from .ecosystem import load_any_source
+from .lifecycle import (
+    DEFAULT_MAX_AGE_DAYS,
+    DEFAULT_MAX_KEEP_TRANSACTIONS,
+    DEFAULT_MAX_TOTAL_BACKUP_MB,
+    DEFAULT_SANDBOX_MAX_AGE_HOURS,
+    cleanup_transaction_backup,
+    prune_reclaimable_storage,
+    reclaim_memory,
+    scan_reclaimable_storage,
+)
 from .matrix import build_matrix_data, evaluate_pair, render_matrix_markdown
 from .resources import scan_resources, stage_resources_to_bundle
 from .transaction import apply_bundle, rollback_transaction, verify_bundle, verify_transaction
@@ -98,6 +108,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_app.add_argument("--include-skills", action="store_true", help="also install staged bundle skills into target")
     p_app.add_argument("--config", type=Path, default=None)
     p_app.add_argument("--allow-cloud-sync-path", type=Path, default=None)
+    p_app.add_argument(
+        "--cleanup-backup-after-verify",
+        action="store_true",
+        help="immediately remove pre-apply .tar.gz backup once post-write readback verification succeeds",
+    )
+    p_app.add_argument(
+        "--keep-backups",
+        type=int,
+        default=DEFAULT_MAX_KEEP_TRANSACTIONS,
+        help="auto-prune older sibling backups beyond this count after successful apply (0 disables auto-prune)",
+    )
     p_app.add_argument("--apply", action="store_true", help="execute transactional writes (default is dry-run)")
 
     # verify
@@ -107,6 +128,30 @@ def build_parser() -> argparse.ArgumentParser:
     # rollback
     p_rb = subparsers.add_parser("rollback", help="restore target directory from an applied transaction's pristine backup")
     p_rb.add_argument("tx_dir", type=Path, help="path to transaction directory or transaction.json")
+    p_rb.add_argument(
+        "--cleanup-backup",
+        action="store_true",
+        help="delete the spent backup archive once exact pristine rollback succeeds",
+    )
+
+    # cleanup
+    p_cln = subparsers.add_parser(
+        "cleanup",
+        help="inspect or reclaim transaction backups, staged bundles, and temp sandboxes (dry-run by default)",
+    )
+    p_cln.add_argument("--tx-dir", type=Path, default=None, help="confirm verified and clean one specific transaction backup")
+    p_cln.add_argument("--remove-bundle", action="store_true", help="with --tx-dir, also remove its verified staged bundle")
+    p_cln.add_argument("--prune", action="store_true", help="apply retention policy to prune old backups and temp sandboxes")
+    p_cln.add_argument("--extra-root", type=Path, action="append", default=[], help="extra folder(s) to scan for bundles/transactions")
+    p_cln.add_argument("--keep", type=int, default=DEFAULT_MAX_KEEP_TRANSACTIONS, help="recent backups to keep when pruning")
+    p_cln.add_argument("--max-age-days", type=float, default=DEFAULT_MAX_AGE_DAYS, help="prune backups older than N days")
+    p_cln.add_argument("--max-mb", type=float, default=DEFAULT_MAX_TOTAL_BACKUP_MB, help="max total backup budget in MiB")
+    p_cln.add_argument("--clean-sandboxes", action="store_true", default=True, help="clean expired temp sandbox dirs (default: on)")
+    p_cln.add_argument("--no-clean-sandboxes", dest="clean_sandboxes", action="store_false")
+    p_cln.add_argument("--sandbox-max-age-hours", type=float, default=DEFAULT_SANDBOX_MAX_AGE_HOURS)
+    p_cln.add_argument("--clean-bundles", action="store_true", help="also prune old staged migration bundles")
+    p_cln.add_argument("--keep-bundles", type=int, default=2, help="newest staged bundles to keep when --clean-bundles is set")
+    p_cln.add_argument("--apply", action="store_true", help="execute deletion (default is dry-run preview)")
 
     # matrix
     p_mat = subparsers.add_parser("matrix", help="print deterministic Cross-Harness Compatibility & Fidelity Matrix")
@@ -172,9 +217,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if result.get("ok") else 1
 
         if args.command == "rollback":
-            result = rollback_transaction(args.tx_dir)
+            result = rollback_transaction(args.tx_dir, cleanup_backup=args.cleanup_backup)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0 if result.get("ok") else 1
+
+        if args.command == "cleanup":
+            if args.tx_dir is not None:
+                result = cleanup_transaction_backup(
+                    args.tx_dir,
+                    remove_bundle=args.remove_bundle,
+                    mark_confirmed=True,
+                    keep_receipt=True,
+                    dry_run=not args.apply,
+                )
+            elif args.prune or args.clean_bundles:
+                result = prune_reclaimable_storage(
+                    extra_roots=args.extra_root or None,
+                    max_keep_transactions=args.keep,
+                    max_age_days=args.max_age_days,
+                    max_total_backup_mb=args.max_mb,
+                    clean_sandboxes=args.clean_sandboxes,
+                    sandbox_max_age_hours=args.sandbox_max_age_hours,
+                    clean_bundles=args.clean_bundles,
+                    bundle_max_keep=args.keep_bundles,
+                    dry_run=not args.apply,
+                )
+            else:
+                result = scan_reclaimable_storage(extra_roots=args.extra_root or None)
+                if args.apply:
+                    result["memory_reclaimed"] = reclaim_memory()
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
 
         if args.command == "apply":
             gate_cfg = load_gate_config(args.config)
@@ -188,6 +261,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 include_skills=args.include_skills,
                 gate_config=gate_cfg,
                 allow_cloud_sync_path=args.allow_cloud_sync_path,
+                cleanup_backup_after_verify=args.cleanup_backup_after_verify,
+                auto_prune_keep=args.keep_backups if args.keep_backups > 0 else None,
             )
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
