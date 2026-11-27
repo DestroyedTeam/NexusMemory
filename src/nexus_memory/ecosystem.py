@@ -2737,6 +2737,16 @@ def _parse_dir_files(
 # ── Unified Auto-Detect Loader ───────────────────────────────────────────────
 
 
+def _read_first_nonempty_line(path: Path) -> str:
+    """Read only the first non-empty line of a JSONL file without loading the entire file into RAM."""
+    with path.open("r", encoding="utf-8-sig", errors="replace") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped:
+                return stripped
+    return "{}"
+
+
 def load_any_source(
     path: str | Path,
     *,
@@ -2911,7 +2921,7 @@ def load_any_source(
             sample_jl = next((f for f in sorted((p / "sessions").rglob("*.jsonl")) if f.is_file()), None)
             if sample_jl is not None:
                 try:
-                    fl = next((l for l in sample_jl.read_text(encoding="utf-8-sig", errors="replace").splitlines() if l.strip()), "{}")
+                    fl = _read_first_nonempty_line(sample_jl)
                     hdr = json.loads(fl)
                     if isinstance(hdr, dict):
                         if hdr.get("type") == "session_header" or "dsh_schema_version" in hdr:
@@ -2947,7 +2957,7 @@ def load_any_source(
             sample_pj = next((f for f in sorted((p / "projects").rglob("*.jsonl")) if f.is_file()), None)
             if sample_pj is not None:
                 try:
-                    fl = next((l for l in sample_pj.read_text(encoding="utf-8-sig", errors="replace").splitlines() if l.strip()), "{}")
+                    fl = _read_first_nonempty_line(sample_pj)
                     if json.loads(fl).get("type") in {"session-meta", "workbuddy_session_meta"}:
                         return parse_workbuddy_home(p, limit=limit), {}
                 except (OSError, json.JSONDecodeError):
@@ -2963,7 +2973,7 @@ def load_any_source(
             sample_root_jl = next((f for f in sorted(p.glob("*.jsonl")) if f.is_file()), None)
             if sample_root_jl is not None:
                 try:
-                    fl = next((l for l in sample_root_jl.read_text(encoding="utf-8-sig", errors="replace").splitlines() if l.strip()), "{}")
+                    fl = _read_first_nonempty_line(sample_root_jl)
                     if json.loads(fl).get("type") == "session":
                         return _parse_dir_files(p, (), ("*.jsonl",), parse_pi_session, limit=limit), {}
                 except (OSError, json.JSONDecodeError):
@@ -3009,7 +3019,7 @@ def load_any_source(
     if name_lower in {"transcript.jsonl", "transcript_full.jsonl"}:
         return [parse_antigravity_transcript(p)], {}
     if name_lower.endswith(".jsonl"):
-        first_line = next((l for l in p.read_text(encoding="utf-8-sig", errors="replace").splitlines() if l.strip()), "{}")
+        first_line = _read_first_nonempty_line(p)
         first = json.loads(first_line)
         if first.get("type") in {"USER_INPUT", "PLANNER_RESPONSE", "SYSTEM_MESSAGE", "GENERIC"} and "step_index" in first:
             return [parse_antigravity_transcript(p)], {}

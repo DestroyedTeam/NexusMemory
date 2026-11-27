@@ -665,7 +665,9 @@ def write_bundle(
             "resources": resources.to_dict() if resources is not None else None,
             "conversations": [graph.to_dict() for graph in conversations],
         }
-        atomic_write_json(output / "portable.json", portable)
+        compact_portable = len(conversations) > 20 or int(manifest.get("node_count") or 0) > 500
+        atomic_write_json(output / "portable.json", portable, compact=compact_portable)
+        del portable
         atomic_write_json(output / "manifest.json", manifest)
         atomic_write_bytes(
             output / "HANDOFF_REPORT.md",
@@ -760,6 +762,10 @@ def write_bundle(
         if gemini_projects:
             gp_dst = ensure_within_root(output / "gemini_sessions" / "projects.json", output)
             atomic_write_json(gp_dst, {"projects": gemini_projects}, mode=0o600)
+        del native_sessions
+        from .lifecycle import reclaim_memory
+
+        reclaim_memory()
         return manifest
     except Exception:
         _remove_tree(output)

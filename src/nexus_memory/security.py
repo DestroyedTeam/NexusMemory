@@ -12,13 +12,14 @@ Incorporates concrete lessons from the 326-repo Nexus Memory audit:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import tempfile
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 # Ordered: multi-line PEM blocks first, then vendor-prefixed high-precision tokens.
 # Keys for original prototype patterns remain identical for test compatibility.
@@ -201,6 +202,114 @@ def atomic_write_bytes(path: Path, data: bytes, *, mode: int = 0o600) -> None:
         raise
 
 
-def atomic_write_json(path: Path, value: Any, *, mode: int = 0o600) -> None:
-    payload = (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-    atomic_write_bytes(path, payload, mode=mode)
+def sha256_file(path: str | Path) -> str:
+    """Stream-compute SHA-256 hex digest in constant memory (~256 KiB buffer) without loading file into RAM."""
+    with Path(path).open("rb") as fh:
+        return hashlib.file_digest(fh, "sha256").hexdigest()
+
+
+def atomic_write_stream(
+    path: Path,
+    src_stream: BinaryIO,
+    *,
+    mode: int = 0o600,
+    chunk_size: int = 262144,
+) -> int:
+    """Atomically stream bytes from `src_stream` into `path` via temp file + `os.replace` in constant memory."""
+    ensure_private_dir(path.parent)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    tmp_path = Path(tmp_name)
+    closed = False
+    total = 0
+    try:
+        if os.name != "nt":
+            try:
+                os.chmod(fd, mode)
+            except OSError:
+                pass
+        with os.fdopen(fd, "wb") as handle:
+            closed = True
+            while True:
+                chunk = src_stream.read(chunk_size)
+                if not chunk:
+                    break
+                handle.write(chunk)
+                total += len(chunk)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        if os.name != "nt":
+            try:
+                path.chmod(mode)
+            except OSError:
+                pass
+        return total
+    except Exception:
+        if not closed:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
+def atomic_copy_file(src: str | Path, dst: Path, *, mode: int = 0o600) -> int:
+    """Atomically copy `src` to `dst` in 256 KiB streaming chunks (zero full-file RAM spike)."""
+    with Path(src).open("rb") as fh:
+        return atomic_write_stream(dst, fh, mode=mode)
+
+
+def atomic_write_json(path: Path, value: Any, *, mode: int = 0o600, compact: bool = False) -> None:
+    """Atomically stream-encode JSON directly to disk (avoids duplicating multi-GB str+bytes in RAM)."""
+    ensure_private_dir(path.parent)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    tmp_path = Path(tmp_name)
+    closed = False
+    encoder = json.JSONEncoder(
+        ensure_ascii=False,
+        indent=None if compact else 2,
+        separators=(",", ":") if compact else None,
+    )
+    try:
+        if os.name != "nt":
+            try:
+                os.chmod(fd, mode)
+            except OSError:
+                pass
+        with os.fdopen(fd, "wb") as handle:
+            closed = True
+            buf: list[str] = []
+            buf_len = 0
+            for piece in encoder.iterencode(value):
+                buf.append(piece)
+                buf_len += len(piece)
+                if buf_len >= 65536:
+                    handle.write("".join(buf).encode("utf-8"))
+                    buf.clear()
+                    buf_len = 0
+            if buf:
+                handle.write("".join(buf).encode("utf-8"))
+            handle.write(b"\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        if os.name != "nt":
+            try:
+                path.chmod(mode)
+            except OSError:
+                pass
+    except Exception:
+        if not closed:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise

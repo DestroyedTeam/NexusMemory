@@ -27,18 +27,37 @@ from pathlib import Path
 from typing import Any
 
 from .claude_desktop_3p import verify_desktop_3p_code_join
+from .lifecycle import (
+    DEFAULT_MAX_KEEP_TRANSACTIONS,
+    cleanup_transaction_backup,
+    prune_reclaimable_storage,
+    reclaim_memory,
+)
 from .security import (
+    atomic_copy_file,
     atomic_write_bytes,
     atomic_write_json,
+    atomic_write_stream,
     ensure_private_dir,
     ensure_within_root,
     scan_secret_markers,
+    sha256_file,
 )
 from .write_gate import GateConfig, check_write_gate
 
 
+def _read_first_nonempty_line(path: Path) -> str:
+    """Read only the first non-empty line without loading a potentially huge JSONL file into RAM."""
+    with path.open("r", encoding="utf-8-sig", errors="replace") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped:
+                return stripped
+    return "{}"
+
+
 def compute_tree_sha256(root: str | Path) -> tuple[int, str]:
-    """Compute deterministic `(file_count, sha256_hex)` over all regular files in `root`."""
+    """Compute deterministic `(file_count, sha256_hex)` over all regular files in `root` using streaming I/O."""
     base = Path(root).expanduser()
     h = hashlib.sha256()
     if not base.exists():
@@ -46,7 +65,7 @@ def compute_tree_sha256(root: str | Path) -> tuple[int, str]:
     files = sorted(p for p in base.rglob("*") if p.is_file() and not p.is_symlink())
     for fp in files:
         rel = fp.relative_to(base).as_posix().encode("utf-8")
-        h.update(rel + b"\x00" + hashlib.sha256(fp.read_bytes()).digest() + b"\n")
+        h.update(rel + b"\x00" + bytes.fromhex(sha256_file(fp)) + b"\n")
     return len(files), h.hexdigest()
 
 
@@ -85,15 +104,17 @@ def verify_bundle(bundle_dir: str | Path) -> dict[str, Any]:
             errors.append(f"missing staged session file: {rel}")
             continue
         if fp.suffix == ".jsonl":
-            for ln, line in enumerate(fp.read_text(encoding="utf-8").splitlines(), 1):
-                if line.strip():
-                    try:
-                        json.loads(line)
-                    except json.JSONDecodeError as exc:
-                        errors.append(f"corrupt JSONL in {rel}:{ln}: {exc.msg}")
+            with fp.open("r", encoding="utf-8") as fh:
+                for ln, line in enumerate(fh, 1):
+                    if line.strip():
+                        try:
+                            json.loads(line)
+                        except json.JSONDecodeError as exc:
+                            errors.append(f"corrupt JSONL in {rel}:{ln}: {exc.msg}")
         elif fp.suffix == ".json":
             try:
-                json.loads(fp.read_text(encoding="utf-8"))
+                with fp.open("r", encoding="utf-8") as fh:
+                    json.load(fh)
             except json.JSONDecodeError as exc:
                 errors.append(f"corrupt JSON in {rel}: {exc.msg}")
 
@@ -136,12 +157,13 @@ def verify_bundle(bundle_dir: str | Path) -> dict[str, Any]:
         if not ap.is_file():
             errors.append(f"missing asset binary: {rel}")
             continue
-        actual_sha = hashlib.sha256(ap.read_bytes()).hexdigest()
+        actual_sha = sha256_file(ap)
         if actual_sha != expected_sha:
             errors.append(f"asset SHA-256 mismatch for {rel}: expected {expected_sha}, got {actual_sha}")
         else:
             verified_assets += 1
     checks["verified_assets"] = verified_assets
+    del portable
 
     # 3. Verify HANDOFF_REPORT.md and resources/mcp.sanitized.json contain ZERO unredacted raw secret markers
     for clean_rel in ("HANDOFF_REPORT.md", "resources/mcp.sanitized.json", "resources/codex-mcp.sanitized.toml"):
@@ -421,7 +443,7 @@ def _create_scoped_backup(
                 modified_meta.append(
                     {
                         "rel_path": rel,
-                        "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                        "sha256": sha256_file(p),
                         "mode": p.stat().st_mode & 0o777,
                     }
                 )
@@ -435,7 +457,8 @@ def _create_scoped_backup(
     for item in modified_meta:
         h.update(f"{item['rel_path']}\x00{item['sha256']}\n".encode("utf-8"))
     return {
-        "backup_sha256": hashlib.sha256(archive_path.read_bytes()).hexdigest(),
+        "backup_sha256": sha256_file(archive_path),
+        "backup_bytes": archive_path.stat().st_size if archive_path.is_file() else 0,
         "scoped_pre_sha256": h.hexdigest(),
         "created_rel_paths": created_rel,
         "modified_files": modified_meta,
@@ -454,6 +477,8 @@ def apply_bundle(
     gate_config: GateConfig | None = None,
     allow_cloud_sync_path: str | Path | None = None,
     on_progress: Callable[[str, int, int, str], None] | None = None,
+    cleanup_backup_after_verify: bool = False,
+    auto_prune_keep: int | None = DEFAULT_MAX_KEEP_TRANSACTIONS,
 ) -> dict[str, Any]:
     """Dry-run or transactionally apply a verified bundle to `target_root` with backup & verification."""
     if on_collision not in {"refuse", "skip", "rename"}:
@@ -511,7 +536,7 @@ def apply_bundle(
                 "dst": str(final_dst),
                 "original_dst": str(dst),
                 "action": action,
-                "src_sha256": hashlib.sha256(src.read_bytes()).hexdigest(),
+                "src_sha256": sha256_file(src),
             }
         )
 
@@ -699,9 +724,8 @@ def apply_bundle(
             cur_obj["projects"] = projs
             atomic_write_json(dst, cur_obj, mode=0o600)
         else:
-            data = src.read_bytes()
-            atomic_write_bytes(dst, data, mode=0o600)
-        written_files.append({**op, "written_sha256": hashlib.sha256(dst.read_bytes()).hexdigest()})
+            atomic_copy_file(src, dst, mode=0o600)
+        written_files.append({**op, "written_sha256": sha256_file(dst)})
         done_ops += 1
         if on_progress is not None:
             on_progress("apply", done_ops, max(total_ops, 1), dst.name)
@@ -726,7 +750,7 @@ def apply_bundle(
                 on_collision=on_collision,
                 on_progress=_t3_progress if on_progress is not None else None,
             )
-            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            db_sha = sha256_file(dst) if dst.is_file() else ""
             for op, meta in zip(group_ops, metas):
                 written_files.append({**op, "t3code_thread_id": meta.get("thread_id"), "written_sha256": db_sha})
             done_ops += len(group_ops)
@@ -740,17 +764,14 @@ def apply_bundle(
             ensure_private_dir(dst.parent)
             wb_entries: list[dict[str, Any]] = []
             for op in group_ops:
-                first_line = next(
-                    (l for l in Path(op["src"]).read_text(encoding="utf-8-sig", errors="replace").splitlines() if l.strip()),
-                    "{}",
-                )
+                first_line = _read_first_nonempty_line(Path(op["src"]))
                 try:
                     hdr = json.loads(first_line)
                 except json.JSONDecodeError:
                     hdr = {}
                 wb_entries.append(hdr if isinstance(hdr, dict) else {})
             wb_metas = merge_workbuddy_sessions_batch(dst, wb_entries, on_collision=on_collision)
-            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            db_sha = sha256_file(dst) if dst.is_file() else ""
             for op, meta in zip(group_ops, wb_metas):
                 written_files.append({**op, "workbuddy_session_id": meta.get("session_id"), "written_sha256": db_sha})
             done_ops += len(group_ops)
@@ -766,7 +787,7 @@ def apply_bundle(
             ensure_private_dir(dst.parent)
             payloads = [json.loads(Path(op["src"]).read_text(encoding="utf-8-sig")) for op in group_ops]
             oc_metas = merge_opencode_sessions_batch(dst, payloads, on_collision=on_collision)
-            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            db_sha = sha256_file(dst) if dst.is_file() else ""
             for op, meta in zip(group_ops, oc_metas):
                 written_files.append({**op, "opencode_session_id": meta.get("session_id"), "written_sha256": db_sha})
             done_ops += len(group_ops)
@@ -791,7 +812,7 @@ def apply_bundle(
                     "records": recs,
                 })
             g_metas = merge_goose_sessions_batch(dst, g_entries, on_collision=on_collision)
-            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            db_sha = sha256_file(dst) if dst.is_file() else ""
             for op, meta in zip(group_ops, g_metas):
                 written_files.append({**op, "goose_session_id": meta.get("session_id"), "written_sha256": db_sha})
             done_ops += len(group_ops)
@@ -822,7 +843,7 @@ def apply_bundle(
                     "ui_messages_path": str(ui_path) if ui_path.is_file() else "",
                 })
             c_metas = merge_cline_sessions_batch(dst, c_entries, on_collision=on_collision)
-            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            db_sha = sha256_file(dst) if dst.is_file() else ""
             for op, meta in zip(group_ops, c_metas):
                 written_files.append({**op, "cline_session_id": meta.get("session_id"), "written_sha256": db_sha})
             done_ops += len(group_ops)
@@ -838,7 +859,7 @@ def apply_bundle(
             ensure_private_dir(dst.parent)
             payloads = [json.loads(Path(op["src"]).read_text(encoding="utf-8-sig")) for op in group_ops]
             z_metas = merge_zed_threads_batch(dst, payloads, on_collision=on_collision)
-            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            db_sha = sha256_file(dst) if dst.is_file() else ""
             for op, meta in zip(group_ops, z_metas):
                 written_files.append({**op, "zed_thread_id": meta.get("thread_id"), "written_sha256": db_sha})
             done_ops += len(group_ops)
@@ -863,7 +884,7 @@ def apply_bundle(
                     "records": recs,
                 })
             k_metas = merge_kiro_sessions_batch(dst, k_entries, on_collision=on_collision)
-            db_sha = hashlib.sha256(dst.read_bytes()).hexdigest() if dst.is_file() else ""
+            db_sha = sha256_file(dst) if dst.is_file() else ""
             for op, meta in zip(group_ops, k_metas):
                 written_files.append({**op, "kiro_conversation_id": meta.get("session_id"), "written_sha256": db_sha})
             done_ops += len(group_ops)
@@ -876,7 +897,7 @@ def apply_bundle(
         if wf.get("action") == "merge_existing" or str(wf.get("kind") or "").endswith("-merge"):
             dpath = str(wf["dst"])
             if dpath not in final_hash_cache and Path(dpath).is_file():
-                final_hash_cache[dpath] = hashlib.sha256(Path(dpath).read_bytes()).hexdigest()
+                final_hash_cache[dpath] = sha256_file(dpath)
             if dpath in final_hash_cache:
                 wf["written_sha256"] = final_hash_cache[dpath]
 
@@ -885,6 +906,11 @@ def apply_bundle(
     for wf in written_files:
         post_h.update(f"{wf['dst']}\x00{wf['written_sha256']}\n".encode("utf-8"))
     post_sha = post_h.hexdigest()
+    total_backup_bytes = int(primary_bk.get("backup_bytes") or 0) + (
+        int(Path(extra_backup["backup_archive"]).stat().st_size)
+        if extra_backup and Path(extra_backup["backup_archive"]).is_file()
+        else 0
+    )
     tx_record: dict[str, Any] = {
         "schema": "nexus-memory.transaction.v2",
         "rollback_mode": "scoped",
@@ -899,6 +925,7 @@ def apply_bundle(
         "post_tree_sha256": post_sha,
         "backup_archive": str(backup_tar),
         "backup_sha256": backup_sha,
+        "backup_bytes": total_backup_bytes,
         "created_rel_paths": primary_bk["created_rel_paths"],
         "modified_files": primary_bk["modified_files"],
         "claude_dir_backup": extra_backup,
@@ -915,6 +942,31 @@ def apply_bundle(
         on_progress("verify", 1, 1, "读回校验通过" if vresult.get("ok") else "读回校验发现异常")
     tx_record["post_write_verification"] = vresult
     atomic_write_json(journal_root / "transaction.json", tx_record, mode=0o600)
+
+    if vresult.get("ok"):
+        if cleanup_backup_after_verify:
+            tx_record["auto_cleanup"] = cleanup_transaction_backup(
+                journal_root,
+                remove_bundle=False,
+                mark_confirmed=True,
+                keep_receipt=True,
+                dry_run=False,
+            )
+            tx_record["backup_cleaned"] = True
+        elif auto_prune_keep is not None and auto_prune_keep > 0 and journal_root.parent.is_dir():
+            prune_res = prune_reclaimable_storage(
+                extra_roots=[journal_root.parent],
+                max_keep_transactions=int(auto_prune_keep),
+                clean_sandboxes=False,
+                clean_bundles=False,
+                include_temp=False,
+                include_desktop=False,
+                dry_run=False,
+            )
+            if prune_res.get("pruned_transactions"):
+                tx_record["auto_prune"] = prune_res
+
+    reclaim_memory()
     return tx_record
 
 
@@ -933,7 +985,7 @@ def verify_transaction(tx_dir: str | Path) -> dict[str, Any]:
         if not dst.is_file():
             errors.append(f"missing written file: {dst}")
             continue
-        actual = hashlib.sha256(dst.read_bytes()).hexdigest()
+        actual = sha256_file(dst)
         expected_hash = wf["written_sha256"] if (wf.get("action") == "merge_existing" or str(wf.get("kind") or "").endswith("-merge")) else wf["src_sha256"]
         if actual != expected_hash:
             errors.append(f"hash mismatch on {dst}: expected {expected_hash}, got {actual}")
@@ -985,7 +1037,9 @@ def _restore_scoped_backup(
     modified_files: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Surgically roll back ONLY files created/modified by this transaction — NEVER wipes unrelated files."""
-    actual_arch_sha = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    if not archive_path.is_file():
+        raise FileNotFoundError(f"backup archive already cleaned or missing: {archive_path}")
+    actual_arch_sha = sha256_file(archive_path)
     if actual_arch_sha != expected_archive_sha:
         raise ValueError(f"backup archive SHA-256 mismatch: expected {expected_archive_sha}, got {actual_arch_sha}")
 
@@ -996,7 +1050,7 @@ def _restore_scoped_backup(
             target_path.unlink(missing_ok=True)
             _prune_empty_parents(target_path, root)
 
-    # 2. Restore exact pre-apply bytes & permissions of modified files
+    # 2. Restore exact pre-apply bytes & permissions of modified files (streaming, constant RAM)
     mode_by_rel = {item["rel_path"]: int(item.get("mode", 0o600)) for item in modified_files}
     with tarfile.open(archive_path, "r:gz") as tf:
         for member in tf.getmembers():
@@ -1006,8 +1060,9 @@ def _restore_scoped_backup(
                 target_path = ensure_within_root(root / member.name, root)
                 extracted = tf.extractfile(member)
                 if extracted is not None:
-                    mode = mode_by_rel.get(member.name, (member.mode & 0o777) or 0o600)
-                    atomic_write_bytes(target_path, extracted.read(), mode=mode)
+                    with extracted:
+                        mode = mode_by_rel.get(member.name, (member.mode & 0o777) or 0o600)
+                        atomic_write_stream(target_path, extracted, mode=mode)
 
     # 3. Verify every created file is removed and every modified file matches its pre-apply SHA-256
     h = hashlib.sha256()
@@ -1020,7 +1075,7 @@ def _restore_scoped_backup(
         if not p.is_file():
             h.update(b"MISSING\n")
         else:
-            h.update(f"{item['rel_path']}\x00{hashlib.sha256(p.read_bytes()).hexdigest()}\n".encode("utf-8"))
+            h.update(f"{item['rel_path']}\x00{sha256_file(p)}\n".encode("utf-8"))
     restored_sha = h.hexdigest()
     return {
         "root": str(root),
@@ -1035,7 +1090,9 @@ def _restore_scoped_backup(
 
 def _restore_from_backup(root: Path, archive_path: Path, expected_archive_sha: str, expected_tree_sha: str) -> dict[str, Any]:
     """Legacy full-tree restore (safe non-destructive extraction preserving original file modes)."""
-    actual_arch_sha = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+    if not archive_path.is_file():
+        raise FileNotFoundError(f"backup archive already cleaned or missing: {archive_path}")
+    actual_arch_sha = sha256_file(archive_path)
     if actual_arch_sha != expected_archive_sha:
         raise ValueError(f"backup archive SHA-256 mismatch: expected {expected_archive_sha}, got {actual_arch_sha}")
     ensure_private_dir(root)
@@ -1049,8 +1106,9 @@ def _restore_from_backup(root: Path, archive_path: Path, expected_archive_sha: s
             elif member.isfile():
                 extracted = tf.extractfile(member)
                 if extracted is not None:
-                    mode = (member.mode & 0o777) or 0o600
-                    atomic_write_bytes(target_path, extracted.read(), mode=mode)
+                    with extracted:
+                        mode = (member.mode & 0o777) or 0o600
+                        atomic_write_stream(target_path, extracted, mode=mode)
     restored_count, restored_sha = compute_tree_sha256(root)
     return {
         "root": str(root),
@@ -1061,7 +1119,7 @@ def _restore_from_backup(root: Path, archive_path: Path, expected_archive_sha: s
     }
 
 
-def rollback_transaction(tx_dir: str | Path) -> dict[str, Any]:
+def rollback_transaction(tx_dir: str | Path, *, cleanup_backup: bool = False) -> dict[str, Any]:
     """Restore target directory (and optional claude_dir) to exact pre-apply pristine SHA-256."""
     jroot = Path(tx_dir).expanduser().resolve()
     tx_file = jroot / "transaction.json" if jroot.is_dir() else jroot
@@ -1104,9 +1162,24 @@ def rollback_transaction(tx_dir: str | Path) -> dict[str, Any]:
             )
 
     ok = primary["exact_match"] and (extra["exact_match"] if extra is not None else True)
+    cleanup_res = None
+    if ok:
+        tx["rolled_back"] = True
+        tx["rolled_back_at"] = datetime.now(UTC).isoformat()
+        atomic_write_json(tx_file, tx, mode=0o600)
+        if cleanup_backup:
+            cleanup_res = cleanup_transaction_backup(
+                tx_file.parent,
+                remove_bundle=False,
+                mark_confirmed=False,
+                keep_receipt=True,
+                dry_run=False,
+            )
+    reclaim_memory()
     return {
         "ok": ok,
         "transaction_id": tx.get("transaction_id"),
         "primary_restore": primary,
         "claude_dir_restore": extra,
+        "backup_cleanup": cleanup_res,
     }
