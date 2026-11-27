@@ -125,7 +125,7 @@ open "dist/Nexus Memory.app"
 
 # Linux (Debian 12/13, Ubuntu, etc. — universal amd64/arm64 .deb)
 python3 packaging/linux/build_deb.py
-sudo apt install ./dist/nexus-memory_0.0.2_all.deb
+sudo apt install ./dist/nexus-memory_0.2.0_all.deb
 nexus-memory --version
 nexus-memory-desktop
 ```
@@ -141,6 +141,12 @@ Windows standalone `.exe` packaging specs live in [packaging/windows/nexus_memor
 - [docs/research/supplemental-skills-managers-triage-2026-11-25.md](docs/research/supplemental-skills-managers-triage-2026-11-25.md) — 192 catalog rows triaged (177 net-new Skills managers)
 
 ```bash
-# Full automated suite (unit + 24x24=576 N×N routes + Playwright Chromium GUI E2E + real-binary CLI acceptance)
+# Full automated suite: unit + 625 (25x25) individual pairwise links + 576 batch N×N + Playwright Chromium GUI E2E + real-binary CLI acceptance
 python3 -m pytest -q tests
 ```
+
+---
+
+## 7. License
+
+Released under the [MIT License](LICENSE).

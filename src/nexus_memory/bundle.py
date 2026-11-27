@@ -402,8 +402,9 @@ def _plan(
         elif target == "aider":
             sessions, graph_losses = build_aider_sessions(graph, cwd=target_cwd)
             for session in sessions:
+                aider_fname = ".aider.chat.history.md" if len(sessions) == 1 else f".aider.chat.history.{session['session_id']}.md"
                 session["target_relative_path"] = (
-                    Path("aider_sessions") / f"conversation-{conversation_index:03d}" / ".aider.chat.history.md"
+                    Path("aider_sessions") / f"conversation-{conversation_index:03d}" / aider_fname
                 ).as_posix()
                 session["source_id"] = graph.source_id
                 session["writer_kind"] = "text-payload"

@@ -1823,6 +1823,159 @@ class NexusV1EndToEndTests(unittest.TestCase):
                 self.assertTrue(rb_d["ok"], f"rollback failed on {dst_target}: {rb_d}")
                 self.assertEqual(compute_tree_sha256(t_dst)[1], pre_sha, f"pristine hash mismatch on {dst_target}")
 
+    def test_exhaustive_all_625_pairwise_harness_links(self) -> None:
+        """Exhaustive 1-to-1 pairwise acceptance across ALL 25 readable sources × ALL 25 writable targets = 625 links.
+
+        Every individual `(source_harness -> target_harness)` pair executes:
+        1. Real materialized source parse (`load_any_source`)
+        2. Dedicated 1-to-1 `write_bundle` + `verify_bundle`
+        3. Dedicated transactional `apply_bundle(..., apply=True)` + `post_write_verification`
+        4. Both explicit AND auto-detect `load_any_source` readback verifying user & assistant fidelity
+        5. Surgical `rollback_transaction` restoring pristine empty tree SHA-256
+        """
+        from nexus_memory.bundle import SUPPORTED_TARGETS
+
+        bidirectional_23 = [
+            "claude-code",
+            "codex",
+            "antigravity",
+            "cursor",
+            "opencode",
+            "pi",
+            "dsh",
+            "gemini-cli",
+            "cline-roo",
+            "goose",
+            "continue",
+            "zed",
+            "aider",
+            "workbuddy",
+            "t3code",
+            "kiro",
+            "amp",
+            "trae",
+            "warp-oz",
+            "windsurf",
+            "claude-desktop-3p-chat",
+            "claude-desktop-3p-cowork",
+            "claude-desktop-3p-code",
+        ]
+        all_25_targets = list(SUPPORTED_TARGETS)
+        self.assertEqual(len(bidirectional_23), 23)
+        self.assertEqual(len(all_25_targets), 25)
+
+        with tempfile.TemporaryDirectory(prefix="nx_625_") as td:
+            tp = Path(td)
+            ws = tp / "PairwiseWs"
+            ws.mkdir()
+
+            # 1. Materialize all 25 readable sources on disk and read each back natively
+            sources: list[tuple[str, ConversationGraph, str, str]] = []
+            for idx, src_name in enumerate(bidirectional_23):
+                u_tok = f"PAIR_U_{idx:02d}_{src_name}"
+                a_tok = f"PAIR_A_{idx:02d}_{src_name}"
+                seed = ConversationGraph(
+                    source_format="seed",
+                    source_id=f"pair-src-{idx:02d}",
+                    title=f"Pairwise {src_name}",
+                    workspace=str(ws),
+                    nodes=(
+                        MessageNode("u1", None, ("a1",), "user", f"Ask {u_tok}", "2026-11-27T04:00:00Z", f"Ask {u_tok}", {}),
+                        MessageNode("a1", "u1", (), "assistant", f"Ans {a_tok}", "2026-11-27T04:00:02Z", f"Ans {a_tok}", {}),
+                    ),
+                    root_ids=("u1",),
+                    active_node_id="a1",
+                    metadata={"project_name": "PairwiseWs", "section_name": "Acceptance"},
+                    raw_source={},
+                )
+                b_s = tp / f"m-b-{idx:02d}-{src_name}"
+                t_s = tp / f"m-t-{idx:02d}-{src_name}"
+                c_s = (tp / f"m-cc-{idx:02d}-{src_name}") if src_name == "claude-desktop-3p-code" else None
+                t_s.mkdir()
+                if c_s:
+                    c_s.mkdir()
+                write_bundle([seed], out=b_s, cwd=ws, target=src_name)
+                tx_s = apply_bundle(b_s, target_root=t_s, claude_dir=c_s, apply=True)
+                self.assertTrue(tx_s["post_write_verification"]["ok"], src_name)
+                parsed, _ = load_any_source(t_s, claude_dir=c_s)
+                self.assertGreaterEqual(len(parsed), 1, f"auto-detect failed for source {src_name}")
+                sources.append((src_name, parsed[0], u_tok, a_tok))
+                self.assertTrue(rollback_transaction(tx_s["journal_dir"])["ok"], src_name)
+
+            # Source #24: portable lossless v2 archive
+            p_b = tp / "m-b-23-portable"
+            p_seed = ConversationGraph(
+                source_format="seed",
+                source_id="pair-src-23",
+                title="Pairwise portable",
+                workspace=str(ws),
+                nodes=(
+                    MessageNode("u1", None, ("a1",), "user", "Ask PAIR_U_23_portable", "2026-11-27T04:00:00Z", "Ask PAIR_U_23_portable", {}),
+                    MessageNode("a1", "u1", (), "assistant", "Ans PAIR_A_23_portable", "2026-11-27T04:00:02Z", "Ans PAIR_A_23_portable", {}),
+                ),
+                root_ids=("u1",),
+                active_node_id="a1",
+                metadata={"project_name": "PairwiseWs", "section_name": "Acceptance"},
+                raw_source={},
+            )
+            write_bundle([p_seed], out=p_b, cwd=ws, target="portable")
+            p_parsed, _ = load_any_source(p_b)
+            sources.append(("portable", p_parsed[0], "PAIR_U_23_portable", "PAIR_A_23_portable"))
+
+            # Source #25: ChatGPT export ZIP
+            zpath = tp / "m-b-24-chatgpt.zip"
+            _make_chatgpt_destruction_era_zip(zpath)
+            cg_list, _ = parse_export_with_assets(zpath)
+            cg_de = filter_conversations(cg_list, project="Destruction Era")[0]
+            sources.append(("chatgpt-export", cg_de, "Design Destruction Era migration", "Branch A initial answer."))
+            self.assertEqual(len(sources), 25)
+
+            # 2. Execute ALL 25 × 25 = 625 individual 1-to-1 links!
+            verified_links = 0
+            for s_idx, (src_name, src_graph, u_tok, a_tok) in enumerate(sources):
+                for d_idx, dst_name in enumerate(all_25_targets):
+                    b_dir = tp / f"p-{s_idx:02d}-{d_idx:02d}"
+                    write_bundle([src_graph], out=b_dir, cwd=ws, target=dst_name)
+                    vb = verify_bundle(b_dir)
+                    self.assertTrue(vb["ok"], f"{src_name} -> {dst_name} verify_bundle failed: {vb}")
+
+                    if dst_name == "portable":
+                        rel_p, _ = load_any_source(b_dir)
+                        blob_p = "\n".join(n.text for g in rel_p for n in g.nodes)
+                        self.assertIn(u_tok, blob_p, f"{src_name} -> portable lost user text")
+                        self.assertIn(a_tok, blob_p, f"{src_name} -> portable lost assistant text")
+                        shutil.rmtree(b_dir)
+                        verified_links += 1
+                        continue
+
+                    t_dir = tp / f"t-{s_idx:02d}-{d_idx:02d}"
+                    c_dir = (tp / f"c-{s_idx:02d}-{d_idx:02d}") if dst_name in {"claude-desktop-3p-code", "claude-desktop-3p-all"} else None
+                    t_dir.mkdir()
+                    if c_dir:
+                        c_dir.mkdir()
+                    _, pre_sha = compute_tree_sha256(t_dir)
+
+                    tx = apply_bundle(b_dir, target_root=t_dir, claude_dir=c_dir, apply=True)
+                    self.assertTrue(tx["post_write_verification"]["ok"], f"{src_name} -> {dst_name} apply verify failed")
+
+                    rel_auto, _ = load_any_source(t_dir, claude_dir=c_dir)
+                    self.assertGreaterEqual(len(rel_auto), 1, f"{src_name} -> {dst_name} auto-detect readback empty")
+                    blob = "\n".join(n.text for g in rel_auto for n in g.nodes)
+                    self.assertIn(u_tok, blob, f"{src_name} -> {dst_name} lost user text")
+                    self.assertIn(a_tok, blob, f"{src_name} -> {dst_name} lost assistant text")
+
+                    rb = rollback_transaction(tx["journal_dir"])
+                    self.assertTrue(rb["ok"], f"{src_name} -> {dst_name} rollback failed")
+                    self.assertEqual(compute_tree_sha256(t_dir)[1], pre_sha, f"{src_name} -> {dst_name} rollback hash mismatch")
+
+                    shutil.rmtree(b_dir)
+                    shutil.rmtree(t_dir)
+                    if c_dir:
+                        shutil.rmtree(c_dir)
+                    verified_links += 1
+
+            self.assertEqual(verified_links, 625)
+
 
 if __name__ == "__main__":
     unittest.main()

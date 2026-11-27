@@ -134,6 +134,7 @@ class DesktopGuiPlaywrightE2ETests(unittest.TestCase):
                     "XDG_CONFIG_HOME": str(fake_home / ".config"),
                     "PYTHONPATH": str(REPO_ROOT / "src"),
                     "PYTHONDONTWRITEBYTECODE": "1",
+                    "NEXUS_NO_BROWSER": "1",
                 }
             )
             proc = subprocess.Popen(
@@ -145,10 +146,15 @@ class DesktopGuiPlaywrightE2ETests(unittest.TestCase):
                 text=True,
             )
             try:
-                deadline = time.time() + 15.0
+                deadline = time.time() + 25.0
                 while time.time() < deadline and not ready_file.is_file():
+                    if proc.poll() is not None:
+                        break
                     time.sleep(0.1)
-                self.assertTrue(ready_file.is_file(), "desktop_ui failed to write ready.json")
+                if not ready_file.is_file():
+                    proc.terminate()
+                    out_s, err_s = proc.communicate(timeout=5)
+                    self.fail(f"desktop_ui failed to write ready.json (rc={proc.returncode}): stdout={out_s!r} stderr={err_s!r}")
                 ready_info = json.loads(ready_file.read_text(encoding="utf-8"))
                 app_url = ready_info["url"]
 

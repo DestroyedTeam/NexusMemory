@@ -16,6 +16,7 @@ from __future__ import annotations
 import html
 import json
 import mimetypes
+import socketserver
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -409,10 +410,20 @@ def make_viewer_handler(bundle_dir: str | Path) -> type[BaseHTTPRequestHandler]:
     return BundleViewerHandler
 
 
+class _LoopbackViewerServer(HTTPServer):
+    """Avoid blocking `socket.getfqdn()` reverse-DNS lookups on macOS/offline loopback binds."""
+
+    def server_bind(self) -> None:
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
+
+
 def serve_bundle(bundle_dir: str | Path, *, port: int = 8765) -> None:
     """Serve `bundle_dir` locally on `127.0.0.1:<port>` (never binds 0.0.0.0)."""
     handler = make_viewer_handler(bundle_dir)
-    server = HTTPServer(("127.0.0.1", port), handler)
+    server = _LoopbackViewerServer(("127.0.0.1", port), handler)
     print(f"Nexus Memory offline viewer running at http://127.0.0.1:{port} (bound strictly to loopback)")
     try:
         server.serve_forever()
