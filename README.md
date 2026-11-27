@@ -126,7 +126,7 @@ open "dist/Nexus Memory.app"
 
 # Linux (Debian 12/13, Ubuntu, etc. — universal amd64/arm64 .deb)
 python3 packaging/linux/build_deb.py
-sudo apt install ./dist/nexus-memory_0.2.1_all.deb
+sudo apt install ./dist/nexus-memory_0.2.2_all.deb
 nexus-memory --version
 nexus-memory-desktop
 ```
