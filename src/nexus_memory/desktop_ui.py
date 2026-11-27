@@ -16,6 +16,7 @@ import json
 import os
 import secrets
 import shutil
+import socketserver
 import subprocess
 import sys
 import tempfile
@@ -2265,12 +2266,13 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
                     bdir = Path(str(body.get("bundle") or "")).expanduser()
                     if not (bdir / "manifest.json").is_file():
                         raise ValueError("该目录还不是有效迁移包（缺少 manifest.json），请先执行第 3 步生成迁移包")
-                    vsrv = HTTPServer(("127.0.0.1", 0), make_viewer_handler(bdir))
+                    vsrv = _LoopbackHTTPServer(("127.0.0.1", 0), make_viewer_handler(bdir))
                     vport = vsrv.server_address[1]
                     viewer_servers.append(vsrv)
                     threading.Thread(target=vsrv.serve_forever, daemon=True).start()
                     url = f"http://127.0.0.1:{vport}/"
-                    webbrowser.open(url)
+                    if os.environ.get("NEXUS_NO_BROWSER") != "1":
+                        webbrowser.open(url)
                     self._send_json(HTTPStatus.OK, {"url": url})
                     return
 
@@ -2281,10 +2283,30 @@ def make_desktop_handler(token: str) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
+class _LoopbackHTTPServer(HTTPServer):
+    """Avoid slow `socket.getfqdn()` mDNS lookups on macOS/offline runners when binding 127.0.0.1."""
+
+    def server_bind(self) -> None:
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
+
+
+class _LoopbackThreadingHTTPServer(ThreadingHTTPServer):
+    """Threading loopback HTTP server without blocking reverse-DNS lookups."""
+
+    def server_bind(self) -> None:
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
+
+
 def start_desktop_server(port: int = 0) -> tuple[ThreadingHTTPServer, str, str]:
     """Start the hardened 127.0.0.1 desktop API+UI server and return `(server, url, token)`."""
     token = secrets.token_urlsafe(24)
-    srv = ThreadingHTTPServer(("127.0.0.1", port), make_desktop_handler(token))
+    srv = _LoopbackThreadingHTTPServer(("127.0.0.1", port), make_desktop_handler(token))
     actual_port = srv.server_address[1]
     return srv, f"http://127.0.0.1:{actual_port}/", token
 
