@@ -96,7 +96,14 @@ def _default_target_roots() -> dict[str, dict[str, str]]:
         "opencode": (str(home / ".local" / "share" / "opencode"), ""),
         "pi": (str(home / ".pi"), ""),
         "gemini-cli": (str(home / ".gemini"), ""),
-        "kiro": (str(home / ".kiro"), ""),
+        "kiro": (
+            str(
+                (home / "Library" / "Application Support" / "kiro-cli")
+                if sys.platform == "darwin" and (home / "Library" / "Application Support" / "kiro-cli").exists()
+                else (home / ".kiro")
+            ),
+            "",
+        ),
         "amp": (str(home / ".local" / "share" / "amp"), ""),
         "trae": (str(home / ".trae"), ""),
         "warp-oz": (str(home / ".warp"), ""),
@@ -105,7 +112,14 @@ def _default_target_roots() -> dict[str, dict[str, str]]:
         "cline-roo": (str(home / ".cline"), ""),
         "goose": (str(home / ".local" / "share" / "goose"), ""),
         "continue": (str(home / ".continue"), ""),
-        "zed": (str(home / ".local" / "share" / "zed"), ""),
+        "zed": (
+            str(
+                (home / "Library" / "Application Support" / "Zed")
+                if sys.platform == "darwin"
+                else (home / ".local" / "share" / "zed")
+            ),
+            "",
+        ),
         "aider": (str(Path.cwd()), ""),
         "portable": (str(home / "Desktop" / "nexus-portable-archive"), ""),
     }
@@ -1110,8 +1124,8 @@ const HARNESS_CATALOG = [
   { id:"pi", discoverId:"pi", fmt:"pi", name:"Pi Agent", sub:"原生多分支树 DAG", ev:"E5", read:true, write:true, pop:true, color:"linear-gradient(135deg,#EC4899,#BE185D)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7v11M15 7v9a2 2 0 002 2" stroke="#fff" stroke-width="2.1" stroke-linecap="round"/></svg>` },
   { id:"gemini-cli", discoverId:"gemini-cli", fmt:"gemini-cli", name:"Gemini CLI", sub:"Google CLI 0.33+", ev:"E5", read:true, write:true, pop:true, color:"linear-gradient(135deg,#60A5FA,#6366F1)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6L12 2z" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/></svg>` },
   { id:"zed", discoverId:"zed", fmt:"zed", name:"Zed / Z Code", sub:"threads.db / Thread JSON", ev:"E4", read:true, write:true, pop:true, color:"linear-gradient(135deg,#0EA5E9,#0369A1)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 6h14L5 18h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-  { id:"dsh", discoverId:"dsh", fmt:"dsh", name:"DeepSeek DSH", sub:"V4 Schema JSONL", ev:"E3", read:true, write:true, pop:true, color:"linear-gradient(135deg,#4F46E5,#312E81)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 5h6a7 7 0 010 14H5V5z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>` },
-  { id:"kiro", discoverId:"kiro", fmt:"kiro", name:"AWS Kiro", sub:"data.sqlite3 + CLI/IDE", ev:"E4", read:true, write:true, pop:false, color:"linear-gradient(135deg,#A855F7,#7E22CE)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 4v16M18 4L9 12l9 8" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+  { id:"dsh", discoverId:"dsh", fmt:"dsh", name:"DeepSeek DSH", sub:"V4 .jsonl.zstd + JSONL", ev:"E5", read:true, write:true, pop:true, color:"linear-gradient(135deg,#4F46E5,#312E81)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 5h6a7 7 0 010 14H5V5z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>` },
+  { id:"kiro", discoverId:"kiro", fmt:"kiro", name:"AWS Kiro", sub:"data.sqlite3 + CLI/IDE", ev:"E5", read:true, write:true, pop:false, color:"linear-gradient(135deg,#A855F7,#7E22CE)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 4v16M18 4L9 12l9 8" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
   { id:"amp", discoverId:"amp", fmt:"amp", name:"Sourcegraph Amp", sub:"Thread JSON", ev:"E3", read:true, write:true, pop:false, color:"linear-gradient(135deg,#14B8A6,#0F766E)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h7l-1 8 10-12h-7l0-8z" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/></svg>` },
   { id:"trae", discoverId:"trae", fmt:"trae", name:"Trae / Agent", sub:"Trajectory JSON", ev:"E3", read:true, write:true, pop:false, color:"linear-gradient(135deg,#22C55E,#15803D)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M12 6v13" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>` },
   { id:"warp-oz", discoverId:"warp-oz", fmt:"warp-oz", name:"Warp / Oz", sub:"warp.sqlite + Agent", ev:"E4", read:true, write:true, pop:false, color:"linear-gradient(135deg,#06B6D4,#2563EB)", svg:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="#fff" stroke-width="2"/><path d="M7 10l3 2-3 2" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>` },
@@ -1515,7 +1529,7 @@ function renderSourceGrid() {
         : `${d.session_file_count} 会话 · ${d.skill_count} Skills`;
     }
     const dotCls = !h.write ? "ro" : (detected ? "" : "off");
-    return `<button class="h-card ${h.id === state.srcId ? "sel-src" : ""}" onclick="selectSource('${h.id}')">
+    return `<button class="h-card ${h.id === state.srcId ? "sel-src" : ""}" data-id="${h.id}" onclick="selectSource('${h.id}')">
       <div class="h-icon" style="background:${h.color};">${h.svg}</div>
       <div class="h-body">
         <div class="h-top"><span class="h-title">${esc(h.name)}</span><span class="h-dot ${dotCls}" title="${!h.write ? "离线导出包" : (detected ? "本机已发现" : "可手动指定路径")}"></span></div>
@@ -1534,7 +1548,7 @@ function renderTargetGrid() {
   if (q) list = list.filter(h => h.name.toLowerCase().includes(q) || h.id.toLowerCase().includes(q) || h.sub.toLowerCase().includes(q));
 
   document.getElementById("target-grid").innerHTML = list.map(h => `
-    <button class="h-card ${h.id === state.dstId ? "sel-dst" : ""}" onclick="selectTarget('${h.id}')">
+    <button class="h-card ${h.id === state.dstId ? "sel-dst" : ""}" data-id="${h.id}" onclick="selectTarget('${h.id}')">
       <div class="h-icon" style="background:${h.color};">${h.svg}</div>
       <div class="h-body">
         <div class="h-top"><span class="h-title">${esc(h.name)}</span><span class="badge ${h.ev === "E5" ? "ok" : "info"}" style="font-size:9.5px;padding:1px 5px;">${h.ev}</span></div>

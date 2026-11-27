@@ -341,11 +341,15 @@ def _plan(
         elif target == "dsh":
             sessions, graph_losses = build_dsh_v4_sessions(graph, cwd=target_cwd)
             for session in sessions:
+                dsh_sub = session.get("dsh_rel_dir") or f"conversation-{conversation_index:03d}/{session['session_id']}"
                 session["target_relative_path"] = (
-                    Path("dsh_sessions") / f"conversation-{conversation_index:03d}" / f"v4-{session['session_id']}.jsonl"
+                    Path("dsh_sessions") / dsh_sub / "session.v4.jsonl"
+                ).as_posix()
+                session["zstd_relative_path"] = (
+                    Path("dsh_sessions") / dsh_sub / "session.v4.jsonl.zstd"
                 ).as_posix()
                 session["source_id"] = graph.source_id
-                session["writer_kind"] = "jsonl"
+                session["writer_kind"] = "dsh-v4-session"
                 native_sessions.append(session)
         elif target == "gemini-cli":
             sessions, graph_losses = build_gemini_cli_sessions(graph, cwd=target_cwd)
@@ -503,6 +507,7 @@ def _plan(
                 **({"sidecar_relative_path": item["sidecar_relative_path"]} if "sidecar_relative_path" in item else {}),
                 **({"index_relative_path": item["index_relative_path"]} if "index_relative_path" in item else {}),
                 **({"ui_messages_relative_path": item["ui_messages_relative_path"]} if "ui_messages_relative_path" in item else {}),
+                **({"zstd_relative_path": item["zstd_relative_path"]} if "zstd_relative_path" in item else {}),
                 **({"encoded_project_dir": item["encoded_project_dir"]} if "encoded_project_dir" in item else {}),
                 **({"rollout_rel_subpath": item["rollout_rel_subpath"]} if "rollout_rel_subpath" in item else {}),
                 **({"split_relative_paths": item["split_relative_paths"]} if "split_relative_paths" in item else {}),
@@ -677,6 +682,17 @@ def write_bundle(
             if wkind in {"claude-code-jsonl", "jsonl"}:
                 dst = ensure_within_root(output / session["target_relative_path"], output)
                 atomic_write_bytes(dst, encode_jsonl(session["records"]), mode=0o600)
+            elif wkind == "dsh-v4-session":
+                from .ecosystem import compress_dsh_zstd_frames
+
+                dst = ensure_within_root(output / session["target_relative_path"], output)
+                atomic_write_bytes(dst, encode_jsonl(session["records"]), mode=0o600)
+                zstd_bytes = compress_dsh_zstd_frames(session["records"])
+                if zstd_bytes is not None and session.get("zstd_relative_path"):
+                    zdst = ensure_within_root(output / session["zstd_relative_path"], output)
+                    atomic_write_bytes(zdst, zstd_bytes, mode=0o600)
+                else:
+                    session.pop("zstd_relative_path", None)
             elif wkind == "codex-rollout":
                 dst = ensure_within_root(output / session["target_relative_path"], output)
                 atomic_write_bytes(dst, encode_jsonl(session["records"]), mode=0o600)

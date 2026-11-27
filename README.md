@@ -22,12 +22,12 @@ Run `nexus-memory matrix` for the machine-readable matrix (`E1` Docs → `E2` Sc
 | **OpenCode** (`opencode`) | `cli` | **E5** | Yes | Yes | **Yes** | Real `opencode 2.4.1` (`session list` + `export`) verified: `opencode.db` v1/v2 (`session_v2`) + split `storage/` + MCP/skills |
 | **Pi Coding Agent** (`pi`) | `cli` | **E5** | Yes | Yes | **Yes** | Real `pi 0.73.0 --export` verified: native tree-DAG JSONL (`id`/`parentId`) preserving multi-branch topology |
 | **Gemini CLI** (`gemini-cli`) | `cli` | **E5** | Yes | Yes | **Yes** | Real `gemini 0.33.1 --list-sessions` verified: `tmp/<slug>/chats/session-*.json` + `.project_root` + lossless `projects.json` merge |
-| **AWS Kiro** (`kiro`) | `cli` / `ide` | **E4** | Yes | Yes | **Yes** | Aligned to `kiro-cli 3.6.2` & `Kiro.app 1.5.49`: `data.sqlite3` (`conversations_v2`) + `sessions/cli/<id>.jsonl` + steering/MCP |
+| **AWS Kiro** (`kiro`) | `cli` / `ide` | **E5** | Yes | Yes | **Yes** | Real `kiro-cli 3.6.2` & `Kiro.app 1.5.49` verified: full 8-table + `migrations` (v0..10) `data.sqlite3` (`conversations_v2`) + `sessions/cli/<id>.jsonl` + steering/MCP |
 | **Sourcegraph Amp** (`amp`) | `cli` | **E3** | Yes | Yes | **Yes** | `~/.local/share/amp/threads/<id>.json` thread JSON |
 | **ByteDance Trae / Trae Agent** (`trae`) | `ide-ext` | **E3** | Yes | Yes | **Yes** | Trae trajectory JSON preserving workspace & alternating turns |
 | **Warp / Oz Agent** (`warp-oz`) | `terminal` | **E4** | Yes | Yes | **Yes** | Real `warp.sqlite` (`agent_conversations` + `ai_queries`, token-redacted) + `~/.warp/sessions/*.json` |
-| **DeepSeek Harness (DSH)** (`dsh`) | `cli` | **E3** | Yes | Yes | **Yes** | Reader enforces V4 authority over stale V2 logs; writer emits V4 JSONL |
-| **Cline / Roo Code** (`cline-roo`) | `ide-ext` | **E4** | Yes | Yes | **Yes** | Real `cline 3.0.75 history --json` verified: `data/db/sessions.db` + `data/tasks/<id>/{api_conversation_history,ui_messages}.json` + legacy `tasks/` |
+| **DeepSeek Harness (DSH)** (`dsh`) | `cli` | **E5** | Yes | Yes | **Yes** | Official `@deepseek-ai/dsh@0.2.2` verified (`Session.fromRestore`): V4 `sessions/<projectKey>/<id>/session.v4.jsonl[.zstd]` (2-frame checksummed Zstd) + legacy V4>V2 JSONL |
+| **Cline / Roo Code** (`cline-roo`) | `ide-ext` | **E4** | Yes | Yes | **Yes** | Real `cline 3.0.75 history --json` & Open VSX `rooveterinaryinc.roo-cline@3.54.0` verified: `data/db/sessions.db` + `data/tasks/<id>/{api_conversation_history,ui_messages}.json` + Cursor `globalStorage` |
 | **Goose** (`goose`) | `cli` | **E4** | Yes | Yes | **Yes** | Real `goose 1.61.1 session list & export` verified: `sessions/sessions.db` (schema v18) + legacy `.jsonl` |
 | **Continue / Zed (Z Code / ACP)** (`continue`, `zed`) | `ide-ext` | **E4** | Yes | Yes | **Yes** | Real `cn 1.5.47 ls --json` & `Zed 1.30.2`: Continue `sessions.json` + `<id>.json` and Zed `threads/threads.db` (`json`/`zstd`) + JSON |
 | **Aider** (`aider`) | `cli` | **E4** | Yes | Yes | **Yes** | Verified alongside `aider 0.86.2`: `.aider.chat.history.md` markdown turns read + write |
@@ -141,5 +141,6 @@ Windows standalone `.exe` packaging specs live in [packaging/windows/nexus_memor
 - [docs/research/supplemental-skills-managers-triage-2026-11-25.md](docs/research/supplemental-skills-managers-triage-2026-11-25.md) — 192 catalog rows triaged (177 net-new Skills managers)
 
 ```bash
-PYTHONPATH=src python3 -m pytest -q tests
+# Full automated suite (unit + 24x24=576 N×N routes + Playwright Chromium GUI E2E + real-binary CLI acceptance)
+python3 -m pytest -q tests
 ```

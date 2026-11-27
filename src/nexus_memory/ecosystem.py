@@ -1535,33 +1535,183 @@ def build_cursor_sessions(
     return sessions, losses
 
 
-# ── 6. DeepSeek Harness / DSH (V4 authority > stale V2 + V4 writer) ──────────
+# ── 6. DeepSeek Harness / DSH (Official v0.2+ Format V4 `.jsonl[.zstd]` + legacy V4>V2) ──
+
+
+def dsh_encode_segment(raw: str) -> str:
+    """Match `@deepseek-ai/dsh-session-persistence-jsonl` `encodeSegment` verbatim."""
+    if not raw:
+        return "session"
+    if raw == ".":
+        return "~002E"
+    if raw == "..":
+        return "~002E~002E"
+    out: list[str] = []
+    for ch in raw:
+        if ch != "~" and ch.isascii() and (ch.isalnum() or ch in "._-"):
+            out.append(ch)
+        else:
+            out.append(f"~{ord(ch):04X}")
+    return "".join(out)
+
+
+def dsh_project_key(cwd: str | None) -> str:
+    """Match `@deepseek-ai/dsh-session-persistence-jsonl` `projectKey` verbatim."""
+    if not cwd:
+        return "_no-cwd"
+    readable: list[str] = []
+    sep_run = False
+    for ch in cwd:
+        if ch in "/\\:":
+            if not sep_run:
+                readable.append("-")
+            sep_run = True
+        elif ch != "~" and ch.isascii() and (ch.isalnum() or ch in "._-"):
+            readable.append(ch)
+            sep_run = False
+        else:
+            readable.append(f"~{ord(ch):04X}")
+            sep_run = False
+    trimmed = "".join(readable).lstrip("-") or "root"
+    return f"--{trimmed[:251]}--"
+
+
+def compress_dsh_zstd_frames(records: list[dict[str, Any]]) -> bytes | None:
+    """Encode DSH v4 records into the exact 2-frame checksummed Zstandard layout (`assertZstdHeaderFrame`)."""
+    if not records:
+        return None
+    hdr_bytes = (json.dumps(records[0], ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+    body_bytes = (
+        "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n" for r in records[1:])
+    ).encode("utf-8")
+    try:
+        import zstandard as _zstd  # type: ignore[import-not-found]
+
+        cctx = _zstd.ZstdCompressor(write_checksum=True)
+        return cctx.compress(hdr_bytes) + (cctx.compress(body_bytes) if body_bytes else b"")
+    except Exception:
+        pass
+    try:
+        r1 = subprocess.run(["zstd", "-qc", "--check"], input=hdr_bytes, capture_output=True, timeout=10)
+        if r1.returncode == 0 and r1.stdout:
+            if not body_bytes:
+                return r1.stdout
+            r2 = subprocess.run(["zstd", "-qc", "--check"], input=body_bytes, capture_output=True, timeout=10)
+            if r2.returncode == 0 and r2.stdout:
+                return r1.stdout + r2.stdout
+    except Exception:
+        pass
+    return None
+
+
+def _read_dsh_jsonl_records(fp: Path) -> list[dict[str, Any]]:
+    raw_bytes = fp.read_bytes()
+    if fp.name.endswith((".zstd", ".zst")) or raw_bytes[:4] == b"\x28\xb5\x2f\xfd":
+        text_data: str | None = None
+        try:
+            import io as _io
+            import zstandard as _zstd  # type: ignore[import-not-found]
+
+            dctx = _zstd.ZstdDecompressor()
+            with dctx.stream_reader(_io.BytesIO(raw_bytes), read_across_frames=True) as reader:
+                text_data = reader.read().decode("utf-8", errors="replace")
+        except Exception:
+            try:
+                proc = subprocess.run(["zstd", "-dc"], input=raw_bytes, capture_output=True, timeout=10)
+                if proc.returncode == 0:
+                    text_data = proc.stdout.decode("utf-8", errors="replace")
+            except Exception:
+                text_data = None
+        if text_data is None:
+            return []
+    else:
+        text_data = raw_bytes.decode("utf-8-sig", errors="replace")
+    out: list[dict[str, Any]] = []
+    for line in text_data.splitlines():
+        if line.strip():
+            try:
+                obj = json.loads(line)
+                if isinstance(obj, dict):
+                    out.append(obj)
+            except json.JSONDecodeError:
+                continue
+    return out
 
 
 def parse_dsh_directory(dsh_dir: str | Path) -> list[ConversationGraph]:
     root = Path(dsh_dir).expanduser()
-    files = sorted(root.rglob("*.jsonl")) if root.is_dir() else [root]
+    if root.is_dir():
+        cand_set = set(root.rglob("*.jsonl")) | set(root.rglob("*.jsonl.zstd")) | set(root.rglob("*.jsonl.zst"))
+        files = sorted(cand_set)
+    else:
+        files = [root]
     by_id: dict[str, tuple[int, ConversationGraph]] = {}
     for fp in files:
         if not fp.is_file():
             continue
-        records = [json.loads(l) for l in fp.read_text(encoding="utf-8-sig").splitlines() if l.strip()]
+        records = _read_dsh_jsonl_records(fp)
         if not records:
             continue
         header = records[0] if isinstance(records[0], dict) else {}
-        schema_ver = int(header.get("dsh_schema_version") or header.get("schema_version") or (4 if "v4" in fp.name.lower() else 2))
-        sid = str(header.get("session_id") or header.get("id") or fp.stem)
-        raw_items: list[dict[str, Any]] = []
-        for idx, rec in enumerate(records):
-            if rec.get("type") in {"session_header", "meta"}:
-                continue
-            role = rec.get("role") or rec.get("type")
-            if role not in {"user", "assistant", "system", "tool_call", "tool_result"}:
-                continue
-            content = rec.get("content", rec.get("text", ""))
-            raw_items.append({"node_id": str(rec.get("id") or f"dsh-{idx}"), "role": str(role), "text": content_text(content), "timestamp": rec.get("timestamp"), "content": content, "raw_record": rec})
-        nodes, roots, active = _chain_linear(raw_items)
-        graph = ConversationGraph(source_format=f"dsh_v{schema_ver}", source_id=sid, title=str(header.get("title") or sid), workspace=str(header.get("cwd") or header.get("workspace")) if (header.get("cwd") or header.get("workspace")) else None, nodes=nodes, root_ids=roots, active_node_id=active, metadata={"dsh_schema_version": schema_ver, "source_file": fp.name}, raw_source={"records": records}, links=_collect_links(nodes), app_mode="cli")
+        if header.get("type") == "session" and ("isSeeded" in header or "delegationDepth" in header):
+            schema_ver = int(header.get("version") or 4)
+            sid = str(header.get("id") or fp.parent.name or fp.stem)
+            title = sid
+            raw_items: list[dict[str, Any]] = []
+            for idx, rec in enumerate(records[1:], 1):
+                ev_type = str(rec.get("type") or "")
+                data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
+                ts_ms = rec.get("time")
+                ts_iso = (
+                    datetime.fromtimestamp(float(ts_ms) / 1000.0, tz=UTC).isoformat().replace("+00:00", "Z")
+                    if isinstance(ts_ms, (int, float))
+                    else None
+                )
+                if ev_type == "session/title" and data.get("title"):
+                    title = str(data["title"])
+                elif ev_type == "user/message":
+                    c = data.get("content", "")
+                    raw_items.append({"node_id": str(data.get("id") or f"dsh-{idx}"), "role": "user", "text": content_text(c), "timestamp": ts_iso, "content": c, "raw_record": rec})
+                elif ev_type in {"assistant/message", "system/message", "developer/message"}:
+                    msg = data.get("message") if isinstance(data.get("message"), dict) else data
+                    role = "assistant" if ev_type == "assistant/message" else "system"
+                    c = msg.get("content", "")
+                    raw_items.append({"node_id": str(msg.get("id") or f"dsh-{idx}"), "role": role, "text": content_text(c), "timestamp": ts_iso, "content": c, "raw_record": rec})
+                elif ev_type == "tool/call":
+                    c = json.dumps({"name": data.get("name"), "arguments": data.get("arguments")}, ensure_ascii=False)
+                    raw_items.append({"node_id": str(data.get("callId") or f"dsh-tc-{idx}"), "role": "tool_call", "text": c, "timestamp": ts_iso, "content": c, "raw_record": rec})
+                elif ev_type == "tool/result":
+                    msg = data.get("message") if isinstance(data.get("message"), dict) else data
+                    c = msg.get("content", "")
+                    raw_items.append({"node_id": str(msg.get("id") or f"dsh-tr-{idx}"), "role": "tool_result", "text": content_text(c), "timestamp": ts_iso, "content": c, "raw_record": rec})
+            nodes, roots, active = _chain_linear(raw_items)
+            graph = ConversationGraph(
+                source_format=f"dsh_v{schema_ver}",
+                source_id=sid,
+                title=title,
+                workspace=str(header["cwd"]) if header.get("cwd") else None,
+                nodes=nodes,
+                root_ids=roots,
+                active_node_id=active,
+                metadata={"dsh_schema_version": schema_ver, "source_file": fp.name},
+                raw_source={"records": records},
+                links=_collect_links(nodes),
+                app_mode="cli",
+            )
+        else:
+            schema_ver = int(header.get("dsh_schema_version") or header.get("schema_version") or (4 if "v4" in fp.name.lower() else 2))
+            sid = str(header.get("session_id") or header.get("id") or fp.stem)
+            raw_items = []
+            for idx, rec in enumerate(records):
+                if rec.get("type") in {"session_header", "meta"}:
+                    continue
+                role = rec.get("role") or rec.get("type")
+                if role not in {"user", "assistant", "system", "tool_call", "tool_result"}:
+                    continue
+                content = rec.get("content", rec.get("text", ""))
+                raw_items.append({"node_id": str(rec.get("id") or f"dsh-{idx}"), "role": str(role), "text": content_text(content), "timestamp": rec.get("timestamp"), "content": content, "raw_record": rec})
+            nodes, roots, active = _chain_linear(raw_items)
+            graph = ConversationGraph(source_format=f"dsh_v{schema_ver}", source_id=sid, title=str(header.get("title") or sid), workspace=str(header.get("cwd") or header.get("workspace")) if (header.get("cwd") or header.get("workspace")) else None, nodes=nodes, root_ids=roots, active_node_id=active, metadata={"dsh_schema_version": schema_ver, "source_file": fp.name}, raw_source={"records": records}, links=_collect_links(nodes), app_mode="cli")
         prev = by_id.get(sid)
         if prev is None or schema_ver >= prev[0]:
             by_id[sid] = (schema_ver, graph)
@@ -1569,23 +1719,134 @@ def parse_dsh_directory(dsh_dir: str | Path) -> list[ConversationGraph]:
 
 
 def build_dsh_v4_sessions(graph: ConversationGraph, *, cwd: str | Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build official `@deepseek-ai/dsh@0.2.2` Format V4 sessions passing strict `Session.fromRestore`."""
     sessions: list[dict[str, Any]] = []
     losses: list[dict[str, Any]] = []
     paths = graph.branch_paths()
     resolved_cwd = str(Path(graph.workspace or cwd).expanduser().resolve())
-    now_iso = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    base_ms = int(datetime.now(UTC).timestamp() * 1000)
     for branch_index, path in enumerate(paths, 1):
-        sid = str(uuid.uuid4())
+        sid = f"session-{uuid.uuid4()}"
         title = graph.title or f"Imported {graph.source_format} {graph.source_id}"
         if len(paths) > 1:
             title = f"{title} [branch {branch_index}]"
-        records: list[dict[str, Any]] = [{"type": "session_header", "dsh_schema_version": 4, "session_id": sid, "title": title, "cwd": resolved_cwd, "timestamp": now_iso}]
+        created_ms = base_ms + branch_index * 1000
+        records: list[dict[str, Any]] = [
+            {
+                "type": "session",
+                "version": 4,
+                "id": sid,
+                "createdAt": created_ms,
+                "cwd": resolved_cwd,
+                "isSeeded": False,
+                "delegationDepth": 0,
+            }
+        ]
+        seq = 0
+        cur_ms = created_ms + 10
+        records.append(
+            {
+                "seq": seq,
+                "time": cur_ms,
+                "type": "session/title",
+                "data": {"title": title, "source": {"kind": "user"}, "messageSeqs": []},
+            }
+        )
+        seq += 1
+        cur_ms += 10
+
+        turns, _, _ = _coalesce_alternating_turns(path)
         source_node_ids: list[str] = []
-        for node in path:
-            if node.role in {"user", "assistant", "system", "tool_call", "tool_result"}:
-                records.append({"id": node.node_id, "role": node.role, "content": node.text, "timestamp": node.timestamp or now_iso})
-                source_node_ids.append(node.node_id)
-        sessions.append({"session_id": sid, "branch_index": branch_index, "title": title, "cwd": resolved_cwd, "source_node_ids": source_node_ids, "records": records})
+        turn_num = 1
+        for t in turns:
+            body = "\n\n".join(t["texts"])
+            source_node_ids.extend(t["source_node_ids"])
+            records.append({"seq": seq, "time": cur_ms, "type": "turn/start", "data": {"turn": turn_num}})
+            seq += 1
+            cur_ms += 10
+            if t["role"] == "user":
+                records.append(
+                    {
+                        "seq": seq,
+                        "time": cur_ms,
+                        "type": "user/message",
+                        "surfaceOp": "append",
+                        "data": {
+                            "id": f"msg-u-{turn_num}-{uuid.uuid4().hex[:8]}",
+                            "role": "user",
+                            "timestamp": cur_ms,
+                            "source": {"kind": "user"},
+                            "content": [{"type": "text", "text": body}],
+                        },
+                    }
+                )
+                seq += 1
+                cur_ms += 10
+            else:
+                records.append({"seq": seq, "time": cur_ms, "type": "step/start", "data": {"turn": turn_num, "step": 1}})
+                seq += 1
+                cur_ms += 10
+                records.append(
+                    {
+                        "seq": seq,
+                        "time": cur_ms,
+                        "type": "assistant/message",
+                        "surfaceOp": "append",
+                        "data": {
+                            "turn": turn_num,
+                            "step": 1,
+                            "stream": [],
+                            "message": {
+                                "id": f"msg-a-{turn_num}-{uuid.uuid4().hex[:8]}",
+                                "role": "assistant",
+                                "timestamp": cur_ms,
+                                "api": "openai-completions",
+                                "provider": "deepseek",
+                                "model": "deepseek-chat",
+                                "usage": {
+                                    "input": 0,
+                                    "output": 0,
+                                    "cacheRead": 0,
+                                    "cacheWrite": 0,
+                                    "totalTokens": 0,
+                                    "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0},
+                                },
+                                "stopReason": "stop",
+                                "source": {"kind": "model", "provider": "deepseek", "model": "deepseek-chat"},
+                                "content": [{"type": "text", "text": body}],
+                            },
+                        },
+                    }
+                )
+                seq += 1
+                cur_ms += 10
+                records.append({"seq": seq, "time": cur_ms, "type": "step/end", "data": {"turn": turn_num, "step": 1}})
+                seq += 1
+                cur_ms += 10
+            records.append(
+                {
+                    "seq": seq,
+                    "time": cur_ms,
+                    "type": "turn/end",
+                    "data": {"turn": turn_num, "reason": {"kind": "completed"}},
+                }
+            )
+            seq += 1
+            cur_ms += 10
+            turn_num += 1
+
+        dsh_rel_dir = f"{dsh_project_key(resolved_cwd)}/{dsh_encode_segment(sid)}"
+        sessions.append(
+            {
+                "session_id": sid,
+                "branch_index": branch_index,
+                "title": title,
+                "cwd": resolved_cwd,
+                "dsh_rel_dir": dsh_rel_dir,
+                "source_node_ids": source_node_ids,
+                "records": records,
+            }
+        )
     if len(paths) > 1:
         losses.append({"feature": "branch_topology", "disposition": "one_dsh_v4_session_per_leaf_path; exact graph in portable.json"})
     return sessions, losses
@@ -1713,7 +1974,18 @@ def parse_cline_home(path: str | Path, *, limit: int | None = None) -> list[Conv
         except sqlite3.Error:
             pass
 
-    raw_graphs = _parse_dir_files(root, ("data/tasks", "tasks"), ("api_conversation_history.json",), parse_cline_roo_task, limit=limit)
+    raw_graphs = _parse_dir_files(
+        root,
+        (
+            "data/tasks",
+            "tasks",
+            "User/globalStorage/saoudrizwan.claude-dev/tasks",
+            "User/globalStorage/rooveterinaryinc.roo-cline/tasks",
+        ),
+        ("api_conversation_history.json",),
+        parse_cline_roo_task,
+        limit=limit,
+    )
     seen: set[str] = set()
     out: list[ConversationGraph] = []
     for g in raw_graphs:
@@ -2634,6 +2906,8 @@ def load_any_source(
         if (p / "tmp").is_dir() and (any((p / "tmp").rglob("session-*.json")) or any((p / "tmp").rglob(".project_root"))):
             return _parse_dir_files(p, ("tmp",), ("session-*.json",), parse_gemini_cli_session, exclude_names={"projects.json", "settings.json"}, limit=limit), {}
         if (p / "sessions").is_dir():
+            if any((p / "sessions").rglob("*.jsonl.zstd")) or any((p / "sessions").rglob("session.v*.jsonl")):
+                return parse_dsh_directory(p / "sessions"), {}
             sample_jl = next((f for f in sorted((p / "sessions").rglob("*.jsonl")) if f.is_file()), None)
             if sample_jl is not None:
                 try:
@@ -2641,6 +2915,8 @@ def load_any_source(
                     hdr = json.loads(fl)
                     if isinstance(hdr, dict):
                         if hdr.get("type") == "session_header" or "dsh_schema_version" in hdr:
+                            return parse_dsh_directory(p / "sessions"), {}
+                        if hdr.get("type") == "session" and ("isSeeded" in hdr or "delegationDepth" in hdr):
                             return parse_dsh_directory(p / "sessions"), {}
                         if hdr.get("type") in {"workbuddy_session_meta", "session-meta"}:
                             return parse_workbuddy_home(p, limit=limit), {}
@@ -2726,6 +3002,8 @@ def load_any_source(
         return parse_cursor_vscdb(p), {}
     if name_lower.endswith(".md") and "aider" in name_lower:
         return [parse_aider_history(p)], {}
+    if name_lower.endswith(".jsonl.zstd"):
+        return parse_dsh_directory(p), {}
     if name_lower.endswith(".jsonl.zst"):
         return [parse_rollout(p)], {}
     if name_lower in {"transcript.jsonl", "transcript_full.jsonl"}:
@@ -2741,6 +3019,8 @@ def load_any_source(
             return [parse_kiro_session(p)], {}
         if first.get("type") == "session_meta" or first.get("type") in {"response_item", "event_msg"}:
             return [parse_rollout(p)], {}
+        if first.get("type") == "session" and ("isSeeded" in first or "delegationDepth" in first):
+            return parse_dsh_directory(p), {}
         if first.get("type") == "session" and "version" in first:
             return [parse_pi_session(p)], {}
         if first.get("type") == "session_header" or "dsh_schema_version" in first:
