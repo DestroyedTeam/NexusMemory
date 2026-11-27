@@ -273,8 +273,17 @@ def _plan_apply_operations(
             dst = ensure_within_root(target_root / "agent" / "sessions" / project_key / Path(rel).name, target_root)
             ops.append((src, dst, "pi-session"))
         elif lane == "dsh":
-            dst = ensure_within_root(target_root / "sessions" / Path(rel).name, target_root)
+            rel_parts = Path(rel).parts
+            rel_under_dsh = Path(*rel_parts[1:]) if len(rel_parts) >= 2 and rel_parts[0] == "dsh_sessions" else Path(Path(rel).name)
+            dst = ensure_within_root(target_root / "sessions" / rel_under_dsh, target_root)
             ops.append((src, dst, "dsh-v4-session"))
+            zstd_rel = sess.get("zstd_relative_path")
+            if zstd_rel and (bundle_root / zstd_rel).is_file():
+                zsrc = ensure_within_root(bundle_root / zstd_rel, bundle_root)
+                zparts = Path(zstd_rel).parts
+                zunder = Path(*zparts[1:]) if len(zparts) >= 2 and zparts[0] == "dsh_sessions" else Path(Path(zstd_rel).name)
+                zdst = ensure_within_root(target_root / "sessions" / zunder, target_root)
+                ops.append((zsrc, zdst, "dsh-v4-session-zstd"))
         elif lane == "gemini-cli":
             rel_under = Path(*Path(rel).parts[1:])
             dst = ensure_within_root(target_root / rel_under, target_root)

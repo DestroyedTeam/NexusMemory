@@ -424,7 +424,8 @@ def discover_harnesses(
         elif item["id"] == "cline":
             cl_ids: set[str] = set()
             cl_sub_ids: set[str] = set()
-            for tdir in (sess_p, root_p / "data" / "tasks"):
+            cline_ext_tasks = cursor_base / "User/globalStorage/saoudrizwan.claude-dev/tasks"
+            for tdir in (sess_p, root_p / "data" / "tasks", cline_ext_tasks):
                 if tdir.is_dir():
                     present = True
                     for fp in tdir.rglob("api_conversation_history.json"):
@@ -452,6 +453,29 @@ def discover_harnesses(
                     pass
             sess_count = len(cl_ids)
             subagent_count = len(cl_sub_ids)
+        elif item["id"] == "roo":
+            roo_ids: set[str] = set()
+            roo_ext_dir = cursor_base / "User/globalStorage/rooveterinaryinc.roo-cline"
+            cursor_exts = hroot / ".cursor/extensions"
+            if roo_ext_dir.exists() or (cursor_exts.is_dir() and any(p.name.lower().startswith("rooveterinaryinc.roo-cline") for p in cursor_exts.iterdir())):
+                present = True
+            for tdir in (sess_p, roo_ext_dir / "tasks"):
+                if tdir.is_dir():
+                    present = True
+                    for fp in tdir.rglob("api_conversation_history.json"):
+                        if fp.is_file():
+                            roo_ids.add(fp.parent.name)
+            sess_count = len(roo_ids)
+        elif item["id"] == "dsh":
+            dsh_ids: set[str] = set()
+            if sess_p.is_dir():
+                for fp in list(sess_p.rglob("*.jsonl")) + list(sess_p.rglob("*.jsonl.zstd")) + list(sess_p.rglob("*.jsonl.zst")):
+                    if fp.is_file():
+                        if fp.name.startswith("session."):
+                            dsh_ids.add(fp.parent.name)
+                        else:
+                            dsh_ids.add(fp.stem)
+            sess_count = len(dsh_ids)
         elif item["id"] == "zed":
             zed_ids: set[str] = set()
             zed_sub_ids: set[str] = set()

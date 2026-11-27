@@ -581,7 +581,21 @@ def _t3code_provider_for_source(source_format: str | None) -> tuple[str, str]:
 
 
 def _ensure_t3code_statev2_schema(conn: sqlite3.Connection) -> None:
-    """Ensure the real T3 Code v2 SQLite projection & event tables exist (for fresh sandboxes)."""
+    """Ensure the official T3 Code v2 SQLite schema exists (including migrations on brand-new DBs)."""
+    existing_tables = {
+        str(r[0]) for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if "effect_sql_migrations" not in existing_tables and "orchestration_v2_projection_threads" not in existing_tables:
+        from ._t3code_ddl import T3CODE_FULL_DDL, T3CODE_MIGRATIONS
+
+        conn.executescript(T3CODE_FULL_DDL)
+        now_sql = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+        conn.executemany(
+            "INSERT OR IGNORE INTO effect_sql_migrations (migration_id, created_at, name) VALUES (?, ?, ?)",
+            [(mid, now_sql, mname) for mid, mname in T3CODE_MIGRATIONS],
+        )
+        return
+
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS projection_projects (
@@ -1688,10 +1702,41 @@ def merge_kiro_sessions_batch(
     db = Path(db_path).expanduser()
     db.parent.mkdir(parents=True, exist_ok=True)
     now_ms = int(time.time() * 1000)
+    now_sec = int(now_ms // 1000)
     conn = sqlite3.connect(str(db), timeout=20.0)
     try:
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS migrations (
+                id INTEGER PRIMARY KEY,
+                version INTEGER NOT NULL,
+                migration_time INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS history (
+                id INTEGER PRIMARY KEY,
+                command TEXT,
+                shell TEXT,
+                pid INTEGER,
+                session_id TEXT,
+                cwd TEXT,
+                start_time INTEGER,
+                hostname TEXT,
+                exit_code INTEGER,
+                end_time INTEGER,
+                duration INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS auth_kv (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+            CREATE TABLE IF NOT EXISTS state (
+                key TEXT PRIMARY KEY,
+                value BLOB
+            );
+            CREATE TABLE IF NOT EXISTS conversations (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
             CREATE TABLE IF NOT EXISTS conversations_v2 (
                 key TEXT NOT NULL,
                 conversation_id TEXT NOT NULL,
@@ -1702,8 +1747,22 @@ def merge_kiro_sessions_batch(
             );
             CREATE INDEX IF NOT EXISTS idx_conversations_v2_key_updated ON conversations_v2(key, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_conversations_v2_updated_at ON conversations_v2(updated_at DESC);
+            CREATE TABLE IF NOT EXISTS extracted_kas_versions (
+                version TEXT PRIMARY KEY,
+                last_used_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS pinned_bin_versions (
+                version TEXT PRIMARY KEY,
+                last_used_at INTEGER NOT NULL
+            );
             """
         )
+        mig_cnt = conn.execute("SELECT COUNT(*) FROM migrations").fetchone()
+        if not mig_cnt or int(mig_cnt[0]) == 0:
+            conn.executemany(
+                "INSERT INTO migrations (id, version, migration_time) VALUES (?, ?, ?)",
+                [(ver + 1, ver, now_sec) for ver in range(11)],
+            )
         existing = {
             (str(r[0]), str(r[1])) for r in conn.execute("SELECT key, conversation_id FROM conversations_v2")
         }
@@ -1917,9 +1976,9 @@ def parse_warp_oz_home(path: str | Path, *, limit: int | None = None) -> list[Co
         return graphs[:limit]
     rem = (limit - len(graphs)) if limit else None
     candidate_dbs = [p / "warp.sqlite"]
-    if sys.platform == "darwin":
+    if sys.platform == "darwin" and p.name == ".warp":
         candidate_dbs.append(
-            Path.home()
+            p.parent
             / "Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Stable/warp.sqlite"
         )
     for db_cand in candidate_dbs:
