@@ -90,7 +90,7 @@ def get_process_memory_mb() -> float:
                 return round(info.resident_size / (1024 * 1024), 2)
         except Exception:
             pass
-    # 3. Windows live WorkingSetSize via psapi
+    # 3. Windows live WorkingSetSize via K32GetProcessMemoryInfo / psapi (64-bit HANDLE safe)
     if sys.platform == "win32":
         try:
             class _ProcessMemoryCounters(ctypes.Structure):
@@ -109,8 +109,17 @@ def get_process_memory_mb() -> float:
 
             counters = _ProcessMemoryCounters()
             counters.cb = ctypes.sizeof(counters)
-            hproc = ctypes.windll.kernel32.GetCurrentProcess()
-            if ctypes.windll.psapi.GetProcessMemoryInfo(hproc, ctypes.byref(counters), counters.cb):
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.GetCurrentProcess.argtypes = []
+            kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+            hproc = kernel32.GetCurrentProcess()
+            get_mem = getattr(kernel32, "K32GetProcessMemoryInfo", None)
+            if get_mem is None:
+                psapi = ctypes.WinDLL("psapi", use_last_error=True)
+                get_mem = psapi.GetProcessMemoryInfo
+            get_mem.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32]
+            get_mem.restype = ctypes.c_int
+            if get_mem(hproc, ctypes.byref(counters), counters.cb) and counters.WorkingSetSize > 0:
                 return round(counters.WorkingSetSize / (1024 * 1024), 2)
         except Exception:
             pass

@@ -33,8 +33,8 @@ jobs:
       - name: Compile check (warnings as errors)
         run: python -W error -m compileall -q src tests
 
-      - name: Run full 25-Harness unit & N×N matrix test suite
-        run: python -m pytest -q -p no:cacheprovider tests/test_prototype.py tests/test_nexus_v1.py tests/test_real_cli_binaries.py
+      - name: Run full 25-Harness unit, lifecycle & N×N matrix test suite
+        run: python -m pytest -q -p no:cacheprovider tests/test_prototype.py tests/test_nexus_v1.py tests/test_real_cli_binaries.py tests/test_resource_lifecycle.py
 
       - name: Run headless Chromium Playwright GUI E2E suite
         if: matrix.python-version == '3.12'
